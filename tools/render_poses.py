@@ -27,6 +27,16 @@ def rot_y(p, a):
     return (p[0] * c - p[2] * s, p[1], p[0] * s + p[2] * c)
 
 
+def rotate(p, rotation):
+    """Fixture rotation in degrees around X, then Y, then Z, matching the viewer."""
+    rx, ry, rz = (math.radians(r) for r in rotation)
+    x, y, z = p
+    y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
+    x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
+    x, y = x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
+    return (x, y, z)
+
+
 def rot_x(p, a):
     c, s = math.cos(a), math.sin(a)
     return (p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c)
@@ -89,14 +99,14 @@ def draw_props(draw, project, fixtures, equipment):
         size = fixture.get('size') or ([0.36, 0.45, 1.8] if fixture['kind'] == 'bench' else [0.5, 1.0, 0.5])
         if fixture['kind'] == 'pull-up-bar':
             size = [2.0, 0.05, 0.05]
-        yaw = math.radians((fixture.get('rotation') or [0, 0, 0])[1])
+        rotation = fixture.get('rotation') or [0, 0, 0]
         half = [s / 2 for s in size]
         corners = []
         for sx in (-1, 1):
             for sy in (-1, 1):
                 for sz in (-1, 1):
                     local = (sx * half[0], sy * half[1], sz * half[2])
-                    rotated = rot_y(local, yaw)
+                    rotated = rotate(local, rotation)
                     corners.append(tuple(c + p for c, p in zip(rotated, pos)))
         edges = []
         for i, a in enumerate(corners):

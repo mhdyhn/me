@@ -76,3 +76,45 @@ describe('written steps and the loop', () => {
     }
   });
 });
+
+describe('movement guardrails', () => {
+  const groundBones = (motionId: string) => {
+    const rig = buildMotionRig(scene(), motions[motionId]!);
+    const lowest = { name: '', y: Number.POSITIVE_INFINITY };
+    for (let step = 0; step < 12; step += 1) {
+      poseRig(rig, step / 12);
+      for (const [name, position] of rig.state.worldPosition) {
+        if (name === 'Root') continue;
+        if (position.y < lowest.y) {
+          lowest.name = name;
+          lowest.y = position.y;
+        }
+      }
+    }
+    return lowest;
+  };
+
+  it('never lets a body bone sink through the floor', () => {
+    for (const motion of Object.values(motions)) {
+      // Hanging from a bar is the one movement where the body is off the floor.
+      if (motion.fixtures?.some((fixture) => fixture.kind === 'pull-up-bar')) continue;
+      const lowest = groundBones(motion.id);
+      expect(lowest.y, `${motion.id}: ${lowest.name}`).toBeGreaterThan(-0.05);
+    }
+  });
+
+  it('keeps planted feet on the floor plane for every stance', () => {
+    for (const motion of Object.values(motions)) {
+      if (motion.plantBones.length === 0) continue;
+      const rig = buildMotionRig(scene(), motion);
+      for (let step = 0; step < 8; step += 1) {
+        poseRig(rig, step / 8);
+        for (const bone of motion.plantBones) {
+          const y = rig.state.worldPosition.get(bone)!.y;
+          expect(y, `${motion.id} ${bone} at ${step}`).toBeGreaterThan(-0.02);
+          expect(y, `${motion.id} ${bone} at ${step}`).toBeLessThan(0.06);
+        }
+      }
+    }
+  });
+});

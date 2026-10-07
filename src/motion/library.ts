@@ -163,31 +163,34 @@ const barbellSquat = (): MotionDefinition => {
 };
 
 const bulgarianSplitSquat = (): MotionDefinition => {
+  // The rear foot rests on a low bench behind the body. Its angles are solved
+  // per key so that the ball of that foot stays on the bench instead of sliding.
   const hold = both('side', -38);
-  const rear = (thigh: number, calf: number, foot: number) => ({
-    thigh_r: { x: thigh, z: -6 },
-    calf_r: { hinge: calf },
-    foot_r: { hinge: foot },
+  const rear = (thigh: number, knee: number, ankle: number) => ({
+    thigh_r: { x: thigh, z: -4 },
+    calf_r: { hinge: knee },
+    foot_r: { hinge: ankle },
   });
   return motion({
     id: 'bulgarian-split-squat',
     name: 'اسکوات بلغاری',
-    summary: 'اسکوات بلغاری: پای جلو خم و راست می‌شود و پای عقب روی پنجه ثابت می‌ماند.',
+    summary: 'اسکوات بلغاری: پای جلو خم و راست می‌شود و پای عقب با کف پا روی نیمکت ثابت می‌ماند.',
     seconds: 3.2,
     plantBones: ['ball_l'],
     equipment: [dumbbells()],
+    fixtures: [benchFixture([0, 0.15, -0.72], [0, 0, 0], [0.36, 0.3, 0.6])],
     standards: squatStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { legs: { thigh: -8, knee: 16 }, arms: hold, extra: rear(24, 40, 18) } },
-      { phase: 1, label: 'پایین‌رفتن', inputs: { legs: { pelvis: 4, thigh: -34, knee: 48 }, torso: 8, arms: hold, extra: rear(28, 50, 22) } },
-      { phase: 2, label: 'پایین‌ترین نقطه', inputs: { legs: { pelvis: 7, thigh: -60, knee: 92 }, torso: 14, arms: hold, extra: rear(32, 58, 26) } },
-      { phase: 3, label: 'بالا آمدن', inputs: { legs: { pelvis: 4, thigh: -34, knee: 48 }, torso: 8, arms: hold, extra: rear(28, 50, 22) } },
+      { phase: 0, label: 'آماده', inputs: { legs: { thigh: -8, knee: 16 }, arms: hold, extra: rear(49.8, 10, 19.3) } },
+      { phase: 1, label: 'پایین‌رفتن', inputs: { legs: { pelvis: 4, thigh: -34, knee: 48 }, torso: 8, arms: hold, extra: rear(25, 55, -4.3) } },
+      { phase: 2, label: 'پایین‌ترین نقطه', inputs: { legs: { pelvis: 7, thigh: -60, knee: 92 }, torso: 14, arms: hold, extra: rear(20, 81, -1) } },
+      { phase: 3, label: 'بالا آمدن', inputs: { legs: { pelvis: 4, thigh: -34, knee: 48 }, torso: 8, arms: hold, extra: rear(25, 55, -4.3) } },
     ],
   });
 };
 
 const legPress = (): MotionDefinition => {
-  const root: [number, number, number] = [0, -0.32, -0.08];
+  const root: [number, number, number] = [0, -0.17, -0.08];
   const hold = both('side', -38);
   return motion({
     id: 'leg-press',
@@ -207,7 +210,9 @@ const legPress = (): MotionDefinition => {
 };
 
 const legExtension = (): MotionDefinition => {
-  const hold = both('side', -38);
+  // Seated on the machine with the hands resting on the thighs, so nothing hangs
+  // through the floor while the shins move.
+  const hold = both('side', 24);
   return motion({
     id: 'leg-extension',
     name: 'جلو پا دستگاه',
@@ -225,7 +230,7 @@ const legExtension = (): MotionDefinition => {
 };
 
 const legCurl = (): MotionDefinition => {
-  const hold = both('side', -38);
+  const hold = both('side', 24);
   return motion({
     id: 'leg-curl',
     name: 'پشت پا نشسته دستگاه',
@@ -612,35 +617,40 @@ const facePull = (): MotionDefinition =>
 /* -------------------------------------------------------------------- core */
 
 const cableCrunch = (): MotionDefinition => {
-  const root: [number, number, number] = [0, -0.5, 0.1];
-  const hold = both('overhead-ext', 70);
+  // Kneeling under a high pulley: the thighs stay put, the hips hinge, and the
+  // trunk curls down from the pelvis. The upper body leans forward at every key
+  // because a kneeling torso is never vertical.
+  const root: [number, number, number] = [0, -0.5, 0.14];
+  const hold = both('overhead-ext', 82);
+  const kneel = { thigh: -22, knee: 128 };
   return motion({
     id: 'cable-crunch',
     name: 'کرانچ زانو زده با سیم‌کش',
-    summary: 'کرانچ زانو زده: تنه با جمع‌شدن شکم به سمت پایین جمع می‌شود و کنترل‌شده برمی‌گردد.',
+    summary: 'کرانچ زانو زده: با لگن ثابت و کمر گرد، تنه به سمت پایین جمع می‌شود و کنترل‌شده برمی‌گردد.',
     seconds: 3,
     plantBones: [],
-    equipment: [cable('both-hands', { l: [0.15, 2.0, 0.35], r: [-0.15, 2.0, 0.35] })],
+    equipment: [cable('both-hands', { l: [0.15, 2.0, 0.5], r: [-0.15, 2.0, 0.5] })],
     standards: coreStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { legs: { thigh: -20, knee: 128 }, torso: 6, arms: hold }, root },
-      { phase: 1, label: 'جمع کردن', inputs: { legs: { thigh: -20, knee: 128 }, torso: 22, arms: hold }, root },
-      { phase: 2, label: 'بالاترین جمع‌شدن', inputs: { legs: { thigh: -20, knee: 128 }, torso: 40, arms: hold }, root },
-      { phase: 3, label: 'بازگشت', inputs: { legs: { thigh: -20, knee: 128 }, torso: 22, arms: hold }, root },
+      { phase: 0, label: 'آماده', inputs: { legs: kneel, torso: 18, head: -18, arms: hold }, root },
+      { phase: 1, label: 'جمع کردن', inputs: { legs: kneel, torso: 40, head: -40, arms: hold }, root },
+      { phase: 2, label: 'بالاترین جمع‌شدن', inputs: { legs: kneel, torso: 54, head: -54, arms: hold }, root },
+      { phase: 3, label: 'بازگشت', inputs: { legs: kneel, torso: 40, head: -40, arms: hold }, root },
     ],
   });
 };
 
 const hangingLegRaise = (): MotionDefinition => {
-  const root: [number, number, number] = [0, 0.08, 0];
+  // Hands on the bar, body hanging under it: the bar is the pivot for the legs.
+  const root: [number, number, number] = [0, 0.6, 0];
   const hold = both('hang', -26);
   return motion({
     id: 'hanging-leg-raise',
     name: 'بالا آوردن پا از بارفیکس',
-    summary: 'آویزان از بارفیکس: زانوها با جمع‌شدن لگن بالا می‌آیند و آهسته پایین می‌روند.',
+    summary: 'آویزان از بارفیکس: با لگن جمع‌شده زانوها تا بالا می‌آیند و آهسته پایین می‌روند.',
     seconds: 3.2,
     plantBones: [],
-    fixtures: [{ kind: 'pull-up-bar', position: [0, 2.05, 0] }],
+    fixtures: [{ kind: 'pull-up-bar', position: [0, 2.55, 0] }],
     standards: coreStandards,
     keys: [
       { phase: 0, label: 'آویزان', inputs: { legs: { thigh: -4, knee: 12 }, arms: hold }, root },
