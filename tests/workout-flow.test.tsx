@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ExerciseViewer } from '../src/components/ExerciseViewer';
 import { GymProvider } from '../src/context/GymProvider';
 import { workoutTemplates } from '../src/data/workouts';
+import { motions } from '../src/motion/library';
 import { db } from '../src/lib/db';
 import { Workout } from '../src/pages/Workout';
 import type { WorkoutSession } from '../src/types';
@@ -51,6 +52,21 @@ describe('workout flow', () => {
     expect(screen.getByRole('button', { name: 'ست بعدی' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'ست بعدی' }));
     expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲');
+  });
+
+  it('offers the form cues of the current exercise while training', async () => {
+    const user = userEvent.setup();
+    renderWorkout();
+
+    await screen.findByText('ست فعلی');
+    const firstExercise = workoutTemplates.find((template) => template.id === 'push-a')!.exercises[0]!.exerciseId;
+    const standards = motions[firstExercise]!.standards;
+
+    await user.click(screen.getByText('نکته‌های فرم همین حرکت'));
+    for (const standard of standards) {
+      expect(screen.getByText(standard.label)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('link', { name: /دیدن نمایش سه‌بعدی حرکت/ })).toHaveAttribute('href', `/exercise/${firstExercise}`);
   });
 
   it('restores the active session and logged set after remounting the app', async () => {

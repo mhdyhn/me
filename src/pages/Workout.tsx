@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
 import { getWorkoutTemplate } from '../data/workouts';
+import { motionById } from '../motion/library';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
 import { faDigits, faNumber, formatDate, formatDuration, kg } from '../lib/format';
 import type { LoggedSet, RestTimerState, WorkoutSession } from '../types';
@@ -41,6 +42,7 @@ export function Workout() {
   const currentExerciseIndex = session?.currentExerciseIndex ?? 0;
   const currentWorkoutExercise = activeTemplate?.exercises[currentExerciseIndex];
   const exercise = currentWorkoutExercise ? exerciseById(currentWorkoutExercise.exerciseId) : undefined;
+  const currentMotion = exercise ? motionById(exercise.motionId ?? exercise.id) : undefined;
   const prescription = currentWorkoutExercise?.prescription;
   const sessionExercise = session?.exercises[currentExerciseIndex];
   const setNumber = (session?.currentSetIndex ?? 0) + 1;
@@ -241,6 +243,14 @@ export function Workout() {
           ) : loggedSet ? (
             <button className="button button--primary button--large button--full next-set-button" onClick={() => void goToNextStep()}>{isFinalSet ? 'پایان تمرین' : session.currentSetIndex + 1 < prescription.sets ? 'ست بعدی' : 'حرکت بعدی'} <ArrowRight size={17} /></button>
           ) : null}
+
+          {currentMotion && (
+            <details className="workout-form-cues">
+              <summary>نکته‌های فرم همین حرکت</summary>
+              <ul>{currentMotion.standards.map((standard) => <li key={standard.label}><strong>{standard.label}</strong><span>{standard.detail}</span></li>)}</ul>
+              <Link className="text-link" to={`/exercise/${exercise.id}`}>دیدن نمایش سه‌بعدی حرکت <ChevronRight size={14} /></Link>
+            </details>
+          )}
 
           <details className="workout-notes-disclosure"><summary>یادداشت جلسه <span>اختیاری</span></summary><textarea value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} onBlur={() => void saveSession({ ...session, notes: notesDraft })} rows={3} placeholder="انرژی، تمرکز یا نکته‌ای برای یادآوری…" /></details>
         </main>

@@ -309,6 +309,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .viewer-control-group--transport button { min-width: 31px; }
 .viewer-note { margin: 0; padding: 0 13px 11px; color: #96a29a; font-size: 9px; line-height: 1.6; text-align: end; }
 .movement-hint { margin: 0 0 9px; padding: 8px 10px; border: 1px dashed rgba(166,183,172,.18); border-radius: 9px; color: #98a49c; font-size: 9px; line-height: 1.6; }
+.workout-form-cues { border: 1px solid rgba(166,183,172,.14); border-radius: 12px; background: rgba(255,255,255,.012); }
+.workout-form-cues summary { padding: 11px 13px; color: #c9d4cb; font: 650 11px var(--font-display); cursor: pointer; }
+.workout-form-cues ul { display: grid; gap: 6px; margin: 0; padding: 0 13px 10px; list-style: none; }
+.workout-form-cues li { display: flex; flex-direction: column; gap: 2px; }
+.workout-form-cues li strong { color: #d6e0d3; font-size: 10px; }
+.workout-form-cues li span { color: #8d9a92; font-size: 9px; line-height: 1.55; }
+.workout-form-cues .text-link { display: inline-flex; align-items: center; gap: 4px; padding: 0 13px 12px; font-size: 10px; }
 .viewer-phase { display: flex; flex-direction: column; gap: 3px; padding: 10px 13px; border-top: 1px solid rgba(166,183,172,.1); background: rgba(217,246,111,.02); }
 .viewer-phase strong { color: #dfe8dd; font: 650 12px var(--font-display); }
 .viewer-phase p { margin: 0; color: #96a29a; font-size: 9px; line-height: 1.6; }
