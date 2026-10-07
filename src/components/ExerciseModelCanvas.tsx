@@ -46,9 +46,9 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     if (!rig || !motion || !seek) return;
     phase.current = phaseToTime(rig.state, seek.phase) ?? 0;
     poseRig(rig, phase.current);
-    // The phase index only matters through the token, so a re-render cannot re-seek.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rig, motion, seek?.token]);
+    // Only the token gates the jump: re-rendering with the same request must not
+    // drag the loop back to the step the reader already looked at.
+  }, [rig, motion, seek, seek?.token]);
 
   useEffect(() => {
     if (!rig) return undefined;

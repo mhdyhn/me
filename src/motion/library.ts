@@ -244,9 +244,11 @@ const legCurl = (): MotionDefinition => {
 
 const calfRaise = (seated: boolean): MotionDefinition => {
   const hold = both('side', -38);
+  // `ankle` is on top of the flat-foot solve: a small heel drop at the bottom
+  // and a full heel lift at the top, with the ball of the foot held on the floor.
   const ankle = seated
-    ? { before: { thigh: -84, knee: 92, ankle: -14 }, top: { thigh: -84, knee: 92, ankle: 26 } }
-    : { before: { thigh: -4, knee: 10, ankle: -14 }, top: { thigh: -4, knee: 10, ankle: 26 } };
+    ? { before: { thigh: -84, knee: 92, ankle: -6 }, top: { thigh: -84, knee: 92, ankle: 40 } }
+    : { before: { thigh: -4, knee: 10, ankle: -6 }, top: { thigh: -4, knee: 10, ankle: 40 } };
   const mid = (from: { thigh: number; knee: number; ankle?: number }, to: { ankle?: number }) => ({
     thigh: from.thigh,
     knee: from.knee,
