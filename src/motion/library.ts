@@ -650,7 +650,7 @@ const hangingLegRaise = (): MotionDefinition => {
     summary: 'آویزان از بارفیکس: با لگن جمع‌شده زانوها تا بالا می‌آیند و آهسته پایین می‌روند.',
     seconds: 3.2,
     plantBones: [],
-    fixtures: [{ kind: 'pull-up-bar', position: [0, 2.55, 0] }],
+    fixtures: [{ kind: 'pull-up-bar', position: [0, 2.71, 0.02] }],
     standards: coreStandards,
     keys: [
       { phase: 0, label: 'آویزان', inputs: { legs: { thigh: -4, knee: 12 }, arms: hold }, root },

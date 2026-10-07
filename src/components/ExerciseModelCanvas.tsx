@@ -7,6 +7,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { phaseToTime } from '../motion/sampler';
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
+import { buildPropScene } from '../motion/props';
 
 type ViewAngle = 'front' | 'side' | 'back';
 
@@ -32,6 +33,8 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
   const gltf = useLoader(GLTFLoader, asset, (loader) => loader.setMeshoptDecoder(MeshoptDecoder));
   const rig = useMemo(() => (motion ? buildMotionRig(gltf.scene, motion) : null), [gltf, motion]);
   const frame = useMemo(() => (rig ? motionBounds(rig) : { centre: [0, 0.85, 0] as [number, number, number], radius: 1 }), [rig]);
+  // Implements and fixtures come from the same sampled state the bones use.
+  const props = useMemo(() => (rig ? buildPropScene(rig.state) : null), [rig]);
   const phase = useRef(0);
   const label = useRef('');
 
@@ -40,15 +43,17 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     label.current = '';
     if (!rig) return;
     poseRig(rig, 0);
-  }, [rig, restartToken]);
+    props?.update();
+  }, [rig, props, restartToken]);
 
   useEffect(() => {
     if (!rig || !motion || !seek) return;
     phase.current = phaseToTime(rig.state, seek.phase) ?? 0;
     poseRig(rig, phase.current);
+    props?.update();
     // Only the token gates the jump: re-rendering with the same request must not
     // drag the loop back to the step the reader already looked at.
-  }, [rig, motion, seek, seek?.token]);
+  }, [rig, motion, props, seek, seek?.token]);
 
   useEffect(() => {
     if (!rig) return undefined;
@@ -59,6 +64,7 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     if (!rig || !motion) return;
     if (playing) phase.current = (phase.current + (delta * speed) / motion.durationSeconds) % 1;
     const state = poseRig(rig, phase.current);
+    props?.update();
     if (state.keyLabel !== label.current) {
       label.current = state.keyLabel;
       onKeyLabel?.(state.keyLabel, state.keyPhase);
@@ -68,6 +74,7 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
   return (
     <>
       <primitive object={gltf.scene} dispose={null} />
+      {props ? <primitive object={props.group} dispose={null} /> : null}
       <CameraControls view={view} target={frame.centre} radius={frame.radius} />
     </>
   );
