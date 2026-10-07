@@ -66,15 +66,23 @@ export const REST_JOINTS = {
 } as const satisfies Record<string, readonly [number, number, number]>;
 
 interface Axis {
-  origin: Vector3;
-  direction: Vector3;
-  length: number;
+  /** Joint the bone starts at. */
+  x: number;
+  y: number;
+  z: number;
+  /** Unit-direction times the bone's length. */
+  dx: number;
+  dy: number;
+  dz: number;
+  /** Squared length, so a projection needs no square root. */
+  lengthSq: number;
 }
 
 const axis = (from: readonly [number, number, number], to: readonly [number, number, number]): Axis => {
-  const origin = new Vector3(...from);
-  const direction = new Vector3(...to).sub(origin);
-  return { origin, direction, length: direction.length() };
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const dz = to[2] - from[2];
+  return { x: from[0], y: from[1], z: from[2], dx, dy, dz, lengthSq: dx * dx + dy * dy + dz * dz };
 };
 
 const upperArm = axis(REST_JOINTS.shoulder, REST_JOINTS.elbow);
@@ -101,17 +109,18 @@ const box =
     soft(v.x, min[0], max[0]) * soft(v.y, min[1], max[1]) * soft(v.z, min[2], max[2]),
   );
 
-/** Where a vertex sits along a bone: 0 at the near joint, 1 at the far joint. */
-const alongBone = (vertex: RestVertex, bone: Axis): number => {
-  const local = new Vector3(vertex.x, vertex.y, vertex.z).sub(bone.origin);
-  return local.dot(bone.direction) / (bone.length * bone.length);
-};
+/**
+ * Where a vertex sits along a bone: 0 at the near joint, 1 at the far joint. Plain
+ * arithmetic on purpose — this runs for every vertex of the figure, so it allocates
+ * nothing.
+ */
+const alongBone = (vertex: RestVertex, bone: Axis): number =>
+  ((vertex.x - bone.x) * bone.dx + (vertex.y - bone.y) * bone.dy + (vertex.z - bone.z) * bone.dz) / bone.lengthSq;
 
 /** How far in front of (+) or behind (−) the bone's axis a vertex sits. */
 const acrossBone = (vertex: RestVertex, bone: Axis): number => {
-  const point = new Vector3(vertex.x, vertex.y, vertex.z);
   const t = Math.max(0, Math.min(1, alongBone(vertex, bone)));
-  return point.z - (bone.origin.z + bone.direction.z * t);
+  return vertex.z - (bone.z + bone.dz * t);
 };
 
 /** Distance from a joint, soft-edged, optionally hollow in the middle. */
@@ -169,8 +178,8 @@ export const REGION_SHAPES: Record<MuscleRegionId, Shape> = {
   quads: box([0.02, 0.49, 0.02], [0.25, 0.94, 0.4]),
   hamstrings: box([0.02, 0.47, -0.4], [0.25, 0.94, 0]),
   adductors: box([0, 0.49, -0.4], [0.065, 0.94, 0.4]),
-  calves: onBone(/^calf_|^ball_/, () => 1),
-  soleus: onBone(/^calf_|^ball_/, (v) => soft(v.y, 0.09, 0.29, 0.05) * (v.z < 0.03 ? 1 : 0)),
+  calves: onBone(/^calf_/, () => 1),
+  soleus: onBone(/^calf_/, (v) => soft(v.y, 0.09, 0.29, 0.05) * (v.z < 0.03 ? 1 : 0)),
   biceps: onBone(/^upperarm_/, (v) => armFront(v) * limb(upperArm, 0.16, 1.06)(v)),
   brachialis: onBone(/^upperarm_/, (v) => armFront(v) * limb(upperArm, 0.45, 1.06)(v)),
   triceps: onBone(/^upperarm_/, (v) => armBack(v) * limb(upperArm, 0.16, 1.06)(v)),
@@ -363,6 +372,213 @@ export function vertexMuscleColour(vertex: RestVertex, highlights: MuscleHighlig
     strength = Math.max(strength, REGION_SHAPES[highlight.region](vertex) * highlight.strength);
   }
   return ANATOMY_PALETTE.body.clone().lerp(ANATOMY_PALETTE.prime, Math.min(1, strength));
+}
+
+/**
+ * How much each region grows the figure, as a peak fraction of the figure's height — the
+ * build of someone who trains, sculpted procedurally so the app ships no second model.
+ * Fractions rather than metres keep the shape intact if the model is ever replaced.
+ */
+export const ATHLETIC_BUILD: Partial<Record<MuscleRegionId, number>> = {
+  chest: 0.011,
+  'upper-chest': 0.009,
+  lats: 0.012,
+  'mid-back': 0.007,
+  'upper-traps': 0.007,
+  'rotator-cuff': 0.005,
+  'front-delts': 0.008,
+  'side-delts': 0.011,
+  'rear-delts': 0.008,
+  shoulders: 0.011,
+  biceps: 0.009,
+  brachialis: 0.006,
+  triceps: 0.01,
+  forearms: 0.005,
+  // The waist only firms up: the athletic read comes from the chest, shoulders, arms and
+  // legs, and a barrel waist would undo it.
+  abs: 0.0025,
+  obliques: 0.003,
+  erectors: 0.005,
+  'hip-flexors': 0.003,
+  glutes: 0.011,
+  quads: 0.011,
+  hamstrings: 0.01,
+  adductors: 0.005,
+  calves: 0.008,
+  soleus: 0.005,
+};
+
+/**
+ * Shaping on top of a region: the two halves of the chest meet at the sternum, so the
+ * middle of the body stays where it is while the muscles beside it grow. Without this the
+ * chest would rise as one slab.
+ */
+const BUILD_SHAPING: Partial<Record<MuscleRegionId, Shape>> = {
+  // The pectorals sit high on the ribcage: the shape tapers into the sternum and into the
+  // belly, so the chest grows where a chest does instead of pushing the waist out with it.
+  chest: (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.05) * soft(v.y, 1.31, 1.44, 0.04),
+  'upper-chest': (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.05) * soft(v.y, 1.36, 1.52, 0.04),
+  glutes: (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.03),
+  lats: (v) => soft(Math.abs(v.x), 0.05, 0.4, 0.03),
+};
+
+/** Meshes the build sculpts: the figure itself plus what it wears over muscle. */
+const SCULPTED_MESHES = ['Body', 'Clothes_1'];
+
+/** A suit over a muscle follows it, but only part of the way, or the shirt balloons. */
+const SUIT_FOLLOW = 0.6;
+
+const sculptedScenes = new WeakSet<Object3D>();
+
+interface QuantisedAttribute {
+  array: ArrayLike<number>;
+  itemSize: number;
+  normalized: boolean;
+  needsUpdate: boolean;
+}
+
+interface SculptGeometry {
+  getAttribute(name: string): QuantisedAttribute | undefined;
+  setAttribute(name: string, attribute: BufferAttribute | unknown): void;
+  index?: { array: ArrayLike<number> } | null;
+  computeVertexNormals?(): void;
+  computeBoundingSphere?(): void;
+  computeBoundingBox?(): void;
+}
+
+interface SculptableMesh {
+  isMesh?: boolean;
+  name: string;
+  geometry?: SculptGeometry;
+}
+
+/**
+ * The shipped model stores positions and normals as normalised 16-bit integers, so `raw`
+ * carries no meaning until it is divided by the range of the storage type. Writing has to
+ * undo that same scaling — a plain `setXYZ` would round a metre into an integer and
+ * collapse the figure.
+ */
+const storageRange = (attribute: QuantisedAttribute): number => {
+  if (!attribute.normalized) return 1;
+  const array = attribute.array;
+  if (array instanceof Int8Array) return 127;
+  if (array instanceof Uint8Array) return 255;
+  if (array instanceof Int16Array) return 32767;
+  if (array instanceof Uint16Array) return 65535;
+  return 1;
+};
+
+const readComponent = (attribute: QuantisedAttribute, range: number, index: number, component: number): number =>
+  Number(attribute.array[index * attribute.itemSize + component]) / range;
+
+const writeComponent = (
+  attribute: QuantisedAttribute,
+  range: number,
+  index: number,
+  component: number,
+  value: number,
+): void => {
+  const store = attribute.array as unknown as { [position: number]: number };
+  store[index * attribute.itemSize + component] =
+    range === 1 ? value : Math.max(-range, Math.min(range, Math.round(value * range)));
+};
+
+/** Smooths a per-vertex field over the mesh edges, so a muscle never ends in a crease. */
+const smoothField = (field: Float32Array, indices: Uint32Array, passes = 1): Float32Array => {
+  let current = field;
+  for (let pass = 0; pass < passes; pass += 1) {
+    const sum = new Float32Array(current.length);
+    const count = new Float32Array(current.length);
+    for (let index = 0; index < indices.length; index += 3) {
+      for (let corner = 0; corner < 3; corner += 1) {
+        const a = indices[index + corner]!;
+        const b = indices[index + ((corner + 1) % 3)]!;
+        sum[a] = (sum[a] ?? 0) + current[b]!;
+        count[a] = (count[a] ?? 0) + 1;
+        sum[b] = (sum[b] ?? 0) + current[a]!;
+        count[b] = (count[b] ?? 0) + 1;
+      }
+    }
+    const next = new Float32Array(current.length);
+    for (let index = 0; index < current.length; index += 1) {
+      const average = count[index]! > 0 ? sum[index]! / count[index]! : current[index]!;
+      next[index] = current[index]! * 0.42 + average * 0.58;
+    }
+    current = next;
+  }
+  return current;
+};
+
+/**
+ * Gives the figure the build of someone who trains, by pushing vertices out along their own
+ * normals inside the muscle regions. It runs once per loaded scene, in the rest pose, and
+ * leaves the skeleton untouched — so every movement plays on the sculpted body.
+ */
+export function buildAthleticFigure(root: Object3D): void {
+  if (sculptedScenes.has(root)) return;
+  sculptedScenes.add(root);
+  const rest = collectRestVertices(root);
+  root.updateMatrixWorld(true);
+
+  root.traverse((object) => {
+    const mesh = object as unknown as SculptableMesh;
+    const vertices = rest.get(mesh?.name ?? '');
+    if (!mesh?.isMesh || !vertices || !SCULPTED_MESHES.includes(mesh.name) || !mesh.geometry) return;
+    const geometry = mesh.geometry;
+    const position = geometry.getAttribute('position');
+    const normal = geometry.getAttribute('normal');
+    if (!position || !normal) return;
+    const positionRange = storageRange(position);
+    const normalRange = storageRange(normal);
+
+    let lowest = Infinity;
+    let highest = -Infinity;
+    for (let index = 0; index < vertices.length; index += 1) {
+      const y = readComponent(position, positionRange, index, 1);
+      if (y < lowest) lowest = y;
+      if (y > highest) highest = y;
+    }
+    const height = Math.max(0.001, highest - lowest);
+    const follow = mesh.name === 'Body' ? 1 : SUIT_FOLLOW;
+
+    const bulge = new Float32Array(vertices.length);
+    for (let index = 0; index < vertices.length; index += 1) {
+      const vertex = vertices[index]!;
+      let peak = 0;
+      for (const [region, amount] of Object.entries(ATHLETIC_BUILD) as [MuscleRegionId, number][]) {
+        const shaping = BUILD_SHAPING[region];
+        const weight = REGION_SHAPES[region](vertex) * (shaping ? shaping(vertex) : 1);
+        peak = Math.max(peak, weight * amount);
+      }
+      bulge[index] = peak * height * follow;
+    }
+    const indices = geometry.index
+      ? Uint32Array.from(geometry.index.array as ArrayLike<number>)
+      : Uint32Array.from({ length: vertices.length }, (_, index) => index);
+    const smoothed = smoothField(bulge, indices);
+
+    let moved = false;
+    for (let index = 0; index < vertices.length; index += 1) {
+      const distance = smoothed[index]!;
+      if (distance === 0) continue;
+      moved = true;
+      for (let component = 0; component < 3; component += 1) {
+        const point = readComponent(position, positionRange, index, component);
+        const direction = readComponent(normal, normalRange, index, component);
+        writeComponent(position, positionRange, index, component, point + direction * distance);
+      }
+    }
+    if (!moved) return;
+
+    position.needsUpdate = true;
+    // Recomputing needs a float target: the shipped normal buffer is quantised, and
+    // three writes recomputed normals as plain numbers.
+    const recalculated = new Float32Array(vertices.length * 3);
+    geometry.setAttribute('normal', new BufferAttribute(recalculated, 3));
+    geometry.computeVertexNormals?.();
+    geometry.computeBoundingSphere?.();
+    geometry.computeBoundingBox?.();
+  });
 }
 
 export interface MusclePaint {

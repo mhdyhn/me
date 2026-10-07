@@ -6,6 +6,7 @@ import {
   MUSCLE_REGION_IDS,
   REGION_SHAPES,
   REST_JOINTS,
+  buildAthleticFigure,
   collectRestVertices,
   createMusclePaint,
   muscleHighlights,
@@ -112,7 +113,7 @@ describe('muscle map', () => {
     expect(grip.every((vertex) => /^(hand|thumb|index|middle|ring|pinky)_/.test(vertex.bone))).toBe(true);
     // Calves never paint the thigh, and the quads never paint the back of the leg.
     for (const vertex of vertices.filter((item) => REGION_SHAPES.calves(item) > 0.5)) {
-      expect(vertex.bone.startsWith('calf_') || vertex.bone.startsWith('ball_')).toBe(true);
+      expect(vertex.bone.startsWith('calf_'), 'the shank carries the calf highlight').toBe(true);
     }
     const quads = bounds('quads', vertices);
     expect(quads.box.z[0]).toBeGreaterThan(-0.08);
@@ -196,6 +197,81 @@ describe('anatomy view', () => {
     expect(paintedMaterial(gltf.scene, 'Body')).toBe(shipped.body);
     expect(paintedMaterial(gltf.scene, 'Clothes_1')).toBe(shipped.suit);
     expect(paintedMaterial(gltf.scene, 'Body').vertexColors).toBe(false);
+  });
+
+  /** Mean distance of the vertices of one bone from that bone's axis. */
+  const measureThickness = (root: Object3D, axis: { from: readonly number[]; to: readonly number[] }, bones: RegExp) => {
+    const vertices = [...collectRestVertices(root).values()].flat().filter((vertex) => bones.test(vertex.bone));
+    let total = 0;
+    for (const vertex of vertices) {
+      const dx = axis.to[0]! - axis.from[0]!;
+      const dy = axis.to[1]! - axis.from[1]!;
+      const dz = axis.to[2]! - axis.from[2]!;
+      const lengthSq = dx * dx + dy * dy + dz * dz;
+      const t = Math.max(0, Math.min(1, ((vertex.x - axis.from[0]!) * dx + (vertex.y - axis.from[1]!) * dy + (vertex.z - axis.from[2]!) * dz) / lengthSq));
+      total += Math.hypot(
+        vertex.x - (axis.from[0]! + dx * t),
+        vertex.y - (axis.from[1]! + dy * t),
+        vertex.z - (axis.from[2]! + dz * t),
+      );
+    }
+    return total / Math.max(1, vertices.length);
+  };
+
+  /** Mean distance from the body's centre line, over the vertices of one band of height. */
+  const bandReach = (root: Object3D, band: [number, number]) => {
+    const vertices = [...collectRestVertices(root).values()].flat().filter((vertex) => vertex.y > band[0] && vertex.y < band[1]);
+    return vertices.reduce((sum, vertex) => sum + Math.hypot(vertex.x, vertex.z), 0) / Math.max(1, vertices.length);
+  };
+
+  /** Mean depth in front of the spine, over the front of one band of height. */
+  const bandDepth = (root: Object3D, band: [number, number]) => {
+    const vertices = [...collectRestVertices(root).values()]
+      .flat()
+      .filter((vertex) => vertex.y > band[0] && vertex.y < band[1] && vertex.z > 0.03 && /spine|clavicle/.test(vertex.bone));
+    return vertices.reduce((sum, vertex) => sum + vertex.z, 0) / Math.max(1, vertices.length);
+  };
+
+  it('grows the figure the ways the build says it does, and only there', async () => {
+    const gltf = await loadBrowserScene();
+    const arm = { from: REST_JOINTS.shoulder, to: REST_JOINTS.elbow };
+    const calf = { from: REST_JOINTS.knee, to: REST_JOINTS.ankle };
+    const footReach = (root: Object3D) => {
+      const vertices = [...collectRestVertices(root).values()].flat().filter((vertex) => /^(foot|ball)_/.test(vertex.bone));
+      return vertices.reduce((sum, vertex) => sum + Math.hypot(vertex.x, vertex.y, vertex.z), 0) / Math.max(1, vertices.length);
+    };
+    const before = {
+      chest: bandDepth(gltf.scene, [1.28, 1.42]),
+      foot: footReach(gltf.scene),
+      arm: measureThickness(gltf.scene, arm, /^upperarm_/),
+      calf: measureThickness(gltf.scene, calf, /^calf_/),
+      head: bandReach(gltf.scene, [1.7, 1.8]),
+    };
+
+    buildAthleticFigure(gltf.scene);
+    gltf.scene.updateMatrixWorld(true);
+
+    const after = {
+      chest: bandDepth(gltf.scene, [1.28, 1.42]),
+      foot: footReach(gltf.scene),
+      arm: measureThickness(gltf.scene, arm, /^upperarm_/),
+      calf: measureThickness(gltf.scene, calf, /^calf_/),
+      head: bandReach(gltf.scene, [1.7, 1.8]),
+    };
+    // The muscles grow, and the chest grows the most.
+    expect(after.chest - before.chest, 'chest depth').toBeGreaterThan(0.003);
+    expect(after.arm - before.arm, 'arm thickness').toBeGreaterThan(0.0015);
+    expect(after.calf - before.calf, 'calf thickness').toBeGreaterThan(0.0005);
+    expect(after.chest - before.chest).toBeGreaterThan((after.calf - before.calf) * 2);
+    // The skull is not a muscle.
+    expect(Math.abs(after.head - before.head), 'head').toBeLessThan(0.001);
+    // Feet keep their size: they live inside shoes, and the shoes do not follow the build.
+    // A few micrometres of smoothing bleed from the calf above them is fine.
+    expect(Math.abs(after.foot - before.foot), 'feet').toBeLessThan(1e-4);
+    // Sculpting is idempotent: mounting the viewer twice must not grow the figure twice.
+    buildAthleticFigure(gltf.scene);
+    gltf.scene.updateMatrixWorld(true);
+    expect(Math.abs(bandDepth(gltf.scene, [1.28, 1.42]) - after.chest)).toBeLessThan(1e-6);
   });
 
   it('keeps the colours under the skinning of the loop', async () => {

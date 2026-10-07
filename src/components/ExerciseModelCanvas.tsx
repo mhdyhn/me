@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { phaseToTime } from '../motion/sampler';
-import { muscleHighlights, musclePaintFor } from '../motion/muscles';
+import { buildAthleticFigure, muscleHighlights, musclePaintFor } from '../motion/muscles';
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
 import { buildPropScene } from '../motion/props';
@@ -48,7 +48,13 @@ function ExerciseRig({
   secondaryMuscles = [],
 }: RiggedProps) {
   const gltf = useLoader(GLTFLoader, asset, (loader) => loader.setMeshoptDecoder(MeshoptDecoder));
-  const rig = useMemo(() => (motion ? buildMotionRig(gltf.scene, motion) : null), [gltf, motion]);
+  // The figure the app shows is the shipped CC0 body given the build of someone who
+  // trains: the muscle regions push the mesh out along its own normals, once, before the
+  // rig reads the rest pose. The skeleton is untouched, so every loop plays on it.
+  const rig = useMemo(() => {
+    buildAthleticFigure(gltf.scene);
+    return motion ? buildMotionRig(gltf.scene, motion) : null;
+  }, [gltf, motion]);
   // Built while the scene is still in the rest pose the rig re-anchored it to: every
   // muscle region is measured in that pose. One paint serves every movement.
   const paint = useMemo(() => musclePaintFor(gltf.scene), [gltf.scene]);
