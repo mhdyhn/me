@@ -23,8 +23,8 @@ export const armPoses = {
   'face-pull-out': { upperarm: { x: -3.9, y: -7, z: 39.7 }, lowerarm: { hinge: -10.2 } },
   'row-up-extended': { upperarm: { x: -33.6, y: -29.7, z: -25.6 }, lowerarm: { hinge: -35 } },
   'row-up-pulled': { upperarm: { x: 36.7, y: 18.9, z: -23 }, lowerarm: { hinge: 65.1 } },
-  'bent-hang': { upperarm: { x: -17.8, y: -20.3, z: -34.4 }, lowerarm: { hinge: -17.1 } },
-  'bent-pulled': { upperarm: { x: 14.4, y: 4.4, z: -24.4 }, lowerarm: { hinge: 62.5 } },
-  'bent-fly-open': { upperarm: { x: 3.6, y: -1.6, z: 43.3 }, lowerarm: { hinge: -30.6 } },
-  'bent-fly-down': { upperarm: { x: -17.2, y: -18.9, z: -31.1 }, lowerarm: { hinge: -2.5 } },
+  'bent-hang': { upperarm: { x: -8.6, y: -12.8, z: -35.9 }, lowerarm: { hinge: 31.7 } },
+  'bent-pulled': { upperarm: { x: 15, y: 8.3, z: -21.1 }, lowerarm: { hinge: 86.7 } },
+  'bent-fly-open': { upperarm: { x: 19.7, y: 11.9, z: 45.8 }, lowerarm: { hinge: -14.7 } },
+  'bent-fly-down': { upperarm: { x: -11.1, y: -12.2, z: -32.2 }, lowerarm: { hinge: 42.1 } },
 } as const;

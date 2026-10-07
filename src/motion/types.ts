@@ -41,13 +41,24 @@ export interface MotionEquipment {
   offset?: [number, number, number];
 }
 
+/** One extra box of a fixture: a backrest, a seat, a chest pad, a upright frame. */
+export interface FixturePart {
+  /** Offset from the fixture's own centre, in metres, rotated with the fixture. */
+  offset: [number, number, number];
+  size: [number, number, number];
+  /** Rotation around X, then Y, then Z in degrees, on top of the fixture's own. */
+  rotation?: [number, number, number];
+}
+
 export interface MotionFixture {
-  kind: 'bench' | 'machine' | 'pull-up-bar';
+  kind: 'bench' | 'machine' | 'pull-up-bar' | 'seat';
   position: [number, number, number];
   /** Rotation around X, Y and Z in degrees, applied in that order. */
   rotation?: [number, number, number];
   /** Box size in metres; the offline renderer falls back to a per-kind default. */
   size?: [number, number, number];
+  /** Extra boxes: a seat backrest, a chest pad, and so on. */
+  parts?: FixturePart[];
 }
 
 /** Ground contact kept fixed by the root solve. */

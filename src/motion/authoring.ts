@@ -68,7 +68,12 @@ export interface PoseInputs {
   legs?: LegAngles;
   /** Total forward lean of the trunk, spread over the three spine bones. */
   torso?: number;
-  /** Where the head looks: defaults to cancelling the trunk lean. */
+  /**
+   * Extra neck/head angle on top of the trunk. Positive tucks the chin toward
+   * the chest (a rounded-back crunch), negative lifts it. The default keeps the
+   * neck in line with the trunk, which is the neutral cue for every bent-over
+   * movement; the head only counter-rotates when a movement asks for it.
+   */
   head?: number;
   arms?: { clavicle?: JointRotation; upperarm?: JointRotation; lowerarm?: JointRotation };
   extra?: Pose;
@@ -94,7 +99,7 @@ export function buildPose({ rootRot = 0, legs = {}, torso = 0, head, arms = {}, 
     joint(pose, 'spine_02', { x: share });
     joint(pose, 'spine_03', { x: share });
   }
-  const headAngle = head ?? -torso;
+  const headAngle = head ?? 0;
   if (headAngle) {
     joint(pose, 'neck_01', { x: headAngle * 0.4 });
     joint(pose, 'head', { x: headAngle * 0.6 });
@@ -126,6 +131,30 @@ export const benchFixture = (
   rotation: [number, number, number] = [0, 0, 0],
   size?: [number, number, number],
 ): MotionFixture => ({ kind: 'bench', position, rotation, size });
+
+/**
+ * Padded seat of a machine, with an optional backrest. Both are measured on the
+ * pose with `npx vite-node tools/seat-fit.ts`, so the pad really sits under the
+ * hips and the backrest really lies along the trunk.
+ */
+export const seatFixture = (
+  position: [number, number, number],
+  backrest?: { offset: [number, number, number]; tilt: number; size?: [number, number, number] },
+): MotionFixture => ({
+  kind: 'seat',
+  position,
+  size: [0.46, 0.11, 0.46],
+  parts: backrest
+    ? [{ offset: backrest.offset, size: backrest.size ?? [0.44, 0.5, 0.1], rotation: [backrest.tilt, 0, 0] }]
+    : [],
+});
+
+/** Machine frame in front of the body, optionally with a chest pad. */
+export const machineFixture = (
+  position: [number, number, number],
+  parts?: MotionFixture['parts'],
+  size?: [number, number, number],
+): MotionFixture => ({ kind: 'machine', position, parts, size });
 
 export interface MotionSpec {
   id: string;

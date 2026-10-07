@@ -10,6 +10,8 @@ import {
   dumbbellLeft,
   dumbbells,
   loop,
+  machineFixture,
+  seatFixture,
   type PoseInputs,
 } from './authoring';
 import type {
@@ -43,6 +45,19 @@ const at = (family: keyof typeof armPoses, hinge: number): { upperarm: JointRota
   const solved = armPoses[family];
   return { upperarm: { ...solved.upperarm }, lowerarm: { hinge } };
 };
+
+/** Shoulder channels of a family, shifted so a different trunk lean keeps the arm swing. */
+const leanAt = (family: keyof typeof armPoses, hinge: number, lean: number) => {
+  const arm = at(family, hinge);
+  return { upperarm: { ...arm.upperarm, x: (arm.upperarm.x ?? 0) - lean }, lowerarm: arm.lowerarm };
+};
+
+/** Both arms, leaning with a trunk that differs from the family's fitted base. */
+const bent = (family: keyof typeof armPoses, hinge: number, lean: number): PoseInputs['arms'] =>
+  leanAt(family, hinge, lean);
+
+/** The trunk lean the bent-over families are fitted on. */
+const BENT_LEAN = 72;
 
 /** Both arms in one family, at one elbow angle. */
 const both = (family: keyof typeof armPoses, hinge: number): PoseInputs['arms'] => at(family, hinge);
@@ -218,13 +233,16 @@ const legExtension = (): MotionDefinition => {
     name: 'جلو پا دستگاه',
     summary: 'جلو پا: زانو از حالت خم تا باز شدن کامل کشیده می‌شود و آهسته برمی‌گردد.',
     seconds: 2.8,
-    fixtures: [{ kind: 'machine', position: [0, 0.3, -0.25] }],
+    // The feet hand in the air on this machine, so nothing is planted: the root
+    // is pinned instead and only the shins move, exactly as the pad holds them.
+    plantBones: [],
+    fixtures: [SEAT_LEG_EXTENSION],
     standards: machineStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { rootRot: -8, legs: { thigh: -80, knee: 96 }, arms: hold } },
-      { phase: 1, label: 'کشیدن', inputs: { rootRot: -8, legs: { thigh: -80, knee: 52 }, arms: hold } },
-      { phase: 2, label: 'زانوی باز', inputs: { rootRot: -8, legs: { thigh: -80, knee: 8 }, arms: hold } },
-      { phase: 3, label: 'بازگشت', inputs: { rootRot: -8, legs: { thigh: -80, knee: 52 }, arms: hold } },
+      { phase: 0, label: 'آماده', inputs: { rootRot: -8, legs: { thigh: -80, knee: 96 }, arms: hold }, root: SEAT_ROOT_LEG_MACHINE },
+      { phase: 1, label: 'کشیدن', inputs: { rootRot: -8, legs: { thigh: -80, knee: 52 }, arms: hold }, root: SEAT_ROOT_LEG_MACHINE },
+      { phase: 2, label: 'زانوی باز', inputs: { rootRot: -8, legs: { thigh: -80, knee: 8 }, arms: hold }, root: SEAT_ROOT_LEG_MACHINE },
+      { phase: 3, label: 'بازگشت', inputs: { rootRot: -8, legs: { thigh: -80, knee: 52 }, arms: hold }, root: SEAT_ROOT_LEG_MACHINE },
     ],
   });
 };
@@ -236,13 +254,14 @@ const legCurl = (): MotionDefinition => {
     name: 'پشت پا نشسته دستگاه',
     summary: 'پشت پا نشسته: زانو از حالت باز تا جمع شدن کامل ساق را جمع می‌کند.',
     seconds: 2.8,
-    fixtures: [benchFixture([0, 0.26, -0.24])],
+    plantBones: [],
+    fixtures: [SEAT_LEG_CURL],
     standards: machineStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -84, knee: 24 }, arms: hold } },
-      { phase: 1, label: 'جمع کردن', inputs: { rootRot: -6, legs: { thigh: -84, knee: 70 }, arms: hold } },
-      { phase: 2, label: 'جمع شدن کامل', inputs: { rootRot: -6, legs: { thigh: -84, knee: 112 }, arms: hold } },
-      { phase: 3, label: 'بازگشت', inputs: { rootRot: -6, legs: { thigh: -84, knee: 70 }, arms: hold } },
+      { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -84, knee: 24 }, arms: hold }, root: SEAT_ROOT_LEG_CURL },
+      { phase: 1, label: 'جمع کردن', inputs: { rootRot: -6, legs: { thigh: -84, knee: 70 }, arms: hold }, root: SEAT_ROOT_LEG_CURL },
+      { phase: 2, label: 'جمع شدن کامل', inputs: { rootRot: -6, legs: { thigh: -84, knee: 112 }, arms: hold }, root: SEAT_ROOT_LEG_CURL },
+      { phase: 3, label: 'بازگشت', inputs: { rootRot: -6, legs: { thigh: -84, knee: 70 }, arms: hold }, root: SEAT_ROOT_LEG_CURL },
     ],
   });
 };
@@ -266,19 +285,21 @@ const calfRaise = (seated: boolean): MotionDefinition => {
       ? 'ساق نشسته: با زانوی خم، پاشنه پایین می‌رود و روی پنجه بالا می‌آید.'
       : 'ساق ایستاده: بلند شدن روی پنجه‌ها و پایین آمدن تا کشش کامل ساق.',
     seconds: 2.6,
-    plantBones: ['ball_l', 'ball_r'],
+    // Seated, the knees are held under the pads and only the heels travel, so the
+    // root is pinned; standing, the balls of the feet stay planted on the floor.
+    plantBones: seated ? [] : ['ball_l', 'ball_r'],
     equipment: seated ? [] : [dumbbells()],
-    fixtures: seated ? [benchFixture([0, 0.24, -0.2])] : undefined,
+    fixtures: seated ? [SEAT_CALF] : undefined,
     standards: [
       { label: 'پاشنهٔ کامل', detail: 'در بالا تا حد امکان روی پنجه بلند می‌شوی.' },
       { label: 'بدون پرش', detail: 'بالا و پایین رفتن آرام و کنترل‌شده است.' },
       { label: 'زانو ثابت', detail: 'زانو در تمام مسیر تقریباً باز می‌ماند.' },
     ],
     keys: [
-      { phase: 0, label: 'آماده', inputs: { rootRot: seated ? -6 : 0, legs: ankle.before, arms: hold } },
-      { phase: 1, label: 'بلند شدن', inputs: { rootRot: seated ? -6 : 0, legs: mid(ankle.before, ankle.top), arms: hold } },
-      { phase: 2, label: 'روی پنجه', inputs: { rootRot: seated ? -6 : 0, legs: ankle.top, arms: hold } },
-      { phase: 3, label: 'پایین آمدن', inputs: { rootRot: seated ? -6 : 0, legs: mid(ankle.before, ankle.top), arms: hold } },
+      { phase: 0, label: 'آماده', inputs: { rootRot: seated ? -6 : 0, legs: ankle.before, arms: hold }, root: seated ? SEAT_ROOT_CALF : undefined },
+      { phase: 1, label: 'بلند شدن', inputs: { rootRot: seated ? -6 : 0, legs: mid(ankle.before, ankle.top), arms: hold }, root: seated ? SEAT_ROOT_CALF : undefined },
+      { phase: 2, label: 'روی پنجه', inputs: { rootRot: seated ? -6 : 0, legs: ankle.top, arms: hold }, root: seated ? SEAT_ROOT_CALF : undefined },
+      { phase: 3, label: 'پایین آمدن', inputs: { rootRot: seated ? -6 : 0, legs: mid(ankle.before, ankle.top), arms: hold }, root: seated ? SEAT_ROOT_CALF : undefined },
     ],
   });
 };
@@ -299,10 +320,10 @@ const romanianDeadlift = (): MotionDefinition => {
       { label: 'دامنهٔ کنترل‌شده', detail: 'پایین رفتن تا حدی است که کشش پشت ران حس شود.' },
     ],
     keys: [
-      { phase: 0, label: 'آماده', inputs: { legs: { thigh: -8, knee: 14 }, arms: both('side', -30) } },
-      { phase: 1, label: 'پایین رفتن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 24, arms: both('side', -24) } },
-      { phase: 2, label: 'انتهای کشش', inputs: { legs: { pelvis: 14, thigh: -24, knee: 34 }, torso: 46, arms: both('bent-hang', -18) } },
-      { phase: 3, label: 'بالا آمدن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 24, arms: both('side', -24) } },
+      { phase: 0, label: 'آماده', inputs: { legs: { thigh: -8, knee: 14 }, arms: both('side', -42) } },
+      { phase: 1, label: 'پایین رفتن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 36, arms: bent('side', -22, 36) } },
+      { phase: 2, label: 'انتهای کشش', inputs: { legs: { pelvis: 14, thigh: -24, knee: 34 }, torso: BENT_LEAN, arms: both('bent-hang', 32) } },
+      { phase: 3, label: 'بالا آمدن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 36, arms: bent('side', -22, 36) } },
     ],
   });
 };
@@ -313,7 +334,38 @@ const FLAT_BENCH = benchFixture([0, 0.225, -0.95]);
 /** Thin pad under an inclined body: measured so the body's back rests on it. */
 const INCLINE_BENCH = benchFixture([0, 0.505, -0.32], [30, 0, 0], [0.36, 0.2, 1.1]);
 const INCLINE_PAD_28 = benchFixture([0, 0.5, -0.32], [28, 0, 0], [0.36, 0.2, 1.1]);
-const SEATED_BENCH = benchFixture([0, 0.24, -0.2]);
+/**
+ * Machine seats measured on the sitting poses with `npx vite-node tools/seat-fit.ts`
+ * so the pad really sits under the hips and the backrest really lies on the trunk.
+ */
+const SEAT_BACKREST = { offset: [0, 0.292, -0.028] as [number, number, number], tilt: -15.216 };
+const SEAT_UPRIGHT = seatFixture([0, 0.4, -0.592], SEAT_BACKREST);
+const SEAT_ROW = seatFixture([0, 0.448, -0.577], SEAT_BACKREST);
+const SEAT_LEG_CURL = seatFixture([0, 0.408, -0.727], SEAT_BACKREST);
+const SEAT_LEG_EXTENSION = seatFixture([0, 0.427, -0.826], {
+  offset: [0, 0.285, -0.034],
+  tilt: -17.216,
+});
+const SEAT_CALF = seatFixture([0, 0.481, -0.532], SEAT_BACKREST);
+
+/**
+ * Root offsets that place the hips on those pads. A pin instead of the usual
+ * floor solve is what a real pad does: the machine holds the hips still while
+ * the free limb moves. Measured with `npx vite-node tools/seat-fit.ts`.
+ */
+const SEAT_ROOT_LEG_MACHINE: [number, number, number] = [0, -0.451, -0.53];
+const SEAT_ROOT_LEG_CURL: [number, number, number] = [0, -0.474, -0.466];
+const SEAT_ROOT_CALF: [number, number, number] = [0, -0.401, -0.271];
+
+/**
+ * Chest pad of the bent-over machines, measured on the leaning pose: a slim
+ * column in front of the legs carries the pad that the chest is braced on.
+ */
+const CHEST_PAD = machineFixture(
+  [0, 0.525, 0.26],
+  [{ offset: [0, 0.645, -0.033], size: [0.44, 0.34, 0.1], rotation: [18.164, 0, 0] }],
+  [0.3, 1.05, 0.2],
+);
 
 const benchPress = (options: {
   id: string;
@@ -369,7 +421,7 @@ const shoulderPress = (): MotionDefinition =>
     summary: 'پرس سرشانهٔ نشسته: دمبل‌ها از کنار شانه‌ها تا بالای سر پرس می‌شوند.',
     seconds: 3,
     equipment: [dumbbells()],
-    fixtures: [SEATED_BENCH],
+    fixtures: [SEAT_UPRIGHT],
     standards: pressStandards,
     keys: [
       { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -84, knee: 88 }, arms: both('shoulder-bottom', 79) } },
@@ -427,17 +479,17 @@ const reverseFly = (): MotionDefinition =>
     summary: 'نشر خم روی دستگاه با تکیه‌گاه سینه: بازوها از زیر بدن تا هم‌سطحی شانه باز می‌شوند.',
     seconds: 2.8,
     plantBones: [],
-    fixtures: [{ kind: 'machine', position: [0, 0.42, -0.2] }],
+    fixtures: [CHEST_PAD],
     standards: [
       { label: 'تنهٔ ثابت', detail: 'سینه روی تکیه‌گاه می‌ماند و تنه حرکت نمی‌کند.' },
       { label: 'آرنج کمی خم', detail: 'آرنج کمی خم می‌ماند و مسیر قوسی است.' },
       { label: 'بدون تاب', detail: 'بالا بردن وزنه از تاب دادن بدن نمی‌آید.' },
     ],
     keys: [
-      { phase: 0, label: 'آماده', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-down', -2) } },
-      { phase: 1, label: 'بالا بردن', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', -16) } },
-      { phase: 2, label: 'هم‌سطحی شانه', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', -31) } },
-      { phase: 3, label: 'پایین بردن', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', -16) } },
+      { phase: 0, label: 'آماده', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-down', 42) } },
+      { phase: 1, label: 'بالا بردن', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', 12) } },
+      { phase: 2, label: 'هم‌سطحی شانه', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', -15) } },
+      { phase: 3, label: 'پایین بردن', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-fly-open', 12) } },
     ],
   });
 
@@ -530,7 +582,7 @@ const pulldown = (id: string, name: string, summary: string): MotionDefinition =
     summary,
     seconds: 3,
     equipment: [cable('both-hands', { l: [0.2, 2.15, 0.1], r: [-0.2, 2.15, 0.1] })],
-    fixtures: [SEATED_BENCH],
+    fixtures: [SEAT_UPRIGHT],
     standards: pullStandards,
     keys: [
       { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -84, knee: 88 }, arms: both('pulldown-top', -29) } },
@@ -547,7 +599,7 @@ const seatedRow = (): MotionDefinition =>
     summary: 'قایقی نشسته: دسته‌ها از کشش کامل جلو تا نزدیک تنه کشیده می‌شوند و کتف جمع می‌شود.',
     seconds: 3,
     equipment: [cable('both-hands', { l: [0.3, 0.55, 1.4], r: [-0.3, 0.55, 1.4] })],
-    fixtures: [SEATED_BENCH],
+    fixtures: [SEAT_ROW],
     standards: pullStandards,
     keys: [
       { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -78, knee: 84 }, arms: both('row-up-extended', -35) } },
@@ -564,13 +616,13 @@ const machineRow = (): MotionDefinition =>
     summary: 'قایقی با تکیه‌گاه سینه: دسته‌ها تا نزدیک تنه کشیده می‌شوند و کتف‌ها جمع می‌شوند.',
     seconds: 3,
     plantBones: [],
-    fixtures: [{ kind: 'machine', position: [0, 0.42, -0.2] }],
+    fixtures: [CHEST_PAD],
     standards: pullStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', -17) } },
-      { phase: 1, label: 'کشیدن', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', 20) } },
-      { phase: 2, label: 'نزدیک تنه', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-pulled', 62) } },
-      { phase: 3, label: 'بازگشت', inputs: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', 20) } },
+      { phase: 0, label: 'آماده', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', 32) } },
+      { phase: 1, label: 'کشیدن', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', 62) } },
+      { phase: 2, label: 'نزدیک تنه', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-pulled', 86) } },
+      { phase: 3, label: 'بازگشت', inputs: { torso: BENT_LEAN, legs: { pelvis: 6, thigh: -14, knee: 22 }, arms: both('bent-hang', 62) } },
     ],
   });
 
@@ -587,10 +639,10 @@ const oneArmRow = (): MotionDefinition =>
       { label: 'بدون چرخش تنه', detail: 'تنه به چپ و راست نمی‌چرخد.' },
     ],
     keys: [
-      { phase: 0, label: 'آماده', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: 46, arms: one('bent-hang', -17), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -10 } } } },
-      { phase: 1, label: 'کشیدن', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: 46, arms: one('bent-hang', 22), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -10 } } } },
-      { phase: 2, label: 'نزدیک پهلو', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: 46, arms: one('bent-pulled', 62), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -10 } } } },
-      { phase: 3, label: 'بازگشت', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: 46, arms: one('bent-hang', 22), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -10 } } } },
+      { phase: 0, label: 'آماده', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: BENT_LEAN, arms: one('bent-hang', 32), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -6 } } } },
+      { phase: 1, label: 'کشیدن', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: BENT_LEAN, arms: one('bent-hang', 62), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -6 } } } },
+      { phase: 2, label: 'نزدیک پهلو', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: BENT_LEAN, arms: one('bent-pulled', 86), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -6 } } } },
+      { phase: 3, label: 'بازگشت', inputs: { legs: { pelvis: 6, thigh: -14, knee: 22 }, torso: BENT_LEAN, arms: one('bent-hang', 62), extra: { upperarm_r: { ...armPoses['side'].upperarm }, lowerarm_r: { hinge: -6 } } } },
     ],
   });
 
@@ -632,10 +684,11 @@ const cableCrunch = (): MotionDefinition => {
     equipment: [cable('both-hands', { l: [0.15, 2.0, 0.5], r: [-0.15, 2.0, 0.5] })],
     standards: coreStandards,
     keys: [
-      { phase: 0, label: 'آماده', inputs: { legs: kneel, torso: 18, head: -18, arms: hold }, root },
-      { phase: 1, label: 'جمع کردن', inputs: { legs: kneel, torso: 40, head: -40, arms: hold }, root },
-      { phase: 2, label: 'بالاترین جمع‌شدن', inputs: { legs: kneel, torso: 54, head: -54, arms: hold }, root },
-      { phase: 3, label: 'بازگشت', inputs: { legs: kneel, torso: 40, head: -40, arms: hold }, root },
+      // The chin tucks as the trunk curls: a crunch rounds the spine, it does not throw the head back.
+      { phase: 0, label: 'آماده', inputs: { legs: kneel, torso: 18, head: 8, arms: hold }, root },
+      { phase: 1, label: 'جمع کردن', inputs: { legs: kneel, torso: 40, head: 16, arms: hold }, root },
+      { phase: 2, label: 'بالاترین جمع‌شدن', inputs: { legs: kneel, torso: 54, head: 20, arms: hold }, root },
+      { phase: 3, label: 'بازگشت', inputs: { legs: kneel, torso: 40, head: 16, arms: hold }, root },
     ],
   });
 };

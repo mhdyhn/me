@@ -30,6 +30,15 @@ export const jointAngle = (state: MotionState, a: string, b: string, c: string):
 
 export type JointRange = [min: number, max: number];
 
+/**
+ * Angle between the neck and the trunk. The rig's rest pose sits at 12°, so a
+ * value near it means the neck stays in line with the spine (neutral); larger
+ * values tuck the chin and smaller ones throw the head back.
+ */
+export const neckAngle = (state: MotionState): number => 180 - jointAngle(state, 'spine_03', 'neck_01', 'head');
+
+export const REST_NECK_ANGLE = 11.9;
+
 /** Ranges of the joints the form checkpoints care about. */
 export const jointRanges = (state: MotionState, samples = 16) => {
   const ranges: Record<'knee' | 'elbow' | 'hip' | 'trunk', JointRange> = {

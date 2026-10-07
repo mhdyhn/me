@@ -93,33 +93,76 @@ def draw_floor(draw, project, extent=2.0, step=0.25):
         draw.line([a[:2], b[:2]], fill=(48, 54, 58), width=1)
 
 
+def fixture_parts(fixture):
+    """The fixture box plus its parts, each as (centre, size, rotation)."""
+    size = fixture.get('size')
+    if not size:
+        if fixture['kind'] == 'bench':
+            size = [0.36, 0.45, 1.8]
+        elif fixture['kind'] == 'pull-up-bar':
+            size = [2.0, 0.05, 0.05]
+        elif fixture['kind'] == 'seat':
+            size = [0.46, 0.11, 0.46]
+        else:
+            size = [0.5, 1.0, 0.5]
+    base = (fixture['position'], size, fixture.get('rotation') or [0, 0, 0])
+    parts = [base]
+    for part in fixture.get('parts') or []:
+        centre = tuple(c + o for c, o in zip(fixture['position'], part['offset']))
+        parts.append((centre, part['size'], part.get('rotation') or [0, 0, 0]))
+    return parts
+
+
+def box_corners(pos, size, rotation):
+    half = [s / 2 for s in size]
+    corners = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            for sz in (-1, 1):
+                local = (sx * half[0], sy * half[1], sz * half[2])
+                rotated = rotate(local, rotation)
+                corners.append(tuple(c + p for c, p in zip(rotated, pos)))
+    return corners
+
+
+def faces_of(corners):
+    """The six faces of a box given its eight corners in (x, y, z) sign order."""
+    at = lambda sx, sy, sz: corners[((sx + 1) // 2) * 4 + ((sy + 1) // 2) * 2 + (sz + 1) // 2]
+    return [
+        [at(-1, -1, -1), at(1, -1, -1), at(1, 1, -1), at(-1, 1, -1)],   # back
+        [at(-1, -1, 1), at(1, -1, 1), at(1, 1, 1), at(-1, 1, 1)],       # front
+        [at(-1, -1, -1), at(-1, -1, 1), at(-1, 1, 1), at(-1, 1, -1)],   # left
+        [at(1, -1, -1), at(1, -1, 1), at(1, 1, 1), at(1, 1, -1)],       # right
+        [at(-1, -1, -1), at(1, -1, -1), at(1, -1, 1), at(-1, -1, 1)],   # bottom
+        [at(-1, 1, -1), at(1, 1, -1), at(1, 1, 1), at(-1, 1, 1)],       # top
+    ]
+
+
+def draw_box(draw, project, pos, size, rotation, fill):
+    corners = box_corners(pos, size, rotation)
+    faces = faces_of(corners)
+    # Paint the faces back to front so the closest one ends up on top.
+    faces.sort(key=lambda face: sum(project(c)[2] for c in face) / 4)
+    for face in faces:
+        draw.polygon([project(c)[:2] for c in face], fill=fill)
+    for a, b in EDGES:
+        pa, pb = project(corners[a]), project(corners[b])
+        draw.line([pa[:2], pb[:2]], fill=(120, 130, 140), width=2)
+
+
+# Corner index pairs of a box's twelve edges, in (x, y, z) sign order.
+EDGES = [
+    (a, b)
+    for a in range(8)
+    for b in range(a + 1, 8)
+    if bin(a ^ b).count('1') == 1
+]
+
+
 def draw_props(draw, project, fixtures, equipment):
     for fixture in fixtures or []:
-        pos = fixture['position']
-        size = fixture.get('size') or ([0.36, 0.45, 1.8] if fixture['kind'] == 'bench' else [0.5, 1.0, 0.5])
-        if fixture['kind'] == 'pull-up-bar':
-            size = [2.0, 0.05, 0.05]
-        rotation = fixture.get('rotation') or [0, 0, 0]
-        half = [s / 2 for s in size]
-        corners = []
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                for sz in (-1, 1):
-                    local = (sx * half[0], sy * half[1], sz * half[2])
-                    rotated = rotate(local, rotation)
-                    corners.append(tuple(c + p for c, p in zip(rotated, pos)))
-        edges = []
-        for i, a in enumerate(corners):
-            for j, b in enumerate(corners):
-                if i < j and abs(sum(1 for k in range(3) if abs(a[k] - b[k]) > 1e-6) - 1) == 0:
-                    edges.append((a, b))
-        for a, b in edges:
-            pa, pb = project(a), project(b)
-            draw.line([pa[:2], pb[:2]], fill=(120, 130, 140), width=2)
-        top = [c for c in corners if abs(c[1] - (pos[1] + half[1])) < 1e-6]
-        if len(top) == 4:
-            poly = [project(c)[:2] for c in sorted(top, key=lambda c: math.atan2(c[2] - pos[2], c[0] - pos[0]))]
-            draw.polygon(poly, fill=(52, 60, 66))
+        for pos, size, rotation in fixture_parts(fixture):
+            draw_box(draw, project, pos, size, rotation, (52, 60, 66))
     for item in equipment or []:
         pos = item['position']
         if item['kind'] == 'cable' and item.get('anchor'):

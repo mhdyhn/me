@@ -76,6 +76,7 @@ const defaultSize = (fixture: MotionFixture): [number, number, number] => {
   if (fixture.size) return fixture.size;
   if (fixture.kind === 'bench') return [0.36, 0.45, 1.8];
   if (fixture.kind === 'pull-up-bar') return [2.0, 0.05, 0.05];
+  if (fixture.kind === 'seat') return [0.46, 0.11, 0.46];
   return [0.5, 1.0, 0.5];
 };
 
@@ -113,6 +114,15 @@ export function buildPropScene(state: MotionState): PropScene {
     mesh.quaternion.copy(fixtureQuaternion(fixture.rotation ?? [0, 0, 0]));
     // Fixtures never move, so no frustum culling surprises on a tilted box.
     mesh.frustumCulled = false;
+    // Backrests and pads are boxes in the fixture's own frame, so they inherit
+    // its tilt: the backrest of a seated row leans with the trunk.
+    for (const part of fixture.parts ?? []) {
+      const box = new Mesh(new BoxGeometry(part.size[0], part.size[1], part.size[2]), benchMat);
+      box.position.fromArray(part.offset);
+      box.quaternion.copy(fixtureQuaternion(part.rotation ?? [0, 0, 0]));
+      box.frustumCulled = false;
+      mesh.add(box);
+    }
     group.add(mesh);
   });
 

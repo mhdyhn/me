@@ -116,8 +116,10 @@ const FAMILIES: Record<string, Family> = {
   /* Bent over: the base pose leans the trunk, so the arms are solved on it. */
 
   // Arms hanging straight down in world space (rows, reverse fly, RDL finish).
+  // The base lean is 72: authored `torso` values land around 45 degrees of real
+  // trunk lean at the chest, which is what a bent-over row needs.
   'bent-hang': {
-    base: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 } },
+    base: { torso: 72, legs: { pelvis: 6, thigh: -14, knee: 22 } },
     elbow: [0.21, 1.1, 0.18],
     palm: [0.21, 0.72, 0.18],
     hinge: -42,
@@ -125,7 +127,7 @@ const FAMILIES: Record<string, Family> = {
   },
   // Pulled in: hand beside the hip, elbow up and behind the ribs.
   'bent-pulled': {
-    base: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 } },
+    base: { torso: 72, legs: { pelvis: 6, thigh: -14, knee: 22 } },
     elbow: [0.34, 1.18, -0.01],
     palm: [0.24, 0.95, 0.28],
     hinge: 75,
@@ -133,7 +135,7 @@ const FAMILIES: Record<string, Family> = {
   },
   // Reverse fly open: arms straight out to the sides, world horizontal.
   'bent-fly-open': {
-    base: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 } },
+    base: { torso: 72, legs: { pelvis: 6, thigh: -14, knee: 22 } },
     elbow: [0.45, 1.29, 0.22],
     palm: [0.83, 1.24, 0.29],
     hinge: 25,
@@ -141,7 +143,7 @@ const FAMILIES: Record<string, Family> = {
   },
   // Reverse fly down: arms hanging under the chest, elbows softly bent.
   'bent-fly-down': {
-    base: { torso: 46, legs: { pelvis: 6, thigh: -14, knee: 22 } },
+    base: { torso: 72, legs: { pelvis: 6, thigh: -14, knee: 22 } },
     elbow: [0.21, 1.11, 0.19],
     palm: [0.24, 0.74, 0.26],
     hinge: 25,
