@@ -8,7 +8,9 @@ import {
   REST_JOINTS,
   buildAthleticFigure,
   collectRestVertices,
-  createMusclePaint,
+  createFigureLook,
+  figureLookFor,
+  STATUE_PALETTE,
   muscleHighlights,
   muscleRegion,
   unknownMuscles,
@@ -173,10 +175,10 @@ describe('anatomy view', () => {
   it('paints the working muscle and leaves the rest of the figure neutral', async () => {
     const gltf = await loadBrowserScene();
     const shipped = { body: paintedMaterial(gltf.scene, 'Body'), suit: paintedMaterial(gltf.scene, 'Clothes_1') };
-    const paint = createMusclePaint(gltf.scene);
+    const look = createFigureLook(gltf.scene);
     const rest = collectRestVertices(gltf.scene).get('Body')!;
 
-    paint.apply(muscleHighlights(['سینه'], ['پشت بازو']));
+    look.apply('statue', muscleHighlights(['سینه'], ['پشت بازو']));
     const strongest = (region: MuscleRegionId) =>
       rest.reduce((best, vertex, index) => (REGION_SHAPES[region](vertex) > REGION_SHAPES[region](rest[best]!) ? index : best), 0);
     const chestIndex = strongest('chest');
@@ -192,11 +194,39 @@ describe('anatomy view', () => {
     expect(paintedMaterial(gltf.scene, 'Clothes_1')).not.toBe(shipped.suit);
     expect(paintedMaterial(gltf.scene, 'Clothes_1').map).toBe(null);
 
-    // Switching the view off hands the figure back exactly as the file had it.
-    paint.apply(null);
+    // The textured style hands the figure back exactly as the file had it.
+    look.apply('textured', null);
     expect(paintedMaterial(gltf.scene, 'Body')).toBe(shipped.body);
     expect(paintedMaterial(gltf.scene, 'Clothes_1')).toBe(shipped.suit);
     expect(paintedMaterial(gltf.scene, 'Body').vertexColors).toBe(false);
+  });
+
+  it('dresses the figure as a statue by default: light skin, dark kit', async () => {
+    const gltf = await loadBrowserScene();
+    const look = figureLookFor(gltf.scene);
+    // One look per scene: two viewers on the same loaded model share it.
+    expect(figureLookFor(gltf.scene)).toBe(look);
+
+    look.apply('statue', null);
+    const skin = paintedMaterial(gltf.scene, 'Body');
+    const kit = paintedMaterial(gltf.scene, 'Clothes_1');
+    const shoes = paintedMaterial(gltf.scene, 'Clothes_2');
+    const hair = paintedMaterial(gltf.scene, 'Hair');
+    expect(skin.color.getHexString()).toBe(STATUE_PALETTE.Body!.colour.slice(1));
+    expect(kit.color.getHexString()).toBe(STATUE_PALETTE.Clothes_1!.colour.slice(1));
+    expect(shoes.color.getHexString()).toBe(STATUE_PALETTE.Clothes_2!.colour.slice(1));
+    expect(hair.color.getHexString()).toBe(STATUE_PALETTE.Hair!.colour.slice(1));
+    // The everyday outfit's textures are off, and no highlight is on without asking.
+    for (const material of [skin, kit, shoes, hair]) expect(material.map).toBe(null);
+    expect(skin.vertexColors).toBe(false);
+    // The kit is dark and the skin is light: the silhouette reads at a glance.
+    expect(kit.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(0.3);
+    expect(skin.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeGreaterThan(0.7);
+
+    // Asking for the anatomy view turns the vertex colours on for the body and the kit.
+    look.apply('statue', muscleHighlights(['سینه'], []));
+    expect(paintedMaterial(gltf.scene, 'Body').vertexColors).toBe(true);
+    expect(paintedMaterial(gltf.scene, 'Clothes_1').vertexColors).toBe(true);
   });
 
   /** Mean distance of the vertices of one bone from that bone's axis. */
@@ -276,8 +306,8 @@ describe('anatomy view', () => {
 
   it('keeps the colours under the skinning of the loop', async () => {
     const gltf = await loadBrowserScene();
-    const paint = createMusclePaint(gltf.scene);
-    paint.apply(muscleHighlights(['چهارسر ران', 'عضلات سرینی'], []));
+    const look = createFigureLook(gltf.scene);
+    look.apply('statue', muscleHighlights(['چهارسر ران', 'عضلات سرینی'], []));
     // Nothing in the paint path writes to the skeleton: a movement can be played on the
     // same scene and the colours ride along with the skinned geometry.
     const before = new Vector3().setFromMatrixPosition(gltf.scene.matrixWorld);

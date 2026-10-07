@@ -308,6 +308,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .viewer-control-group button:disabled { opacity: .42; cursor: not-allowed; }
 .viewer-control-group--transport button { min-width: 31px; }
 .viewer-control-group--anatomy button { gap: 5px; letter-spacing: .04em; }
+.viewer-control-group--figure button { letter-spacing: .02em; }
 .viewer-anatomy { display: grid; gap: 6px; padding: 10px 13px; border-top: 1px solid rgba(166,183,172,.1); background: rgba(224,74,44,.045); }
 .viewer-anatomy .eyebrow { color: #b79a8f; }
 .viewer-anatomy ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }

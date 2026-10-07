@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Box, Eye, ListChecks, Pause, Play, RotateCcw, Scan } from 'lucide-react';
 import { ModelErrorBoundary } from './ModelErrorBoundary';
 import { motionById } from '../motion/library';
-import { unknownMuscles } from '../motion/muscles';
+import { unknownMuscles, type FigureStyle } from '../motion/muscles';
 import type { MotionStandard } from '../motion/types';
 import { faNumber } from '../lib/format';
 
@@ -12,6 +12,12 @@ const views: { id: ViewAngle; label: string }[] = [
   { id: 'front', label: 'روبرو' },
   { id: 'side', label: 'پهلو' },
   { id: 'back', label: 'پشت' },
+];
+
+/** How the figure is presented: the neutral statue, or the textures of the file. */
+const FIGURES: { id: FigureStyle; label: string }[] = [
+  { id: 'statue', label: 'مجسمه' },
+  { id: 'textured', label: 'بافت اصلی' },
 ];
 
 interface ExerciseViewerProps {
@@ -40,6 +46,7 @@ export function ExerciseViewer({
   const [speed, setSpeed] = useState(1);
   const [playing, setPlaying] = useState(true);
   const [anatomy, setAnatomy] = useState(false);
+  const [figureStyle, setFigureStyle] = useState<FigureStyle>('statue');
   const [restartToken, setRestartToken] = useState(0);
   const [phase, setPhase] = useState({ label: motion?.keys[0]?.label ?? '', phase: 0 });
 
@@ -114,6 +121,7 @@ export function ExerciseViewer({
                 seek={seek}
                 onKeyLabel={(label, keyPhase) => setPhase({ label, phase: keyPhase })}
                 anatomy={anatomy}
+                figureStyle={figureStyle}
                 primaryMuscles={primaryMuscles}
                 secondaryMuscles={secondaryMuscles}
               />
@@ -143,6 +151,19 @@ export function ExerciseViewer({
           {[0.5, 1, 1.5].map((item) => (
             <button key={item} type="button" disabled={!hasMotion} aria-pressed={speed === item} onClick={() => setSpeed(item)}>
               {faNumber(item)}×
+            </button>
+          ))}
+        </div>
+        <div className="viewer-control-group viewer-control-group--figure" role="group" aria-label="ظاهر بدن مدل">
+          {FIGURES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              disabled={!asset}
+              aria-pressed={figureStyle === item.id}
+              onClick={() => setFigureStyle(item.id)}
+            >
+              {item.label}
             </button>
           ))}
         </div>

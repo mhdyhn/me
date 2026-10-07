@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { phaseToTime } from '../motion/sampler';
-import { buildAthleticFigure, muscleHighlights, musclePaintFor } from '../motion/muscles';
+import { buildAthleticFigure, figureLookFor, muscleHighlights, type FigureStyle } from '../motion/muscles';
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
 import { buildPropScene } from '../motion/props';
@@ -27,8 +27,10 @@ interface RiggedProps {
   restartToken: number;
   seek?: SeekRequest | null;
   onKeyLabel?: (label: string, phase: number) => void;
-  /** Illuminate the muscles the exercise works instead of the plain figure. */
+  /** Illuminate the muscles the exercise works. */
   anatomy?: boolean;
+  /** Neutral mannequin, or the figure with the textures the file shipped. */
+  figureStyle?: FigureStyle;
   primaryMuscles?: string[];
   secondaryMuscles?: string[];
 }
@@ -44,6 +46,7 @@ function ExerciseRig({
   seek,
   onKeyLabel,
   anatomy = false,
+  figureStyle = 'statue',
   primaryMuscles = [],
   secondaryMuscles = [],
 }: RiggedProps) {
@@ -56,8 +59,8 @@ function ExerciseRig({
     return motion ? buildMotionRig(gltf.scene, motion) : null;
   }, [gltf, motion]);
   // Built while the scene is still in the rest pose the rig re-anchored it to: every
-  // muscle region is measured in that pose. One paint serves every movement.
-  const paint = useMemo(() => musclePaintFor(gltf.scene), [gltf.scene]);
+  // muscle region is measured in that pose. One look serves every movement.
+  const look = useMemo(() => figureLookFor(gltf.scene), [gltf.scene]);
   const frame = useMemo(() => (rig ? motionBounds(rig) : { centre: [0, 0.85, 0] as [number, number, number], radius: 1 }), [rig]);
   // Implements and fixtures come from the same sampled state the bones use.
   const props = useMemo(() => (rig ? buildPropScene(rig.state) : null), [rig]);
@@ -91,11 +94,11 @@ function ExerciseRig({
     return () => restRig(rig);
   }, [rig]);
 
-  // The colours only change when the exercise or the switch changes, never per frame:
+  // The colours only change when the exercise or a switch changes, never per frame:
   // skinning carries the painted geometry through the loop.
   useEffect(() => {
-    paint.apply(anatomy ? muscleHighlights(primaryMuscles, secondaryMuscles) : null);
-  }, [paint, anatomy, primaryMuscles, secondaryMuscles]);
+    look.apply(figureStyle, anatomy ? muscleHighlights(primaryMuscles, secondaryMuscles) : null);
+  }, [look, figureStyle, anatomy, primaryMuscles, secondaryMuscles]);
 
   useFrame((_, delta) => {
     if (!rig || !motion) return;
@@ -163,15 +166,19 @@ export default function ExerciseModelCanvas({
   seek,
   onKeyLabel,
   anatomy,
+  figureStyle,
   primaryMuscles,
   secondaryMuscles,
 }: RiggedProps) {
   return (
     <Canvas camera={{ position: [0, 1.1, 3.4], fov: 36 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
       <color attach="background" args={['#171d1b']} />
-      <ambientLight intensity={1.3} />
-      <directionalLight position={[3, 5, 4]} intensity={2.2} />
-      <directionalLight position={[-3, 2, -2]} intensity={1.1} />
+      {/* Form lighting: enough ambient to keep the dark kit readable, a key light for the
+          muscle highlights and a rim light so the back of the figure does not go flat. */}
+      <ambientLight intensity={0.62} />
+      <directionalLight position={[3.2, 4.6, 3.4]} intensity={2.4} />
+      <directionalLight position={[-3.2, 1.8, -1.6]} intensity={1.5} />
+      <directionalLight position={[0, 1.2, -4]} intensity={0.7} />
       <ExerciseRig
         asset={asset}
         motion={motion}
@@ -182,6 +189,7 @@ export default function ExerciseModelCanvas({
         seek={seek}
         onKeyLabel={onKeyLabel}
         anatomy={anatomy}
+        figureStyle={figureStyle}
         primaryMuscles={primaryMuscles}
         secondaryMuscles={secondaryMuscles}
       />

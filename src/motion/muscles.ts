@@ -163,10 +163,15 @@ const armBack = onBone(/^upperarm_/, (v) => {
 
 /** Every region the anatomy view can paint, measured in the model's rest pose. */
 export const REGION_SHAPES: Record<MuscleRegionId, Shape> = {
-  chest: box([0.02, 1.25, 0.04], [0.21, 1.44, 0.4]),
+  chest: box([0.02, 1.25, 0.04], [0.21, 1.41, 0.4]),
   'upper-chest': box([0.02, 1.39, 0.04], [0.21, 1.52, 0.4]),
-  lats: box([0.06, 1.13, -0.4], [0.25, 1.42, 0.06]),
-  'mid-back': box([0.01, 1.28, -0.4], [0.21, 1.5, 0.03]),
+  // The lats are a fan: narrow against the spine at the waist, widest under the armpit.
+  lats: (v) => {
+    const reach = Math.abs(v.x);
+    const outer = 0.15 + (v.y - 1.13) * 0.32;
+    return soft(reach, 0.02, outer, 0.03) * soft(v.y, 1.13, 1.42, 0.04) * soft(v.z, -0.4, 0.06, 0.04);
+  },
+  'mid-back': box([0.01, 1.33, -0.4], [0.13, 1.5, 0.02]),
   'upper-traps': box([0.01, 1.45, -0.4], [0.17, 1.62, 0.12]),
   'rotator-cuff': box([0.07, 1.4, -0.07], [0.22, 1.54, 0.1]),
   erectors: box([0, 1.02, -0.4], [0.09, 1.32, 0.06]),
@@ -416,7 +421,7 @@ export const ATHLETIC_BUILD: Partial<Record<MuscleRegionId, number>> = {
 const BUILD_SHAPING: Partial<Record<MuscleRegionId, Shape>> = {
   // The pectorals sit high on the ribcage: the shape tapers into the sternum and into the
   // belly, so the chest grows where a chest does instead of pushing the waist out with it.
-  chest: (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.05) * soft(v.y, 1.31, 1.44, 0.04),
+  chest: (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.05) * soft(v.y, 1.31, 1.42, 0.04),
   'upper-chest': (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.05) * soft(v.y, 1.36, 1.52, 0.04),
   glutes: (v) => soft(Math.abs(v.x), 0.02, 0.4, 0.03),
   lats: (v) => soft(Math.abs(v.x), 0.05, 0.4, 0.03),
@@ -425,8 +430,12 @@ const BUILD_SHAPING: Partial<Record<MuscleRegionId, Shape>> = {
 /** Meshes the build sculpts: the figure itself plus what it wears over muscle. */
 const SCULPTED_MESHES = ['Body', 'Clothes_1'];
 
-/** A suit over a muscle follows it, but only part of the way, or the shirt balloons. */
-const SUIT_FOLLOW = 0.6;
+/**
+ * The kit follows the same build as the skin under it. The displacement is a smooth field
+ * of position, so cloth that sits a few millimetres off the skin keeps that offset and can
+ * never be left behind by a growing muscle.
+ */
+const SUIT_FOLLOW = 1;
 
 const sculptedScenes = new WeakSet<Object3D>();
 
@@ -581,96 +590,117 @@ export function buildAthleticFigure(root: Object3D): void {
   });
 }
 
-export interface MusclePaint {
+/**
+ * The statue look: the same figure presented as a neutral mannequin — light skin and a
+ * dark training kit — which is how training apps show a body, and which reads far better
+ * than the everyday outfit the file happens to wear. Colours are per mesh of this model;
+ * a mesh that is not listed keeps the textures of the file.
+ */
+export const STATUE_PALETTE: Record<string, { colour: string; roughness: number; metalness: number }> = {
+  Body: { colour: '#d9dee1', roughness: 0.52, metalness: 0 },
+  Clothes_1: { colour: '#2e383b', roughness: 0.86, metalness: 0 },
+  Clothes_2: { colour: '#1a2023', roughness: 0.68, metalness: 0.05 },
+  Hair: { colour: '#3b4042', roughness: 0.92, metalness: 0 },
+  Eyebrows: { colour: '#3b4042', roughness: 0.92, metalness: 0 },
+  Eyelashes: { colour: '#2a2f31', roughness: 0.92, metalness: 0 },
+  Eyes: { colour: '#b6c2c7', roughness: 0.34, metalness: 0.05 },
+};
+
+/** 'statue' is the neutral mannequin; 'textured' is the figure exactly as the file has it. */
+export type FigureStyle = 'statue' | 'textured';
+
+export interface FigureLook {
   /**
-   * Shows the working muscles. Passing nothing paints the plain mannequin and lets the
-   * figure keep that look until the reader asks for the textures again.
+   * Sets how the figure is presented. Muscle highlights are written on the statue; on the
+   * textured figure the file's own materials are shown untouched.
    */
-  apply(highlights: MuscleHighlight[] | null): void;
-  /** True while the anatomy look is on. */
-  readonly active: boolean;
+  apply(style: FigureStyle, highlights: MuscleHighlight[] | null): void;
 }
 
-interface PaintEntry {
+interface LookEntry {
   mesh: MeshLike;
+  name: string;
   /** Material the file shipped with. */
   original: MeshStandardMaterial;
-  /** Neutral material the anatomy look paints on. */
-  mannequin: MeshStandardMaterial;
-  vertices: RestVertex[];
-  colours: Float32Array;
-  attribute: BufferAttribute;
+  /** Neutral material of the statue look. */
+  statue?: MeshStandardMaterial;
+  vertices?: RestVertex[];
+  colours?: Float32Array;
+  attribute?: BufferAttribute;
 }
 
 /**
- * Builds the anatomy look for one loaded figure. The scene must still be in its rest
- * pose: every region is measured in that pose. Painting happens only when the colours
- * change — while a movement plays, the geometry keeps the colours it already has and
- * skinning carries them along, so the loop costs nothing.
+ * Builds the presentation of one loaded figure. The scene must still be in its rest pose:
+ * the muscle highlights are measured in that pose, and the colours are cached per vertex.
+ * Colours are written only when they change — while a movement plays, skinning carries the
+ * painted geometry along and the loop costs nothing extra.
  */
-export function createMusclePaint(root: Object3D): MusclePaint {
+export function createFigureLook(root: Object3D): FigureLook {
   const rest = collectRestVertices(root);
-  const entries: PaintEntry[] = [];
+  const entries: LookEntry[] = [];
 
   root.traverse((object) => {
     const mesh = object as unknown as MeshLike;
-    const vertices = rest.get(mesh?.name ?? '');
-    if (!mesh?.isMesh || !vertices) return;
+    if (!mesh?.isMesh || !mesh.name) return;
     const original = mesh.material;
-    const mannequin = original.clone();
-    mannequin.map = null;
-    mannequin.color.copy(ANATOMY_PALETTE.body);
-    mannequin.roughness = 0.6;
-    mannequin.metalness = 0;
-    mannequin.vertexColors = true;
-    const colours = new Float32Array(vertices.length * 3);
-    const attribute = new BufferAttribute(colours, 3, false);
-    attribute.setUsage(DynamicDrawUsage);
-    mesh.geometry.setAttribute('color', attribute);
-    entries.push({ mesh, original, mannequin, vertices, colours, attribute });
+    const entry: LookEntry = { mesh, name: mesh.name, original };
+    const palette = STATUE_PALETTE[mesh.name];
+    if (palette) {
+      const statue = original.clone();
+      statue.map = null;
+      statue.color.set(palette.colour);
+      statue.roughness = palette.roughness;
+      statue.metalness = palette.metalness;
+      statue.vertexColors = false;
+      entry.statue = statue;
+    }
+    const vertices = rest.get(mesh.name);
+    if (vertices) {
+      entry.vertices = vertices;
+      entry.colours = new Float32Array(vertices.length * 3);
+      entry.attribute = new BufferAttribute(entry.colours, 3, false);
+      entry.attribute.setUsage(DynamicDrawUsage);
+      mesh.geometry.setAttribute('color', entry.attribute);
+    }
+    entries.push(entry);
   });
 
-  let active = false;
-
-  const write = (highlights: MuscleHighlight[]) => {
-    for (const entry of entries) {
-      for (let index = 0; index < entry.vertices.length; index += 1) {
-        const colour = vertexMuscleColour(entry.vertices[index]!, highlights);
-        entry.colours[index * 3] = colour.r;
-        entry.colours[index * 3 + 1] = colour.g;
-        entry.colours[index * 3 + 2] = colour.b;
-      }
-      entry.attribute.needsUpdate = true;
-    }
-  };
-
   return {
-    get active() {
-      return active;
-    },
-    apply(highlights) {
-      const wanted = highlights !== null;
-      if (wanted) write(highlights);
+    apply(style, highlights) {
+      const painted = highlights !== null && highlights.length > 0;
       for (const entry of entries) {
-        // The neutral material ignores the file's textures, so swapping it in is enough
-        // to show the mannequin; swapping back restores the figure the file shipped.
-        entry.mesh.material = wanted ? entry.mannequin : entry.original;
+        const material = style === 'statue' ? entry.statue : undefined;
+        if (style === 'statue' && !material) continue;
+        if (painted && material && entry.vertices && entry.colours && entry.attribute) {
+          for (let index = 0; index < entry.vertices.length; index += 1) {
+            const colour = vertexMuscleColour(entry.vertices[index]!, highlights!);
+            entry.colours[index * 3] = colour.r;
+            entry.colours[index * 3 + 1] = colour.g;
+            entry.colours[index * 3 + 2] = colour.b;
+          }
+          entry.attribute.needsUpdate = true;
+        }
+        if (material) {
+          material.vertexColors = painted && Boolean(entry.colours);
+          entry.mesh.material = material;
+        } else {
+          entry.mesh.material = entry.original;
+        }
         entry.mesh.material.needsUpdate = true;
       }
-      active = wanted;
     },
   };
 }
 
-/** One paint per loaded scene: the scene is shared by every movement on a page. */
-const paints = new WeakMap<Object3D, MusclePaint>();
+/** One look per loaded scene: the scene is shared by every movement on a page. */
+const looks = new WeakMap<Object3D, FigureLook>();
 
-export const musclePaintFor = (scene: Object3D): MusclePaint => {
-  const existing = paints.get(scene);
+export const figureLookFor = (scene: Object3D): FigureLook => {
+  const existing = looks.get(scene);
   if (existing) return existing;
-  const paint = createMusclePaint(scene);
-  paints.set(scene, paint);
-  return paint;
+  const look = createFigureLook(scene);
+  looks.set(scene, look);
+  return look;
 };
 
 export const MUSCLE_REGION_IDS = Object.keys(REGION_SHAPES) as MuscleRegionId[];

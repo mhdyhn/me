@@ -73,6 +73,19 @@ describe('ExerciseViewer', () => {
     expect(screen.getByText(/در این مدل رنگ‌آمیزی نشده است/)).toBeInTheDocument();
   });
 
+  it('starts on the statue figure and can show the textures of the file', async () => {
+    render(<ExerciseViewer modelAsset="/models/human.glb" motionId="barbell-bench-press" exerciseName="پرس سینه" />);
+
+    const group = await screen.findByRole('group', { name: 'ظاهر بدن مدل' });
+    const statue = within(group).getByRole('button', { name: 'مجسمه' });
+    const textured = within(group).getByRole('button', { name: 'بافت اصلی' });
+    expect(statue).toHaveAttribute('aria-pressed', 'true');
+    expect(textured).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(textured);
+    expect(textured).toHaveAttribute('aria-pressed', 'true');
+    expect(statue).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('keeps the explicit empty-state when no model asset exists', () => {
     render(<ExerciseViewer motionId="barbell-bench-press" exerciseName="پرس سینه" />);
 
