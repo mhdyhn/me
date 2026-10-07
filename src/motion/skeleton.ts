@@ -21,11 +21,55 @@ export interface RestSkeleton {
 const isBone = (object: Object3D | null): object is Object3D =>
   Boolean(object && (object as { isBone?: boolean }).isBone);
 
+interface RestTransform {
+  position: Vector3;
+  quaternion: Quaternion;
+  scale: Vector3;
+}
+
 /**
- * Reads the rest pose of a loaded GLTF scene. Call this before any pose is applied,
- * otherwise the captured rest transforms are already animated.
+ * The transforms a scene shipped with, keyed by the scene object itself. The GLB
+ * loader hands the same scene to every movement on a page, so without this the
+ * movement you just left would leak into the rest pose of the next one: the "rest"
+ * of the bench press would be the bottom of a squat, and every bone would inherit
+ * that offset.
+ */
+const shippedTransforms = new WeakMap<Object3D, Map<Object3D, RestTransform>>();
+
+/**
+ * Puts a loaded scene back into the transforms of the file. The first call for a
+ * scene simply remembers them, which is exactly what we want on first load; later
+ * calls re-anchor a scene that a previous movement pose left somewhere else.
+ */
+export function restoreShippedTransforms(root: Object3D): void {
+  let snapshot = shippedTransforms.get(root);
+  if (!snapshot) {
+    snapshot = new Map();
+    root.traverse((object) => {
+      if (isBone(object)) {
+        snapshot!.set(object, {
+          position: object.position.clone(),
+          quaternion: object.quaternion.clone(),
+          scale: object.scale.clone(),
+        });
+      }
+    });
+    shippedTransforms.set(root, snapshot);
+  }
+  for (const [object, rest] of snapshot) {
+    object.position.copy(rest.position);
+    object.quaternion.copy(rest.quaternion);
+    object.scale.copy(rest.scale);
+  }
+  root.updateMatrixWorld(true);
+}
+
+/**
+ * Reads the rest pose of a loaded GLTF scene. The scene is re-anchored first, so the
+ * rest pose is the pose of the file even when a movement was played on it before.
  */
 export function collectRestSkeleton(root: Object3D): RestSkeleton {
+  restoreShippedTransforms(root);
   root.updateMatrixWorld(true);
   const boneObjects: Object3D[] = [];
   root.traverse((object) => {

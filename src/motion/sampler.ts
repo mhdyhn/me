@@ -432,12 +432,33 @@ function placeEquipment(state: MotionState): void {
 }
 
 /** Copies the sampled pose onto the live skeleton. */
+/**
+ * Writes the sampled loop onto a loaded skeleton.
+ *
+ * The sampler composes every joint around axes taken from the rest pose in world
+ * space, so `worldQuaternion` is the value the tests, the offline renderer and
+ * the joint tables all describe. Three.js instead applies a bone's quaternion
+ * inside its parent's frame, so the world target has to be converted back with
+ * the parent's posed rotation — copying the raw local rotation bends every joint
+ * around the wrong axis as soon as its parent is not in its rest orientation.
+ */
 export function applyMotionToBones(state: MotionState, bones: Map<string, Object3D>): void {
+  const parentWorld = new Quaternion();
   for (const name of state.rest.order) {
     const object = bones.get(name);
     if (!object) continue;
-    object.quaternion.copy(state.local.get(name)!);
-    if (!state.rest.bones.get(name)!.parent) object.position.copy(state.localPosition.get(name)!);
+    const rest = state.rest.bones.get(name)!;
+    const target = state.worldQuaternion.get(name)!;
+    if (rest.parent) {
+      parentWorld.copy(state.worldQuaternion.get(rest.parent)!);
+      object.quaternion.copy(parentWorld.invert().multiply(target));
+    } else {
+      // A root bone answers to the model's armature, not to another bone.
+      if (object.parent) object.parent.getWorldQuaternion(parentWorld);
+      else parentWorld.identity();
+      object.quaternion.copy(parentWorld.invert().multiply(target));
+      object.position.copy(state.localPosition.get(name)!);
+    }
   }
 }
 

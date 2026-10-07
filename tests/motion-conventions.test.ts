@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Bone, type Object3D } from 'three';
+import { Bone, Quaternion, type Object3D } from 'three';
 import { createMotionState, applyPose, sampleMotion, applyMotionToBones, type MotionState } from '../src/motion/sampler';
 import { buildPose } from '../src/motion/authoring';
 import type { MotionDefinition, PlantBone } from '../src/motion/types';
@@ -177,13 +177,33 @@ describe('motion sampling', () => {
     const { rest } = loadRig();
     const state = createMotionState(rest, probe());
     const objects = new Map<string, Object3D>();
-    for (const name of rest.order) objects.set(name, new Bone());
+    for (const name of rest.order) {
+      const bone = new Bone();
+      bone.name = name;
+      objects.set(name, bone);
+    }
+    // The bones parent each other the way the rig does, so the sampler's frame
+    // conversion is exercised: a world rotation has to be re-expressed in the
+    // frame of whichever parent bone carries it.
+    for (const name of rest.order) {
+      const parent = rest.bones.get(name)!.parent;
+      if (parent) objects.get(parent)!.add(objects.get(name)!);
+    }
     applyPose(state, { thigh_l: { x: -20 } });
     applyMotionToBones(state, objects);
-    expect(objects.get('thigh_l')!.quaternion.equals(rest.bones.get('thigh_l')!.localQuaternion)).toBe(false);
-    expect(objects.get('calf_l')!.quaternion.equals(rest.bones.get('calf_l')!.localQuaternion)).toBe(true);
-    const { rest: restAgain } = loadRig();
-    expect(objects.get('Root')!.position.y).toBeCloseTo(restAgain.bones.get('Root')!.localPosition.y, 6);
+    objects.get('Root')!.updateMatrixWorld(true);
+    for (const name of rest.order) {
+      const world = new Quaternion();
+      objects.get(name)!.getWorldQuaternion(world);
+      expect(world.angleTo(state.worldQuaternion.get(name)!), `world rotation ${name}`).toBeLessThan(0.001);
+    }
+    // The knee inherits the hip's rotation, so it is no longer at its rest rotation…
+    expect(objects.get('calf_l')!.quaternion.equals(rest.bones.get('calf_l')!.localQuaternion)).toBe(false);
+    // …while a bone the pose never touches keeps the local rotation of the file. The
+    // rig's matrices decompose back with a residue of ~1e-3 rad, so that is the bar.
+    const untouched = new Quaternion().copy(rest.bones.get('hand_r')!.localQuaternion).invert().multiply(objects.get('hand_r')!.quaternion);
+    expect(untouched.angleTo(new Quaternion())).toBeLessThan(0.002);
+    expect(objects.get('Root')!.position.y).toBeCloseTo(rest.bones.get('Root')!.localPosition.y, 6);
     expect(objects.get('Root')!.position.y).toBeLessThan(0.002);
   });
 });
