@@ -1,0 +1,134 @@
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { Box, Eye, ListChecks, Pause, Play, RotateCcw } from 'lucide-react';
+import { ModelErrorBoundary } from './ModelErrorBoundary';
+import { motionById } from '../motion/library';
+import type { MotionStandard } from '../motion/types';
+import { faNumber } from '../lib/format';
+
+const ModelCanvas = lazy(() => import('./ExerciseModelCanvas'));
+type ViewAngle = 'front' | 'side' | 'back';
+const views: { id: ViewAngle; label: string }[] = [
+  { id: 'front', label: 'روبرو' },
+  { id: 'side', label: 'پهلو' },
+  { id: 'back', label: 'پشت' },
+];
+
+interface ExerciseViewerProps {
+  modelAsset?: string | null;
+  /** Movement loop for this exercise, keyed by the workout library. */
+  motionId?: string | null;
+  exerciseName: string;
+}
+
+export function ExerciseViewer({ modelAsset, motionId, exerciseName }: ExerciseViewerProps) {
+  const motion = useMemo(() => (motionId ? motionById(motionId) ?? null : null), [motionId]);
+  const asset = modelAsset || null;
+  const [view, setView] = useState<ViewAngle>('front');
+  const [speed, setSpeed] = useState(1);
+  const [playing, setPlaying] = useState(true);
+  const [restartToken, setRestartToken] = useState(0);
+  const [phase, setPhase] = useState({ label: motion?.keys[0]?.label ?? '', phase: 0 });
+
+  useEffect(() => {
+    setPlaying(true);
+    setPhase({ label: motion?.keys[0]?.label ?? '', phase: 0 });
+  }, [motion, asset]);
+
+  const hasMotion = Boolean(motion && asset);
+
+  return (
+    <section className="viewer-card" aria-label={`نمایش سه‌بعدی ${exerciseName}`}>
+      <div className="viewer-heading">
+        <div>
+          <span className="eyebrow">{hasMotion ? 'نمایش حرکت' : 'مدل مرجع'}</span>
+          <h3>{hasMotion ? 'نمای سه‌بعدی حرکت' : 'مدل سه‌بعدی بدن'}</h3>
+        </div>
+        <span
+          className={`viewer-status${hasMotion ? ' viewer-status--ready' : asset ? ' viewer-status--static' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span />
+          {hasMotion ? 'پویانمایی حرکت فعال است' : asset ? 'مدل ثابت · بدون پویانمایی' : 'مدل هنوز افزوده نشده'}
+        </span>
+      </div>
+
+      <div className="viewer-stage">
+        {asset ? (
+          <ModelErrorBoundary>
+            <Suspense fallback={<div className="viewer-loading"><span className="loader-dot" /> در حال بارگذاری مدل سه‌بعدی…</div>}>
+              <ModelCanvas
+                asset={asset}
+                motion={hasMotion ? motion : null}
+                view={view}
+                speed={speed}
+                playing={playing && hasMotion}
+                restartToken={restartToken}
+                onKeyLabel={(label, keyPhase) => setPhase({ label, phase: keyPhase })}
+              />
+            </Suspense>
+          </ModelErrorBoundary>
+        ) : (
+          <div className="viewer-placeholder">
+            <div className="viewer-grid" aria-hidden="true" />
+            <div className="viewer-placeholder__mark"><Box size={34} strokeWidth={1.1} /></div>
+            <span className="viewer-placeholder__code" dir="ltr">GLB / glTF · بارگذاری تنبل</span>
+            <strong>هنوز مدل سه‌بعدی اضافه نشده است</strong>
+            <p>این راهنما برای افزودن مدل و پویانمایی دارای مجوز و بهینه‌شده برای موبایل آماده است. در حال حاضر از تصویر آماده یا مدل شبیه‌سازی‌شده استفاده نمی‌شود.</p>
+            <span className="viewer-placeholder__foot"><Eye size={14} /> راهنمای چیدمان و مراحل حرکت در ادامه آمده است.</span>
+          </div>
+        )}
+      </div>
+
+      <div className="viewer-controls">
+        <div className="viewer-control-group" role="group" aria-label="زاویهٔ دید">
+          {views.map((item) => (
+            <button key={item.id} type="button" disabled={!asset} aria-pressed={view === item.id} onClick={() => setView(item.id)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="viewer-control-group viewer-control-group--speed" role="group" aria-label="سرعت پویانمایی">
+          {[0.5, 1, 1.5].map((item) => (
+            <button key={item} type="button" disabled={!hasMotion} aria-pressed={speed === item} onClick={() => setSpeed(item)}>
+              {faNumber(item)}×
+            </button>
+          ))}
+        </div>
+        <div className="viewer-control-group viewer-control-group--transport" role="group" aria-label="کنترل پویانمایی">
+          <button type="button" disabled={!hasMotion} aria-label={playing && hasMotion ? 'توقف پویانمایی' : 'پخش پویانمایی'} onClick={() => setPlaying((value) => !value)}>
+            {playing && hasMotion ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+          <button type="button" disabled={!hasMotion} aria-label="شروع دوبارهٔ پویانمایی" onClick={() => setRestartToken((value) => value + 1)}>
+            <RotateCcw size={15} />
+          </button>
+        </div>
+      </div>
+
+      {hasMotion && motion ? (
+        <>
+          {/* The loop's own label changes constantly, so it stays out of the live region. */}
+          <div className="viewer-phase">
+            <span className="eyebrow">مرحلهٔ فعلی</span>
+            <strong>{phase.label || motion.keys[0]?.label}</strong>
+            <p>{motion.summary}</p>
+          </div>
+          <div className="viewer-standards">
+            <span className="eyebrow"><ListChecks size={14} /> استانداردهای فرم همین حرکت</span>
+            <ul>
+              {motion.standards.map((standard: MotionStandard) => (
+                <li key={standard.label}><strong>{standard.label}</strong><span>{standard.detail}</span></li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : (
+        <p className="viewer-note">
+          {asset
+            ? 'این مدل ثابت فقط برای مشاهدهٔ بدن از چند زاویه است؛ برای این حرکت هنوز پویانمایی ثبت نشده است.'
+            : 'با افزودن مدل، نمایش سه‌بعدی حرکت‌ها فعال می‌شود.'}
+        </p>
+      )}
+    </section>
+  );
+}

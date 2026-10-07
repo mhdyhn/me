@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build outputs
+/dist/
+/.vite/
+
+# local environment and secrets
+.env
+.env.*
+!.env.example
+
+# editor / OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test and coverage output
+/coverage/
+/test-results/
+/playwright-report/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
