@@ -1,15 +1,24 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
+import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { Dashboard } from './pages/Dashboard';
-import { ExerciseDetail } from './pages/ExerciseDetail';
-import { ExerciseLibrary } from './pages/ExerciseLibrary';
-import { Nutrition } from './pages/Nutrition';
-import { Program } from './pages/Program';
-import { Progress } from './pages/Progress';
-import { Settings } from './pages/Settings';
-import { Workout } from './pages/Workout';
+
+/**
+ * Only the dashboard ships with the shell: it is the page the app opens on. Every
+ * other route — and the whole exercise database and 3D viewer behind them — is
+ * fetched when it is first opened, so a phone downloads a few kilobytes to show
+ * the plan instead of the entire catalogue.
+ */
+const ExerciseDetail = lazy(() => import('./pages/ExerciseDetail').then((module) => ({ default: module.ExerciseDetail })));
+const ExerciseLibrary = lazy(() => import('./pages/ExerciseLibrary').then((module) => ({ default: module.ExerciseLibrary })));
+const Nutrition = lazy(() => import('./pages/Nutrition').then((module) => ({ default: module.Nutrition })));
+const Program = lazy(() => import('./pages/Program').then((module) => ({ default: module.Program })));
+const Progress = lazy(() => import('./pages/Progress').then((module) => ({ default: module.Progress })));
+const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
+const Workout = lazy(() => import('./pages/Workout').then((module) => ({ default: module.Workout })));
 
 function NotFound() {
   return <div className="not-found"><span className="eyebrow">صفحه پیدا نشد</span><h2>این مسیر در برنامه نیست.</h2><p>ممکن است صفحه جابه‌جا شده باشد، اما اطلاعات ثبت‌شدهٔ شما همچنان محفوظ است.</p><Link className="button button--primary" to="/">بازگشت به خانه</Link></div>;
@@ -20,6 +29,7 @@ export function App() {
     <ErrorBoundary>
       <GymProvider>
         <BrowserRouter>
+          <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
@@ -33,6 +43,7 @@ export function App() {
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </GymProvider>
     </ErrorBoundary>

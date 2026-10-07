@@ -12,7 +12,30 @@ import { Progress } from '../src/pages/Progress';
 import { Settings } from '../src/pages/Settings';
 import { db } from '../src/lib/db';
 import { getLocalDateKey } from '../src/lib/format';
+import { getWeekComparison, getWeeklyTotals } from '../src/lib/analytics';
+import { exerciseNames } from '../src/data/exerciseNames';
+import { exercises } from '../src/data/exercises';
 import type { WorkoutSession } from '../src/types';
+
+const completedSession = (
+  id: string,
+  startedAt: string,
+  sets: { weightKg: number; reps: number }[],
+): WorkoutSession => ({
+  id,
+  templateId: 'push-a',
+  name: 'Push A',
+  startedAt,
+  completedAt: startedAt,
+  status: 'completed',
+  notes: '',
+  currentExerciseIndex: 0,
+  currentSetIndex: 0,
+  exercises: [{
+    exerciseId: 'barbell-bench-press',
+    sets: sets.map((set, index) => ({ setNumber: index + 1, ...set, rir: 2, doneAt: startedAt })),
+  }],
+});
 
 function renderPage(path: string) {
   return render(
@@ -39,6 +62,15 @@ beforeEach(async () => {
   await db.preferences.clear();
 });
 afterEach(() => cleanup());
+
+describe('exercise name map', () => {
+  // The dashboard reads the light map, the exercise pages read the catalogue, so
+  // the two must not drift apart.
+  it('matches the catalogue it stands in for', () => {
+    expect(Object.keys(exerciseNames).sort()).toEqual(exercises.map((exercise) => exercise.id).sort());
+    exercises.forEach((exercise) => expect(exerciseNames[exercise.id]).toBe(exercise.name));
+  });
+});
 
 describe('primary routes', () => {
   it.each([
@@ -95,6 +127,43 @@ describe('bodyweight and nutrition persistence', () => {
     expect(screen.getByRole('img', { name: 'نمودار روند پرس سینه با هالتر · مجموع تکرارها' })).toBeInTheDocument();
     await user.selectOptions(metric, 'volume');
     expect(screen.getByRole('img', { name: 'نمودار روند پرس سینه با هالتر · حجم تمرین' })).toBeInTheDocument();
+  });
+
+  it('buckets completed sessions into Monday-start weeks, oldest first', () => {
+    // Wednesday 2026-10-07 sits in the week that opened on Monday 2026-10-05.
+    const now = new Date('2026-10-07T12:00:00.000Z');
+    const weeks = getWeeklyTotals([
+      completedSession('this-week', '2026-10-06T08:00:00.000Z', [{ weightKg: 60, reps: 10 }]),
+      completedSession('last-week', '2026-09-30T08:00:00.000Z', [{ weightKg: 50, reps: 10 }, { weightKg: 50, reps: 8 }]),
+      completedSession('too-old', '2026-06-01T08:00:00.000Z', [{ weightKg: 90, reps: 10 }]),
+    ], 6, now);
+
+    expect(weeks).toHaveLength(6);
+    expect(weeks.at(-1)?.volumeKg).toBe(600);
+    expect(weeks.at(-1)?.setCount).toBe(1);
+    expect(weeks.at(-2)?.volumeKg).toBe(900);
+    expect(weeks.at(-2)?.repCount).toBe(18);
+    // Sessions older than the window are dropped rather than folded into a week.
+    expect(weeks.reduce((sum, week) => sum + week.volumeKg, 0)).toBe(1500);
+    expect(weeks[0]?.start.getTime()).toBeLessThan(weeks.at(-1)!.start.getTime());
+
+    const comparison = getWeekComparison(weeks);
+    expect(comparison?.volumeChange).toBe(-300);
+    expect(comparison?.volumeChangePercent).toBeCloseTo(-33.33, 1);
+    expect(comparison?.sessionChange).toBe(0);
+    // An empty previous week gives no percentage instead of dividing by zero.
+    expect(getWeekComparison(getWeeklyTotals([], 2, now))?.volumeChangePercent).toBeNull();
+  });
+
+  it('shows this week against last week on the progress page', async () => {
+    await db.sessions.put(completedSession('week-a', '2026-10-06T08:00:00.000Z', [{ weightKg: 60, reps: 10 }]));
+    await db.sessions.put(completedSession('week-b', '2026-09-29T08:00:00.000Z', [{ weightKg: 40, reps: 10 }]));
+    renderPage('/progress');
+    expect(await screen.findByText('هفته‌به‌هفته سبک‌تر یا سنگین‌تر؟')).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'نمودار روند حجم هفتگی' })).toBeInTheDocument();
+    const strip = document.querySelectorAll('.week-strip-row');
+    expect(strip.length).toBe(6);
+    expect(strip[0]?.textContent).toMatch(/کیلوگرم·تکرار/);
   });
 
   it('saves daily food notes without requiring calorie estimates', async () => {

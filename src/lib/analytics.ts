@@ -1,4 +1,4 @@
-import { exercises } from '../data/exercises';
+import { exerciseName } from '../data/exerciseNames';
 import { faNumber } from './format';
 import { primaryWorkoutTemplates, workoutTemplates } from '../data/workouts';
 import type { ExercisePrescription, LoggedSet, WorkoutSession } from '../types';
@@ -76,7 +76,7 @@ export const getRecentRecord = (sessions: WorkoutSession[]): RecordHighlight | n
 
   completed.forEach((session, sessionIndex) => {
     session.exercises.forEach((sessionExercise) => {
-      const exerciseName = exercises.find((exercise) => exercise.id === sessionExercise.exerciseId)?.name ?? 'حرکت';
+      const label = exerciseName(sessionExercise.exerciseId);
       const priorSets = completed
         .slice(0, sessionIndex)
         .flatMap((prior) => prior.exercises.find((item) => item.exerciseId === sessionExercise.exerciseId)?.sets ?? []);
@@ -85,7 +85,7 @@ export const getRecentRecord = (sessions: WorkoutSession[]): RecordHighlight | n
         if (isBest) {
           latest = {
             exerciseId: sessionExercise.exerciseId,
-            exerciseName,
+            exerciseName: label,
             weightKg: set.weightKg,
             reps: set.reps,
             date: session.startedAt,
@@ -136,6 +136,72 @@ export const getCurrentStreak = (sessions: WorkoutSession[], now = new Date()) =
     cursor.setDate(cursor.getDate() - 1);
   }
   return streak;
+};
+
+export interface WeekTotals {
+  /** Monday 00:00 of the week, local time. */
+  start: Date;
+  sessionCount: number;
+  setCount: number;
+  repCount: number;
+  volumeKg: number;
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Completed sessions bucketed into Monday-start weeks, oldest week first so a
+ * right-to-left chart reads the same way as the other timelines in the app.
+ * Every completed session counts, including the optional low-fatigue day.
+ */
+export const getWeeklyTotals = (sessions: WorkoutSession[], weeks = 6, now = new Date()): WeekTotals[] => {
+  const thisWeek = getWeekStart(now).getTime();
+  const totals = Array.from({ length: weeks }, (_, index) => ({
+    start: new Date(thisWeek - (weeks - 1 - index) * WEEK_MS),
+    sessionCount: 0,
+    setCount: 0,
+    repCount: 0,
+    volumeKg: 0,
+  }));
+  sessions
+    .filter((session) => session.status === 'completed')
+    .forEach((session) => {
+      const started = new Date(session.startedAt).getTime();
+      const offset = Math.floor((started - thisWeek) / WEEK_MS);
+      const index = weeks - 1 + offset;
+      const bucket = totals[index];
+      if (!bucket) return;
+      const logged = getSessionTotals(session);
+      bucket.sessionCount += 1;
+      bucket.setCount += logged.setCount;
+      bucket.repCount += logged.repCount;
+      bucket.volumeKg += logged.volumeKg;
+    });
+  return totals;
+};
+
+export interface WeekComparison {
+  current: WeekTotals;
+  previous: WeekTotals;
+  volumeChange: number;
+  /** `null` when last week had no volume to compare against. */
+  volumeChangePercent: number | null;
+  sessionChange: number;
+}
+
+/** The last two buckets of `getWeeklyTotals`, ready for a week-over-week card. */
+export const getWeekComparison = (weeks: WeekTotals[]): WeekComparison | null => {
+  const current = weeks.at(-1);
+  const previous = weeks.at(-2);
+  if (!current || !previous) return null;
+  const volumeChange = current.volumeKg - previous.volumeKg;
+  return {
+    current,
+    previous,
+    volumeChange,
+    volumeChangePercent: previous.volumeKg > 0 ? (volumeChange / previous.volumeKg) * 100 : null,
+    sessionChange: current.sessionCount - previous.sessionCount,
+  };
 };
 
 export const getNextWorkout = (sessions: WorkoutSession[]) => {

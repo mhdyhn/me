@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, ArrowRight, CalendarDays, ChevronDown, Plus, Trophy, Weight } from 'lucide-react';
+import { Activity, ArrowRight, CalendarDays, ChevronDown, Plus, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
@@ -7,7 +7,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
 import { getWorkoutTemplate } from '../data/workouts';
-import { getBestSet, getExercisePerformances, getSessionTotals } from '../lib/analytics';
+import { getBestSet, getExercisePerformances, getSessionTotals, getWeekComparison, getWeeklyTotals } from '../lib/analytics';
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
 export function Progress() {
@@ -41,6 +41,16 @@ export function Progress() {
   const weeklyAverage = recentWeights.length ? recentWeights.reduce((sum, entry) => sum + entry.weightKg, 0) / recentWeights.length : null;
   const weightPoints = [...bodyweights].reverse().map((entry) => ({ label: formatDate(`${entry.date}T00:00:00`, { month: 'short', day: 'numeric' }), value: entry.weightKg }));
   const records = useMemo(() => exercises.map((exercise) => ({ exercise, best: getBestSet(sessions, exercise.id) })).filter((item) => item.best).slice(0, 6), [sessions]);
+  const weeklyTotals = useMemo(() => getWeeklyTotals(sessions, 6), [sessions]);
+  const weekComparison = useMemo(() => getWeekComparison(weeklyTotals), [weeklyTotals]);
+  const weeklyPoints = weeklyTotals.map((week) => ({
+    label: formatDate(week.start, { month: 'short', day: 'numeric' }),
+    value: Math.round(week.volumeKg),
+  }));
+  const weeklyVolumeTotal = weeklyTotals.reduce((sum, week) => sum + week.volumeKg, 0);
+  const weekChangeText = weekComparison && weekComparison.volumeChangePercent !== null
+    ? `${weekComparison.volumeChange > 0 ? '+' : ''}${faNumber(Math.round(weekComparison.volumeChangePercent))}٪`
+    : '—';
 
   const submitWeight = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,6 +78,27 @@ export function Progress() {
           <table className="history-table"><thead><tr><th>تاریخ</th><th>ست کاری</th><th>تکرار در ذخیره (RIR)</th><th>جلسه</th></tr></thead><tbody>{performances.flatMap((performance) => performance.sets.map((set) => ({ performance, set }))).map(({ performance, set }) => <tr key={`${performance.session.id}-${set.setNumber}`}><td>{formatDate(performance.session.startedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong></td><td>{faNumber(set.rir)}</td><td>{getWorkoutTemplate(performance.session.templateId)?.name ?? performance.session.name}</td></tr>)}</tbody></table>
           {!performances.length && <p className="history-table-empty">هنوز عملکردی برای «{selectedName}» ثبت نشده است. در حالت تمرین یک ست ثبت کن تا اینجا نمایش داده شود.</p>}
         </div>
+      </section>
+
+      <section className="panel-card weekly-volume-panel">
+        <div className="card-topline"><div><span className="eyebrow">حجم هفتگی</span><h2>هفته‌به‌هفته سبک‌تر یا سنگین‌تر؟</h2></div>{weekComparison && weekComparison.volumeChange < 0 ? <TrendingDown size={18} className="icon-accent" /> : <TrendingUp size={18} className="icon-accent" />}</div>
+        <p className="muted">حجم هر هفته = مجموع «وزنه × تکرار» جلسه‌های کامل‌شدهٔ همان هفته. هفته از دوشنبه شروع می‌شود و روز ششم اختیاری هم حساب می‌شود.</p>
+        <div className="week-compare">
+          <div><span>این هفته</span><strong>{faNumber(Math.round(weekComparison?.current.volumeKg ?? 0))}</strong><small>کیلوگرم·تکرار · {faNumber(weekComparison?.current.sessionCount ?? 0)} جلسه</small></div>
+          <div><span>هفتهٔ گذشته</span><strong>{faNumber(Math.round(weekComparison?.previous.volumeKg ?? 0))}</strong><small>کیلوگرم·تکرار · {faNumber(weekComparison?.previous.sessionCount ?? 0)} جلسه</small></div>
+          <div className={weekComparison && weekComparison.volumeChange !== 0 ? 'week-compare-change' : undefined}><span>تغییر حجم</span><strong>{weekChangeText}</strong><small>{weekComparison?.volumeChangePercent === null ? 'هفتهٔ گذشته حجمی ثبت نشده' : `${faNumber(Math.round(Math.abs(weekComparison?.volumeChange ?? 0)))} کیلوگرم·تکرار ${(weekComparison?.volumeChange ?? 0) < 0 ? 'کمتر' : 'بیشتر'}`}</small></div>
+        </div>
+        <ProgressChart points={weeklyPoints} unit=" کیلوگرم·تکرار" label="حجم هفتگی" />
+        <div className="week-strip">
+          {weeklyTotals.slice().reverse().map((week) => (
+            <div key={week.start.toISOString()} className="week-strip-row">
+              <span>هفتهٔ {formatDate(week.start, { month: 'short', day: 'numeric' })}</span>
+              <strong>{faNumber(Math.round(week.volumeKg))} کیلوگرم·تکرار</strong>
+              <small>{faNumber(week.sessionCount)} جلسه · {faNumber(week.setCount)} ست · {faNumber(week.repCount)} تکرار</small>
+            </div>
+          ))}
+        </div>
+        {weeklyVolumeTotal === 0 && <p className="muted small-text">با کامل کردن اولین جلسه، ستون‌های همین نمودار پر می‌شوند.</p>}
       </section>
 
       <section id="bodyweight" className="bodyweight-progress-grid">

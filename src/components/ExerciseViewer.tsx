@@ -36,6 +36,24 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
     setPhase({ label: motion?.keys[0]?.label ?? '', phase: 0 });
   }, [motion, asset]);
 
+  /**
+   * The 3D runtime and the model together are the heaviest thing the app ships,
+   * so they are fetched while the reader is still on the written form instead of
+   * when the canvas mounts. Both requests hit the service-worker cache.
+   */
+  useEffect(() => {
+    if (!asset) return undefined;
+    const warm = () => {
+      void import('./ExerciseModelCanvas');
+      void fetch(asset, { cache: 'force-cache' }).catch(() => undefined);
+    };
+    const idle = window.requestIdleCallback?.(warm) ?? window.setTimeout(warm, 600);
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle as number);
+      else window.clearTimeout(idle as number);
+    };
+  }, [asset]);
+
   const hasMotion = Boolean(motion && asset);
 
   // Jumping to a written step shows one position, so the loop stops there.

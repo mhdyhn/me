@@ -37,6 +37,9 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
   const props = useMemo(() => (rig ? buildPropScene(rig.state) : null), [rig]);
   const phase = useRef(0);
   const label = useRef('');
+  // Posed once after every jump; a paused loop does not need to re-pose the
+  // skeleton sixty times a second while the reader studies one step.
+  const needsPose = useRef(true);
 
   useEffect(() => {
     phase.current = 0;
@@ -44,6 +47,7 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     if (!rig) return;
     poseRig(rig, 0);
     props?.update();
+    needsPose.current = true;
   }, [rig, props, restartToken]);
 
   useEffect(() => {
@@ -51,6 +55,7 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     phase.current = phaseToTime(rig.state, seek.phase) ?? 0;
     poseRig(rig, phase.current);
     props?.update();
+    needsPose.current = true;
     // Only the token gates the jump: re-rendering with the same request must not
     // drag the loop back to the step the reader already looked at.
   }, [rig, motion, props, seek, seek?.token]);
@@ -63,6 +68,8 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
   useFrame((_, delta) => {
     if (!rig || !motion) return;
     if (playing) phase.current = (phase.current + (delta * speed) / motion.durationSeconds) % 1;
+    else if (!needsPose.current) return;
+    needsPose.current = false;
     const state = poseRig(rig, phase.current);
     props?.update();
     if (state.keyLabel !== label.current) {
