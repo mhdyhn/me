@@ -1,4 +1,5 @@
 import type { ExerciseDefinition } from '../types';
+import { motions } from '../motion/library';
 import { persianExerciseTranslations } from './exercisePersian';
 
 type ExerciseInput = Omit<ExerciseDefinition, 'movementPhases' | 'modelAsset' | 'motionId'> & {
@@ -410,15 +411,23 @@ export const exercises: ExerciseDefinition[] = exerciseDefinitions.map((exercise
   const translation = persianExerciseTranslations[exercise.id];
   if (!translation) throw new Error(`Missing Persian copy for exercise "${exercise.id}".`);
   const localized = { ...exercise, ...translation };
+  const motion = motions[exercise.id];
+  const instructions = [
+    localized.startPosition,
+    localized.execution[0] ?? localized.startPosition,
+    localized.execution[1] ?? localized.startPosition,
+    localized.execution[2] ?? localized.startPosition,
+    localized.finishPosition,
+  ];
+  const fallbackLabels = ['شروع', 'پایین‌بردن', 'مکث', 'بالاآوردن', 'پایان'];
   return {
     ...localized,
-    movementPhases: [
-      { label: 'شروع', instruction: localized.startPosition },
-      { label: 'پایین‌بردن', instruction: localized.execution[0] ?? localized.startPosition },
-      { label: 'مکث', instruction: localized.execution[1] ?? localized.startPosition },
-      { label: 'بالاآوردن', instruction: localized.execution[2] ?? localized.startPosition },
-      { label: 'پایان', instruction: localized.finishPosition },
-    ],
+    // The written steps carry the labels the movement loop itself is authored
+    // with, so the timeline and the 3D phase readout say the same thing.
+    movementPhases: instructions.map((instruction, index) => ({
+      label: motion?.keys[index]?.label ?? fallbackLabels[index]!,
+      instruction,
+    })),
   };
 });
 

@@ -308,6 +308,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .viewer-control-group button:disabled { opacity: .42; cursor: not-allowed; }
 .viewer-control-group--transport button { min-width: 31px; }
 .viewer-note { margin: 0; padding: 0 13px 11px; color: #96a29a; font-size: 9px; line-height: 1.6; text-align: end; }
+.movement-hint { margin: 0 0 9px; padding: 8px 10px; border: 1px dashed rgba(166,183,172,.18); border-radius: 9px; color: #98a49c; font-size: 9px; line-height: 1.6; }
 .viewer-phase { display: flex; flex-direction: column; gap: 3px; padding: 10px 13px; border-top: 1px solid rgba(166,183,172,.1); background: rgba(217,246,111,.02); }
 .viewer-phase strong { color: #dfe8dd; font: 650 12px var(--font-display); }
 .viewer-phase p { margin: 0; color: #96a29a; font-size: 9px; line-height: 1.6; }

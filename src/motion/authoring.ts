@@ -164,7 +164,9 @@ export function loop(start: MotionKey, mid: MotionKey, turn: MotionKey, back: Mo
     { ...mid, t: 0.25, phase: 1 },
     { ...turn, t: 0.5, phase: 2 },
     { ...back, t: 0.75, phase: 3 },
-    { ...start, t: 1, phase: 4 },
+    // The loop closes on the pose it started from, but the label says so out
+    // loud: the closing key is the return, not the start position again.
+    { ...start, t: 1, phase: 4, label: `بازگشت به ${start.label}` },
   ];
 }
 

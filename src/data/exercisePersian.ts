@@ -1,7 +1,7 @@
 import type { ExerciseDefinition } from '../types';
 
 export type ExerciseTranslation = Omit<ExerciseDefinition,
-  'id' | 'category' | 'difficulty' | 'modelAsset' | 'animationAsset' | 'movementPhases' | 'referenceWeightKg'
+  'id' | 'category' | 'difficulty' | 'modelAsset' | 'motionId' | 'movementPhases' | 'referenceWeightKg'
 >;
 
 export const persianExerciseTranslations: Record<string, ExerciseTranslation> = {
