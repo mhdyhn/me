@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { phaseToTime } from '../motion/sampler';
+import { muscleHighlights, musclePaintFor } from '../motion/muscles';
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
 import { buildPropScene } from '../motion/props';
@@ -26,12 +27,31 @@ interface RiggedProps {
   restartToken: number;
   seek?: SeekRequest | null;
   onKeyLabel?: (label: string, phase: number) => void;
+  /** Illuminate the muscles the exercise works instead of the plain figure. */
+  anatomy?: boolean;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
 }
 
 /** Loads the GLB once and keeps the rig plus the camera framing derived from it. */
-function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, onKeyLabel }: RiggedProps) {
+function ExerciseRig({
+  asset,
+  motion,
+  view,
+  speed,
+  playing,
+  restartToken,
+  seek,
+  onKeyLabel,
+  anatomy = false,
+  primaryMuscles = [],
+  secondaryMuscles = [],
+}: RiggedProps) {
   const gltf = useLoader(GLTFLoader, asset, (loader) => loader.setMeshoptDecoder(MeshoptDecoder));
   const rig = useMemo(() => (motion ? buildMotionRig(gltf.scene, motion) : null), [gltf, motion]);
+  // Built while the scene is still in the rest pose the rig re-anchored it to: every
+  // muscle region is measured in that pose. One paint serves every movement.
+  const paint = useMemo(() => musclePaintFor(gltf.scene), [gltf.scene]);
   const frame = useMemo(() => (rig ? motionBounds(rig) : { centre: [0, 0.85, 0] as [number, number, number], radius: 1 }), [rig]);
   // Implements and fixtures come from the same sampled state the bones use.
   const props = useMemo(() => (rig ? buildPropScene(rig.state) : null), [rig]);
@@ -64,6 +84,12 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, 
     if (!rig) return undefined;
     return () => restRig(rig);
   }, [rig]);
+
+  // The colours only change when the exercise or the switch changes, never per frame:
+  // skinning carries the painted geometry through the loop.
+  useEffect(() => {
+    paint.apply(anatomy ? muscleHighlights(primaryMuscles, secondaryMuscles) : null);
+  }, [paint, anatomy, primaryMuscles, secondaryMuscles]);
 
   useFrame((_, delta) => {
     if (!rig || !motion) return;
@@ -121,7 +147,19 @@ function CameraControls({ view, target, radius }: { view: ViewAngle; target: [nu
   return null;
 }
 
-export default function ExerciseModelCanvas({ asset, motion, view, speed, playing, restartToken, seek, onKeyLabel }: RiggedProps) {
+export default function ExerciseModelCanvas({
+  asset,
+  motion,
+  view,
+  speed,
+  playing,
+  restartToken,
+  seek,
+  onKeyLabel,
+  anatomy,
+  primaryMuscles,
+  secondaryMuscles,
+}: RiggedProps) {
   return (
     <Canvas camera={{ position: [0, 1.1, 3.4], fov: 36 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
       <color attach="background" args={['#171d1b']} />
@@ -137,6 +175,9 @@ export default function ExerciseModelCanvas({ asset, motion, view, speed, playin
         restartToken={restartToken}
         seek={seek}
         onKeyLabel={onKeyLabel}
+        anatomy={anatomy}
+        primaryMuscles={primaryMuscles}
+        secondaryMuscles={secondaryMuscles}
       />
     </Canvas>
   );

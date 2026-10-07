@@ -307,6 +307,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .viewer-control-group button[aria-pressed='true'] { border-color: rgba(217,246,111,.35); color: var(--accent); background: rgba(217,246,111,.07); }
 .viewer-control-group button:disabled { opacity: .42; cursor: not-allowed; }
 .viewer-control-group--transport button { min-width: 31px; }
+.viewer-control-group--anatomy button { gap: 5px; letter-spacing: .04em; }
+.viewer-anatomy { display: grid; gap: 6px; padding: 10px 13px; border-top: 1px solid rgba(166,183,172,.1); background: rgba(224,74,44,.045); }
+.viewer-anatomy .eyebrow { color: #b79a8f; }
+.viewer-anatomy ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.viewer-anatomy li { display: flex; align-items: baseline; gap: 6px; color: #cbd5cc; font-size: 10px; line-height: 1.6; }
+.viewer-anatomy p { margin: 0; color: #8c9990; font-size: 9px; line-height: 1.6; }
+.muscle-key { flex: none; width: 9px; height: 9px; border-radius: 3px; transform: translateY(1px); }
+.muscle-key--prime { background: #df4526; }
+.muscle-key--helper { background: #c9776a; }
 .viewer-note { margin: 0; padding: 0 13px 11px; color: #96a29a; font-size: 9px; line-height: 1.6; text-align: end; }
 .movement-hint { margin: 0 0 9px; padding: 8px 10px; border: 1px dashed rgba(166,183,172,.18); border-radius: 9px; color: #98a49c; font-size: 9px; line-height: 1.6; }
 .workout-form-cues { border: 1px solid rgba(166,183,172,.14); border-radius: 12px; background: rgba(255,255,255,.012); }

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ExerciseViewer } from './ExerciseViewer';
 import { motions } from '../motion/library';
@@ -31,6 +31,46 @@ describe('ExerciseViewer', () => {
     }
     expect(screen.getByRole('button', { name: 'پخش پویانمایی' })).toBeDisabled();
     expect(screen.getByText(/برای این حرکت هنوز پویانمایی ثبت نشده است/)).toBeInTheDocument();
+  });
+
+  it('switches to the muscle view and names the muscles it paints', async () => {
+    render(
+      <ExerciseViewer
+        modelAsset="/models/human.glb"
+        motionId="barbell-bench-press"
+        exerciseName="پرس سینه"
+        primaryMuscles={['سینه']}
+        secondaryMuscles={['پشت بازو', 'سرشانهٔ جلویی']}
+      />,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'نمای عضلات' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent('نمای عضلات فعال است');
+    expect(screen.getByText(/عضلهٔ اصلی: سینه/)).toBeInTheDocument();
+    expect(screen.getByText(/عضلهٔ کمکی: پشت بازو/)).toBeInTheDocument();
+    // The map says what it is: a training map, not a measurement.
+    expect(screen.getByText(/نه اندازه‌گیری فعالیت عضلانی/)).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(screen.queryByText(/عضلهٔ اصلی: سینه/)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('پویانمایی حرکت فعال است');
+  });
+
+  it('says when a muscle of the catalogue cannot be painted on this model', async () => {
+    render(
+      <ExerciseViewer
+        modelAsset="/models/human.glb"
+        motionId="barbell-bench-press"
+        exerciseName="پرس سینه"
+        primaryMuscles={['سینه']}
+        secondaryMuscles={['عضلهٔ ناشناخته در این مدل']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'نمای عضلات' }));
+    expect(screen.getByText(/در این مدل رنگ‌آمیزی نشده است/)).toBeInTheDocument();
   });
 
   it('keeps the explicit empty-state when no model asset exists', () => {

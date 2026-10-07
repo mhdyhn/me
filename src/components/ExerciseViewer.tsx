@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Box, Eye, ListChecks, Pause, Play, RotateCcw } from 'lucide-react';
+import { Box, Eye, ListChecks, Pause, Play, RotateCcw, Scan } from 'lucide-react';
 import { ModelErrorBoundary } from './ModelErrorBoundary';
 import { motionById } from '../motion/library';
+import { unknownMuscles } from '../motion/muscles';
 import type { MotionStandard } from '../motion/types';
 import { faNumber } from '../lib/format';
 
@@ -20,14 +21,25 @@ interface ExerciseViewerProps {
   /** Written step the model should hold, with a token that changes on each click. */
   seek?: { phase: number; token: number } | null;
   exerciseName: string;
+  /** Muscles of the exercise, painted on the model in the anatomy view. */
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
 }
 
-export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: ExerciseViewerProps) {
+export function ExerciseViewer({
+  modelAsset,
+  motionId,
+  seek,
+  exerciseName,
+  primaryMuscles = [],
+  secondaryMuscles = [],
+}: ExerciseViewerProps) {
   const motion = useMemo(() => (motionId ? motionById(motionId) ?? null : null), [motionId]);
   const asset = modelAsset || null;
   const [view, setView] = useState<ViewAngle>('front');
   const [speed, setSpeed] = useState(1);
   const [playing, setPlaying] = useState(true);
+  const [anatomy, setAnatomy] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [phase, setPhase] = useState({ label: motion?.keys[0]?.label ?? '', phase: 0 });
 
@@ -55,6 +67,10 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
   }, [asset]);
 
   const hasMotion = Boolean(motion && asset);
+  const unpaintable = useMemo(
+    () => unknownMuscles([...primaryMuscles, ...secondaryMuscles]),
+    [primaryMuscles, secondaryMuscles],
+  );
 
   // Jumping to a written step shows one position, so the loop stops there.
   useEffect(() => {
@@ -74,7 +90,13 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
           aria-live="polite"
         >
           <span />
-          {hasMotion ? 'پویانمایی حرکت فعال است' : asset ? 'مدل ثابت · بدون پویانمایی' : 'مدل هنوز افزوده نشده'}
+          {anatomy && asset
+            ? 'نمای عضلات فعال است'
+            : hasMotion
+              ? 'پویانمایی حرکت فعال است'
+              : asset
+                ? 'مدل ثابت · بدون پویانمایی'
+                : 'مدل هنوز افزوده نشده'}
         </span>
       </div>
 
@@ -91,6 +113,9 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
                 restartToken={restartToken}
                 seek={seek}
                 onKeyLabel={(label, keyPhase) => setPhase({ label, phase: keyPhase })}
+                anatomy={anatomy}
+                primaryMuscles={primaryMuscles}
+                secondaryMuscles={secondaryMuscles}
               />
             </Suspense>
           </ModelErrorBoundary>
@@ -121,6 +146,17 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
             </button>
           ))}
         </div>
+        <div className="viewer-control-group viewer-control-group--anatomy" role="group" aria-label="نمای بدن">
+          <button
+            type="button"
+            disabled={!asset}
+            aria-pressed={anatomy}
+            onClick={() => setAnatomy((value) => !value)}
+          >
+            <Scan size={14} />
+            نمای عضلات
+          </button>
+        </div>
         <div className="viewer-control-group viewer-control-group--transport" role="group" aria-label="کنترل پویانمایی">
           <button type="button" disabled={!hasMotion} aria-label={playing && hasMotion ? 'توقف پویانمایی' : 'پخش پویانمایی'} onClick={() => setPlaying((value) => !value)}>
             {playing && hasMotion ? <Pause size={15} /> : <Play size={15} />}
@@ -130,6 +166,25 @@ export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: Exe
           </button>
         </div>
       </div>
+
+      {anatomy && asset ? (
+        <div className="viewer-anatomy">
+          <span className="eyebrow">عضلات درگیر در این حرکت</span>
+          <ul>
+            {primaryMuscles.length > 0 ? (
+              <li><i className="muscle-key muscle-key--prime" />عضلهٔ اصلی: {primaryMuscles.join(' · ')}</li>
+            ) : null}
+            {secondaryMuscles.length > 0 ? (
+              <li><i className="muscle-key muscle-key--helper" />عضلهٔ کمکی: {secondaryMuscles.join(' · ')}</li>
+            ) : null}
+          </ul>
+          <p>
+            این نقشه بر پایهٔ عضلاتی است که این حرکت در برنامه می‌آموزد، نه اندازه‌گیری فعالیت عضلانی؛
+            الگو را برای یادگیری مسیر حرکت ببین، نه به‌عنوان عدد و درصد.
+            {unpaintable.length > 0 ? ` (${unpaintable.join(' · ')} در این مدل رنگ‌آمیزی نشده است.)` : ''}
+          </p>
+        </div>
+      ) : null}
 
       {hasMotion && motion ? (
         <>

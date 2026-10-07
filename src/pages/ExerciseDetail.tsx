@@ -80,7 +80,14 @@ export function ExerciseDetail() {
 
       <div className="exercise-detail-grid">
         <div className="exercise-detail-main page-stack page-stack--tight">
-          <ExerciseViewer modelAsset={exercise.modelAsset} motionId={exercise.motionId ?? exercise.id} seek={seek} exerciseName={exercise.name} />
+          <ExerciseViewer
+            modelAsset={exercise.modelAsset}
+            motionId={exercise.motionId ?? exercise.id}
+            seek={seek}
+            exerciseName={exercise.name}
+            primaryMuscles={exercise.primaryMuscles}
+            secondaryMuscles={exercise.secondaryMuscles}
+          />
 
           {placements.length > 0 && (
             <section className="panel-card prescription-card">
