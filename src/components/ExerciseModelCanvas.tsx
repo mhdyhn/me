@@ -4,10 +4,17 @@ import type { PerspectiveCamera } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { phaseToTime } from '../motion/sampler';
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
 
 type ViewAngle = 'front' | 'side' | 'back';
+
+/** Jump the loop to the key of one written step (phase 0…4). */
+export interface SeekRequest {
+  phase: number;
+  token: number;
+}
 
 interface RiggedProps {
   asset: string;
@@ -16,11 +23,12 @@ interface RiggedProps {
   speed: number;
   playing: boolean;
   restartToken: number;
+  seek?: SeekRequest | null;
   onKeyLabel?: (label: string, phase: number) => void;
 }
 
 /** Loads the GLB once and keeps the rig plus the camera framing derived from it. */
-function ExerciseRig({ asset, motion, view, speed, playing, restartToken, onKeyLabel }: RiggedProps) {
+function ExerciseRig({ asset, motion, view, speed, playing, restartToken, seek, onKeyLabel }: RiggedProps) {
   const gltf = useLoader(GLTFLoader, asset, (loader) => loader.setMeshoptDecoder(MeshoptDecoder));
   const rig = useMemo(() => (motion ? buildMotionRig(gltf.scene, motion) : null), [gltf, motion]);
   const frame = useMemo(() => (rig ? motionBounds(rig) : { centre: [0, 0.85, 0] as [number, number, number], radius: 1 }), [rig]);
@@ -33,6 +41,14 @@ function ExerciseRig({ asset, motion, view, speed, playing, restartToken, onKeyL
     if (!rig) return;
     poseRig(rig, 0);
   }, [rig, restartToken]);
+
+  useEffect(() => {
+    if (!rig || !motion || !seek) return;
+    phase.current = phaseToTime(rig.state, seek.phase) ?? 0;
+    poseRig(rig, phase.current);
+    // The phase index only matters through the token, so a re-render cannot re-seek.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rig, motion, seek?.token]);
 
   useEffect(() => {
     if (!rig) return undefined;
@@ -91,7 +107,7 @@ function CameraControls({ view, target, radius }: { view: ViewAngle; target: [nu
   return null;
 }
 
-export default function ExerciseModelCanvas({ asset, motion, view, speed, playing, restartToken, onKeyLabel }: RiggedProps) {
+export default function ExerciseModelCanvas({ asset, motion, view, speed, playing, restartToken, seek, onKeyLabel }: RiggedProps) {
   return (
     <Canvas camera={{ position: [0, 1.1, 3.4], fov: 36 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
       <color attach="background" args={['#171d1b']} />
@@ -105,6 +121,7 @@ export default function ExerciseModelCanvas({ asset, motion, view, speed, playin
         speed={speed}
         playing={playing}
         restartToken={restartToken}
+        seek={seek}
         onKeyLabel={onKeyLabel}
       />
     </Canvas>

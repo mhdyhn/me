@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { Vector3 } from 'three';
 import { buildSkeletonScene, readGlbJson } from '../src/motion/glbNodes';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../src/motion/modelRig';
+import { phaseToTime } from '../src/motion/sampler';
 import { motions } from '../src/motion/library';
 
 const scene = () => buildSkeletonScene(readGlbJson(new Uint8Array(readFileSync('public/models/human.glb')))).scene;
@@ -47,5 +48,31 @@ describe('browser rig', () => {
     expect(bench.centre[2]).toBeLessThan(-0.5);
     // A lying press reaches further along the body's axis than a squat does in height.
     expect(bench.radius).toBeGreaterThan(1);
+  });
+});
+
+describe('written steps and the loop', () => {
+  it('maps every written step to a loop position the viewer can jump to', () => {
+    const motion = motions['barbell-squat']!;
+    const rig = buildMotionRig(scene(), motion);
+    const at = (phase: number) => {
+      const time = phaseToTime(rig.state, phase);
+      expect(time, `phase ${phase}`).not.toBeNull();
+      return poseRig(rig, time!);
+    };
+
+    // Every step before the closing key lands on its own key.
+    for (const key of motion.keys.filter((entry) => entry.phase < 4)) {
+      const state = at(key.phase);
+      expect(state.keyPhase, `phase ${key.phase}`).toBe(key.phase);
+      expect(state.keyLabel, `phase ${key.phase}`).toBe(key.label);
+    }
+
+    // The fifth step is the loop end, and a loop ends on the pose it started from.
+    const start = at(0);
+    const finish = at(4);
+    for (const bone of ['pelvis', 'foot_l', 'hand_l']) {
+      expect(finish.worldPosition.get(bone)!.distanceTo(start.worldPosition.get(bone)!), bone).toBeLessThan(1e-6);
+    }
   });
 });

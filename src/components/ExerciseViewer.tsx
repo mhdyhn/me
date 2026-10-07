@@ -17,10 +17,12 @@ interface ExerciseViewerProps {
   modelAsset?: string | null;
   /** Movement loop for this exercise, keyed by the workout library. */
   motionId?: string | null;
+  /** Written step the model should hold, with a token that changes on each click. */
+  seek?: { phase: number; token: number } | null;
   exerciseName: string;
 }
 
-export function ExerciseViewer({ modelAsset, motionId, exerciseName }: ExerciseViewerProps) {
+export function ExerciseViewer({ modelAsset, motionId, seek, exerciseName }: ExerciseViewerProps) {
   const motion = useMemo(() => (motionId ? motionById(motionId) ?? null : null), [motionId]);
   const asset = modelAsset || null;
   const [view, setView] = useState<ViewAngle>('front');
@@ -35,6 +37,11 @@ export function ExerciseViewer({ modelAsset, motionId, exerciseName }: ExerciseV
   }, [motion, asset]);
 
   const hasMotion = Boolean(motion && asset);
+
+  // Jumping to a written step shows one position, so the loop stops there.
+  useEffect(() => {
+    if (seek) setPlaying(false);
+  }, [seek?.token]);
 
   return (
     <section className="viewer-card" aria-label={`نمایش سه‌بعدی ${exerciseName}`}>
@@ -64,6 +71,7 @@ export function ExerciseViewer({ modelAsset, motionId, exerciseName }: ExerciseV
                 speed={speed}
                 playing={playing && hasMotion}
                 restartToken={restartToken}
+                seek={seek}
                 onKeyLabel={(label, keyPhase) => setPhase({ label, phase: keyPhase })}
               />
             </Suspense>

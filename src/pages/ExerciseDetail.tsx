@@ -18,6 +18,7 @@ export function ExerciseDetail() {
   const { sessions } = useGym();
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [replaying, setReplaying] = useState(false);
+  const [seek, setSeek] = useState<{ phase: number; token: number } | null>(null);
   const placements = workoutTemplates.flatMap((workout) => workout.exercises
     .filter((item) => item.exerciseId === exerciseId)
     .map((item) => ({ workout, prescription: item.prescription })));
@@ -47,6 +48,14 @@ export function ExerciseDetail() {
   const replaySteps = () => {
     setPhaseIndex(0);
     setReplaying(true);
+    setSeek({ phase: 0, token: (seek?.token ?? 0) + 1 });
+  };
+
+  /** Shows one written step on the model and stops the loop there. */
+  const showStep = (index: number) => {
+    setReplaying(false);
+    setPhaseIndex(index);
+    setSeek({ phase: index, token: (seek?.token ?? 0) + 1 });
   };
 
   const beginWorkout = () => {
@@ -71,7 +80,7 @@ export function ExerciseDetail() {
 
       <div className="exercise-detail-grid">
         <div className="exercise-detail-main page-stack page-stack--tight">
-          <ExerciseViewer modelAsset={exercise.modelAsset} motionId={exercise.motionId ?? exercise.id} exerciseName={exercise.name} />
+          <ExerciseViewer modelAsset={exercise.modelAsset} motionId={exercise.motionId ?? exercise.id} seek={seek} exerciseName={exercise.name} />
 
           {placements.length > 0 && (
             <section className="panel-card prescription-card">
@@ -83,7 +92,7 @@ export function ExerciseDetail() {
           <section className="panel-card movement-card">
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>
             <div className="movement-timeline" role="tablist" aria-label="مراحل حرکت">
-              {exercise.movementPhases.map((phase, index) => <button role="tab" aria-selected={phaseIndex === index} className={`movement-phase${phaseIndex === index ? ' is-active' : ''}`} key={phase.label} onClick={() => { setReplaying(false); setPhaseIndex(index); }}><span>{faDigits(String(index + 1).padStart(2, '0'))}</span><strong>{phase.label}</strong></button>)}
+              {exercise.movementPhases.map((phase, index) => <button role="tab" aria-selected={phaseIndex === index} className={`movement-phase${phaseIndex === index ? ' is-active' : ''}`} key={phase.label} onClick={() => showStep(index)}><span>{faDigits(String(index + 1).padStart(2, '0'))}</span><strong>{phase.label}</strong></button>)}
             </div>
             <div className="movement-phase-copy" role="tabpanel"><span className="movement-phase-copy__arrow">↓</span><div><span className="eyebrow">{exercise.movementPhases[phaseIndex]?.label ?? 'شروع'}</span><p>{exercise.movementPhases[phaseIndex]?.instruction ?? exercise.startPosition}</p></div></div>
             <div className="movement-summary"><div><span className="summary-step">۰۱</span><span><strong>شروع</strong><small>{exercise.startPosition}</small></span></div><span className="summary-arrow">↓</span><div><span className="summary-step">۰۲</span><span><strong>اجرا</strong><small>{exercise.execution.join(' ')}</small></span></div><span className="summary-arrow">↓</span><div><span className="summary-step">۰۳</span><span><strong>پایان</strong><small>{exercise.finishPosition}</small></span></div></div>
