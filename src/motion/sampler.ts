@@ -353,8 +353,11 @@ function knuckleLine(state: MotionState, side: 'l' | 'r'): Vector3 {
  */
 function solveGripTwists(state: MotionState): void {
   // Tools that need the raw authored wrists (the angle tables, the fitting scripts)
-  // can switch the rule off with MOTION_NO_GRIP_SOLVE=1.
-  if (process.env.MOTION_NO_GRIP_SOLVE === '1') return;
+  // can switch the rule off with MOTION_NO_GRIP_SOLVE=1. The environment is read through
+  // globalThis because this module also runs in the browser, where `process` is not defined
+  // and touching it would take the whole canvas down.
+  const environment = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  if (environment?.MOTION_NO_GRIP_SOLVE === '1') return;
   // Only a barbell runs straight through both hands; a pair of dumbbells or two cable
   // handles each follow their own hand, so their wrists stay as the pose authored them.
   const holds = state.motion.equipment.some((item) => item.kind === 'barbell');
