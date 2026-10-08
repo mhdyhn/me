@@ -28,6 +28,11 @@ const HINGE_JOINTS: { bone: string; parent: string; joint: string; child: string
 ];
 
 /**
+ * Finger chains. The three joints of a finger bend in one plane, so the axis is
+ * derived once per finger from its own two segments and reused by the knuckle, the
+ * middle joint and the tip; deriving it per segment would let a curl spiral.
+ */
+/**
  * Bones whose own long axis is an explicit channel. The forearm uses it for
  * pronation; the upper arm uses it for the humerus rotation that decides which
  * plane the elbow bends in, which keeps the shoulder angles small and readable.
@@ -106,7 +111,7 @@ export function boneAxes(rest: RestSkeleton, bone: string): BoneAxes {
     x: new Vector3(1, 0, 0),
     y: new Vector3(0, 1, 0),
     z: new Vector3(0, 0, 1),
-    hinge: hinge ? hingeAxisFor(rest, hinge) : null,
+    hinge: hinge ? hingeAxisFor(rest, hinge) : fingerAxis(rest, bone),
     twist: TWIST_AXES[bone] ? handAxis(rest, bone, TWIST_AXES[bone]!) : null,
   };
 }
@@ -122,6 +127,17 @@ const mirrorAxis = (axis: Vector3, side: 'l' | 'r') =>
  * mirrored, so a symmetric pose stays symmetric even though the rig's rest data
  * is a fraction of a degree away from a perfect mirror.
  */
+/** Knuckle-to-tip bend axis of one finger, mirrored onto the right hand. */
+function fingerAxis(rest: RestSkeleton, bone: string): Vector3 | null {
+  const match = /^(index|middle|ring|pinky|thumb)_0[123]_[lr]$/.exec(bone);
+  if (!match) return null;
+  const finger = match[1]!;
+  const side = bone.endsWith('_r') ? 'r' : 'l';
+  const chain = [`${finger}_01_l`, `${finger}_02_l`, `${finger}_03_l`];
+  const axis = hingeAxis(rest, chain[0]!, chain[1]!, chain[2]!, 1);
+  return mirrorAxis(axis, side);
+}
+
 function hingeAxisFor(rest: RestSkeleton, joint: { parent: string; joint: string; child: string; sign: 1 | -1 }): Vector3 {
   const axis = hingeAxis(rest, leftOf(joint.parent), leftOf(joint.joint), leftOf(joint.child), joint.sign);
   // Knee and ankle are medio-lateral joints. The rig only bends them a few
@@ -140,7 +156,14 @@ function handAxis(rest: RestSkeleton, bone: string, child: string): Vector3 {
 }
 
 export function createMotionState(rest: RestSkeleton, motion: MotionDefinition): MotionState {
-  const animatedBones = [...new Set(motion.keys.flatMap((key) => Object.keys(key.pose)))];
+  // The hands close the same way in every key, so the grip is merged under the
+  // authored pose rather than repeated in the movement data; a key may still
+  // override a single finger by naming it.
+  const grip = gripPose(motion);
+  const keys = Object.keys(grip).length === 0
+    ? motion.keys
+    : motion.keys.map((key) => ({ ...key, pose: { ...grip, ...key.pose } }));
+  const animatedBones = [...new Set(keys.flatMap((key) => Object.keys(key.pose)))];
   for (const bone of animatedBones) {
     if (!rest.bones.has(bone)) throw new Error(`Motion ${motion.id} animates unknown bone ${bone}`);
   }
@@ -153,7 +176,7 @@ export function createMotionState(rest: RestSkeleton, motion: MotionDefinition):
     axes.set(bone, boneAxes(rest, bone));
   }
 
-  const frames: Frame[] = motion.keys.map((key) => ({
+  const frames: Frame[] = keys.map((key) => ({
     t: key.t,
     label: key.label,
     phase: key.phase,
@@ -293,9 +316,85 @@ export function applyPose(state: MotionState, pose: Pose, root?: [number, number
 
 function commit(state: MotionState): MotionState {
   applyRotations(state);
+  solveGripTwists(state);
   solveGroundContact(state);
   placeEquipment(state);
   return state;
+}
+
+/**
+ * Direction a two-hand bar runs in: square to the shoulders, which is how a bar is
+ * held and also how the squat's bar is already anchored. Taking it from the shoulders
+ * instead of from the hands keeps the direction independent of the very wrist angle
+ * the grip solve is about to change.
+ */
+function barDirection(state: MotionState): Vector3 {
+  const left = state.worldPosition.get('upperarm_l') ?? state.worldPosition.get('clavicle_l');
+  const right = state.worldPosition.get('upperarm_r') ?? state.worldPosition.get('clavicle_r');
+  const axis = left && right ? new Vector3().subVectors(left, right) : new Vector3(1, 0, 0);
+  if (axis.lengthSq() < 1e-8) axis.set(1, 0, 0);
+  return axis.normalize();
+}
+
+/** World direction from the little-finger knuckle to the index knuckle: the palm line. */
+function knuckleLine(state: MotionState, side: 'l' | 'r'): Vector3 {
+  return new Vector3().subVectors(
+    state.worldPosition.get(`index_01_${side}`)!,
+    state.worldPosition.get(`pinky_01_${side}`)!,
+  ).normalize();
+}
+
+/**
+ * A handle held in both hands runs along the line that joins them, so each wrist rolls
+ * until its palm line lies on that line. Without this the hand keeps the orientation
+ * its shoulder happened to give it and the bar crosses the palm — the "open hand on a
+ * bar" look that reads as a fake grip. Single-hand holds are left alone: there the
+ * handle follows the hand, so any wrist reads as a grip.
+ */
+function solveGripTwists(state: MotionState): void {
+  // Tools that need the raw authored wrists (the angle tables, the fitting scripts)
+  // can switch the rule off with MOTION_NO_GRIP_SOLVE=1.
+  if (process.env.MOTION_NO_GRIP_SOLVE === '1') return;
+  // Only a barbell runs straight through both hands; a pair of dumbbells or two cable
+  // handles each follow their own hand, so their wrists stay as the pose authored them.
+  const holds = state.motion.equipment.some((item) => item.kind === 'barbell');
+  if (!holds) return;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const target = barDirection(state);
+
+    let changed = false;
+    for (const side of ['l', 'r'] as const) {
+      const forearm = `lowerarm_${side}`;
+      if (!state.rotation.has(forearm)) continue;
+      const line = knuckleLine(state, side);
+      const axis = new Vector3().subVectors(
+        state.worldPosition.get(`hand_${side}`)!,
+        state.worldPosition.get(forearm)!,
+      );
+      if (axis.lengthSq() < 1e-10) continue;
+      axis.normalize();
+      const lineFlat = line.clone().addScaledVector(axis, -line.dot(axis));
+      const targetFlat = target.clone().addScaledVector(axis, -target.dot(axis));
+      if (lineFlat.lengthSq() < 1e-6 || targetFlat.lengthSq() < 1e-6) continue;
+      lineFlat.normalize();
+      targetFlat.normalize();
+      let angle = Math.atan2(
+        new Vector3().crossVectors(lineFlat, targetFlat).dot(axis),
+        lineFlat.dot(targetFlat),
+      ) * (180 / Math.PI);
+      if (angle > 90) angle -= 180;
+      else if (angle < -90) angle += 180;
+      if (Math.abs(angle) < 0.05) continue;
+      const rotation = state.rotation.get(forearm)!;
+      // The right side's twist axis is the mirrored rest direction, which reverses the
+      // sense of the same world rotation, so its step is negated.
+      rotation.twist = (rotation.twist ?? 0) + (side === 'l' ? angle : -angle);
+      changed = true;
+      void pass;
+    }
+    if (!changed) return;
+    applyRotations(state);
+  }
 }
 
 function applyRotations(state: MotionState): void {
@@ -360,43 +459,194 @@ function solveGroundContact(state: MotionState): void {
   }
 }
 
-/** World axes of the palm line and the forearm direction for one hand. */
-function handFrame(state: MotionState, side: 'l' | 'r'): { position: Vector3; x: Vector3; y: Vector3 } {
-  const index = state.worldPosition.get(`index_01_${side}`)!;
-  const pinky = state.worldPosition.get(`pinky_01_${side}`)!;
-  const hand = state.worldPosition.get(`hand_${side}`)!;
-  const wrist = state.worldPosition.get(`lowerarm_${side}`)!;
+/**
+ * A handle is held in the palm, so the frame comes from the palm and not from the
+ * splayed finger bases of the rest pose. Every number here is measured once on the
+ * rest skeleton, in the hand bone's own frame, and then carried by the hand's posed
+ * rotation; that way a relaxed rest hand still grips a bar square.
+ */
+interface PalmFrame {
+  /** Point on the bone plane where the handle sits, relative to the hand bone. */
+  seat: Vector3;
+  /** Handle height already baked into `seat`; the caller adds the handle radius. */
+  rise: number;
+  /** The hand's long axis, from the wrist toward the knuckles. */
+  forward: Vector3;
+  /** Direction from the little finger toward the index finger: the handle's own axis. */
+  handle: Vector3;
+  /** Out of the palm, the side the fingers close onto. */
+  palm: Vector3;
+}
 
+/**
+ * Where the handle sits in the palm, and how thick the skin is over the bone plane.
+ * Both are fitted against the shipped mesh by `tools/grip-fit.ts`; they are read on
+ * every call so that tool can sweep them without recompiling the sampler.
+ */
+export const GRIP = {
+  /** Fraction of the wrist-to-knuckle axis the handle sits at. */
+  seat: 0.85,
+  /** Skin over the bone plane, measured on the shipped mesh. */
+  skin: 0.01,
+};
+
+/** Radius of the handle a hold wraps around. */
+export function handleRadius(kind: 'barbell' | 'dumbbell' | 'cable'): number {
+  if (kind === 'dumbbell') return 0.017;
+  if (kind === 'cable') return 0.016;
+  return 0.014;
+}
+
+const palmFrames = new WeakMap<RestSkeleton, Map<string, PalmFrame>>();
+
+function restPalmFrame(state: MotionState, side: 'l' | 'r'): PalmFrame {
+  let frames = palmFrames.get(state.rest);
+  if (!frames) {
+    frames = new Map();
+    palmFrames.set(state.rest, frames);
+  }
+  // The seat is baked into the cached frame, so the cache key carries it: tools that
+  // sweep the grip would otherwise keep reading the first seat they asked for.
+  const key = `${side}@${GRIP.seat}`;
+  const cached = frames.get(key);
+  if (cached) return cached;
+
+  const hand = state.rest.bones.get(`hand_${side}`)!;
+  const index = state.rest.bones.get(`index_01_${side}`)!.worldPosition;
+  const middle = state.rest.bones.get(`middle_01_${side}`)!.worldPosition;
+  const pinky = state.rest.bones.get(`pinky_01_${side}`)!.worldPosition;
+  const knuckles = new Vector3().addVectors(index, pinky).multiplyScalar(0.5).lerp(middle, 0.5);
+
+  // The bar lies along the knuckles themselves — that is the line a real bar follows —
+  // so the palm line is taken raw and the wrist-to-knuckle axis is squared up to it
+  // instead.
   const handle = new Vector3().subVectors(index, pinky);
-  if (handle.lengthSq() < 1e-8) handle.set(side === 'l' ? 1 : -1, 0.2, 0);
+  if (handle.lengthSq() < 1e-10) handle.set(side === 'l' ? -1 : 1, 0, 0);
   handle.normalize();
-
-  const forearm = new Vector3().subVectors(hand, wrist).normalize();
-  const forward = forearm.clone().addScaledVector(handle, -forearm.dot(handle));
-  if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1).addScaledVector(handle, -handle.z);
+  const forward = new Vector3().subVectors(knuckles, hand.worldPosition);
+  forward.addScaledVector(handle, -forward.dot(handle));
+  if (forward.lengthSq() < 1e-10) forward.set(0, 0, 1).addScaledVector(handle, -handle.z);
   forward.normalize();
+  let palm = new Vector3().crossVectors(handle, forward).normalize();
 
-  return {
-    position: new Vector3().addVectors(index, pinky).multiplyScalar(0.5),
-    x: handle,
-    y: forward,
-  };
+  // The palm side is the side a fingertip travels to when its knuckle flexes, which the
+  // rig answers with the knuckle's own hinge axis.
+  const finger = new Vector3().subVectors(
+    state.rest.bones.get(`index_02_${side}`)!.worldPosition,
+    state.rest.bones.get(`index_01_${side}`)!.worldPosition,
+  );
+  const hinge = boneAxes(state.rest, `index_01_${side}`).hinge;
+  if (hinge && finger.lengthSq() > 1e-10) {
+    const curl = new Vector3().crossVectors(hinge, finger.normalize());
+    if (curl.dot(palm) < 0) palm.negate();
+  }
+
+  const seat = new Vector3()
+    .lerpVectors(hand.worldPosition, knuckles, GRIP.seat)
+    .sub(hand.worldPosition);
+  const frame: PalmFrame = { seat, rise: 0, forward, handle, palm };
+  frames.set(key, frame);
+  return frame;
+}
+
+/**
+ * How a hand closes around a handle. The knuckle takes most of the bend, the middle
+ * joint follows, and the tip tucks in behind the handle, which is what a real grip
+ * looks like — an open hand resting on the bar is the giveaway of a fake one.
+ */
+export interface FingerCurl {
+  mcp: number;
+  pip: number;
+  dip: number;
+}
+
+export const CURL: Record<'barbell' | 'dumbbell' | 'cable', Record<string, FingerCurl>> = {
+  barbell: {
+    index: { mcp: 30, pip: 75, dip: 0 },
+    middle: { mcp: 30, pip: 85, dip: 0 },
+    ring: { mcp: 20, pip: 85, dip: 0 },
+    pinky: { mcp: 20, pip: 60, dip: 0 },
+    thumb: { mcp: 20, pip: 50, dip: 0 },
+  },
+  dumbbell: {
+    index: { mcp: 30, pip: 75, dip: 0 },
+    middle: { mcp: 30, pip: 85, dip: 0 },
+    ring: { mcp: 20, pip: 85, dip: 0 },
+    pinky: { mcp: 20, pip: 60, dip: 0 },
+    thumb: { mcp: 20, pip: 50, dip: 0 },
+  },
+  cable: {
+    index: { mcp: 30, pip: 75, dip: 0 },
+    middle: { mcp: 30, pip: 85, dip: 0 },
+    ring: { mcp: 20, pip: 85, dip: 0 },
+    pinky: { mcp: 20, pip: 60, dip: 0 },
+    thumb: { mcp: 20, pip: 50, dip: 0 },
+  },
+};/**
+ * Finger bend for every hand a movement loads. The bar on the upper back is still
+ * held by both hands, so that grip closes as well; a push-up holds nothing and keeps
+ * the rest hand.
+ */
+function gripPose(motion: MotionDefinition): Pose {
+  const pose: Pose = {};
+  for (const item of motion.equipment) {
+    const sides: ('l' | 'r')[] =
+      item.grip === 'left-hand' ? ['l'] : item.grip === 'right-hand' ? ['r'] : ['l', 'r'];
+    for (const side of sides) {
+      for (const [finger, curl] of Object.entries(CURL[item.kind])) {
+        pose[`${finger}_01_${side}`] = { hinge: curl.mcp };
+        pose[`${finger}_02_${side}`] = { hinge: curl.pip };
+        pose[`${finger}_03_${side}`] = { hinge: curl.dip };
+      }
+    }
+  }
+  return pose;
+}
+
+/** World frame of one hand: where the handle sits, the axis it runs along, the palm side. */
+export function handFrame(state: MotionState, side: 'l' | 'r', radius = 0.014): { position: Vector3; x: Vector3; y: Vector3 } {
+  const frame = restPalmFrame(state, side);
+  const rise = GRIP.skin + radius;
+  const bone = `hand_${side}`;
+  const rest = state.rest.bones.get(bone)!;
+  // How far the hand has turned since the rest pose; the frame turns with it.
+  const turn = state.worldQuaternion.get(bone)!.clone().multiply(rest.worldQuaternion.clone().invert());
+  const position = frame.seat.clone().addScaledVector(frame.palm, rise - frame.rise)
+    .applyQuaternion(turn).add(state.worldPosition.get(bone)!);
+  const handle = frame.handle.clone().applyQuaternion(turn).normalize();
+  const forward = frame.forward.clone().applyQuaternion(turn).normalize();
+  return { position, x: handle, y: forward };
 }
 
 function placeEquipment(state: MotionState): void {
   let anchorIndex = 0;
   state.equipment.forEach((placement) => {
+    const radius = handleRadius(placement.kind);
+    if (placement.kind === 'barbell') {
+      // One bar, and it runs through the two palms: whether the movement holds it in
+      // front (a press, a curl) or lays it on the upper back (a squat), the hands are
+      // what the bar is in, so the grip never has to be guessed from an offset.
+      const left = handFrame(state, 'l', radius);
+      const right = handFrame(state, 'r', radius);
+      const axis = new Vector3().subVectors(left.position, right.position);
+      if (axis.lengthSq() < 1e-8) axis.copy(barDirection(state));
+      axis.normalize();
+      const y = left.y.clone().addScaledVector(axis, -left.y.dot(axis));
+      if (y.lengthSq() < 1e-6) y.set(0, 1, 0).addScaledVector(axis, -axis.y);
+      y.normalize();
+      placement.position.addVectors(left.position, right.position).multiplyScalar(0.5);
+      placement.quaternion.setFromRotationMatrix(
+        new Matrix4().makeBasis(axis, y, new Vector3().crossVectors(axis, y)),
+      );
+      return;
+    }
     if (placement.side === 'both') {
       const anchor = state.anchors[anchorIndex++]!;
       const delta = state.delta.get(anchor.bone);
       const offset = anchor.offset.clone();
       if (delta) offset.applyQuaternion(delta);
       placement.position.copy(state.worldPosition.get(anchor.bone)!).add(offset);
-      const shoulderLeft = state.worldPosition.get('upperarm_l') ?? state.worldPosition.get('clavicle_l')!;
-      const shoulderRight = state.worldPosition.get('upperarm_r') ?? state.worldPosition.get('clavicle_r')!;
-      const axis = new Vector3().subVectors(shoulderLeft, shoulderRight);
-      if (axis.lengthSq() < 1e-8) axis.set(1, 0, 0);
-      axis.normalize();
+      const axis = barDirection(state);
       const up = new Vector3().subVectors(state.worldPosition.get('spine_03')!, state.worldPosition.get('pelvis')!);
       const y = up.addScaledVector(axis, -up.dot(axis));
       if (y.lengthSq() < 1e-6) y.set(0, 1, 0).addScaledVector(axis, -axis.y);
@@ -408,22 +658,7 @@ function placeEquipment(state: MotionState): void {
     }
 
     const side = placement.side as 'l' | 'r';
-    const frame = handFrame(state, side);
-    if (placement.kind === 'barbell') {
-      const other = handFrame(state, side === 'l' ? 'r' : 'l');
-      const axis = new Vector3().subVectors(frame.position, other.position);
-      if (axis.lengthSq() < 1e-8) axis.set(1, 0, 0);
-      axis.normalize();
-      const y = frame.y.clone().addScaledVector(axis, -frame.y.dot(axis));
-      if (y.lengthSq() < 1e-6) y.set(0, 1, 0).addScaledVector(axis, -axis.y);
-      y.normalize();
-      placement.position.addVectors(frame.position, other.position).multiplyScalar(0.5);
-      placement.quaternion.setFromRotationMatrix(
-        new Matrix4().makeBasis(axis, y, new Vector3().crossVectors(axis, y)),
-      );
-      return;
-    }
-
+    const frame = handFrame(state, side, radius);
     placement.position.copy(frame.position);
     placement.quaternion.setFromRotationMatrix(
       new Matrix4().makeBasis(frame.x, frame.y, new Vector3().crossVectors(frame.x, frame.y)),
