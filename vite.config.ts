@@ -1,9 +1,33 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/**
+ * Dev-only: the browser posts the error that stopped the 3D model from loading, so the
+ * failure can be read off the dev server log. There is no headless browser in this
+ * environment, so this is the only way the client's reason reaches the terminal.
+ */
+const modelErrorLog = (): Plugin => ({
+  name: 'meety-model-error-log',
+  apply: 'serve',
+  configureServer(server) {
+    server.middlewares.use('/__model-error', (request, response) => {
+      let body = '';
+      request.on('data', (chunk) => {
+        body += chunk;
+      });
+      request.on('end', () => {
+        console.log('[model-error]', body.slice(0, 4000));
+        response.statusCode = 204;
+        response.end();
+      });
+    });
+  },
+});
+
 export default defineConfig({
   plugins: [
+    modelErrorLog(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -30,15 +54,22 @@ export default defineConfig({
       workbox: {
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,woff2,glb}'],
-        globIgnores: ['**/ExerciseModelCanvas-*.js', '**/three-core-*.js', '**/react-three-fiber-*.js'],
+        // The model is deliberately not precached: it is 700 KB of binary that only one
+        // route asks for, and a precached binary would be pinned to the build that first
+        // installed the worker, out of reach of a reload.
+        globIgnores: ['**/ExerciseModelCanvas-*.js', '**/three-core-*.js', '**/react-three-fiber-*.js', '**/models/*.glb'],
         runtimeCaching: [
           {
+            // Network-first: the model is immutable, but a cache-first entry is only ever
+            // right if what got cached really was the model. A 200 that carried something
+            // else - a fallback page from a proxy, for instance - would otherwise be served
+            // for a month and no amount of reloading would bring the model back.
             urlPattern: /\/models\/.*\.(?:glb|gltf)$/i,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'meety-exercise-models',
               expiration: { maxEntries: 12, maxAgeSeconds: 30 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {

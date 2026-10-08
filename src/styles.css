@@ -336,6 +336,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .viewer-standards li strong { color: #d6e0d3; font-size: 10px; font-weight: 650; }
 .viewer-standards li span { color: #8d9a92; font-size: 9px; line-height: 1.55; }
 .viewer-loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; color: #b6c3b7; font-size: 11px; }
+.model-error-fallback__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.model-error-fallback__report { max-width: 100%; max-height: 116px; margin: 0; padding: 7px 8px; overflow: auto; border-radius: 6px; background: #101614; color: #9fb0a6; font: 400 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
 .model-canvas-boundary { width: 100%; height: 100%; }
 .model-canvas-boundary canvas { display: block; width: 100% !important; height: 100% !important; }
 .model-error-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 200px; gap: 9px; padding: 18px; color: #dfac91; text-align: center; }

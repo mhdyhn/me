@@ -6,7 +6,10 @@ import { unknownMuscles, type FigureStyle } from '../motion/muscles';
 import type { MotionStandard } from '../motion/types';
 import { faNumber } from '../lib/format';
 
-const ModelCanvas = lazy(() => import('./ExerciseModelCanvas'));
+/** Split out so the first paint does not wait for three.js; rebuilt per load attempt because
+ * a rejected dynamic import stays rejected for the life of the page, which would make the
+ * fallback's retry button useless. */
+const canvasLoader = () => import('./ExerciseModelCanvas');
 type ViewAngle = 'front' | 'side' | 'back';
 const views: { id: ViewAngle; label: string }[] = [
   { id: 'front', label: 'روبرو' },
@@ -73,6 +76,12 @@ export function ExerciseViewer({
     };
   }, [asset]);
 
+  // A failed load is often a poisoned cache entry for the asset URL, so retrying asks for
+  // the same file under a new key instead of reloading the whole page.
+  const [modelAttempt, setModelAttempt] = useState(0);
+  const canvasAsset = !modelAttempt || !asset ? asset : `${asset}${asset.includes('?') ? '&' : '?'}retry=${modelAttempt}`;
+  const ModelCanvas = useMemo(() => lazy(canvasLoader), [modelAttempt]);
+
   const hasMotion = Boolean(motion && asset);
   const unpaintable = useMemo(
     () => unknownMuscles([...primaryMuscles, ...secondaryMuscles]),
@@ -108,11 +117,15 @@ export function ExerciseViewer({
       </div>
 
       <div className="viewer-stage">
-        {asset ? (
-          <ModelErrorBoundary>
+        {canvasAsset ? (
+          <ModelErrorBoundary
+            key={modelAttempt}
+            asset={asset ?? undefined}
+            onRetry={() => setModelAttempt((attempt) => attempt + 1)}
+          >
             <Suspense fallback={<div className="viewer-loading"><span className="loader-dot" /> در حال بارگذاری مدل سه‌بعدی…</div>}>
               <ModelCanvas
-                asset={asset}
+                asset={canvasAsset}
                 motion={hasMotion ? motion : null}
                 view={view}
                 speed={speed}
