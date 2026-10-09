@@ -10,7 +10,7 @@ import { db } from '../src/lib/db';
 import { Workout } from '../src/pages/Workout';
 import type { WorkoutSession } from '../src/types';
 
-function renderWorkout(path = '/workout/push-a') {
+function renderWorkout(path = '/workout/day-1') {
   return render(
     <GymProvider>
       <MemoryRouter initialEntries={[path]}>
@@ -54,12 +54,19 @@ describe('workout flow', () => {
     expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲');
   });
 
+  it('trains a programmed movement that has no 3D entry, using the programme name', async () => {
+    renderWorkout('/workout/day-2');
+    expect(await screen.findByRole('heading', { name: 'زیربغل سیمکش مچ برعکس' })).toBeInTheDocument();
+    expect(screen.getByText(/راهنمای تصویری برای این حرکت هنوز اضافه نشده است/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ثبت ست و شروع استراحت/i })).toBeInTheDocument();
+  });
+
   it('offers the form cues of the current exercise while training', async () => {
     const user = userEvent.setup();
     renderWorkout();
 
     await screen.findByText('ست فعلی');
-    const firstExercise = workoutTemplates.find((template) => template.id === 'push-a')!.exercises[0]!.exerciseId;
+    const firstExercise = workoutTemplates.find((template) => template.id === 'day-1')!.exercises[0]!.exerciseId;
     const standards = motions[firstExercise]!.standards;
 
     await user.click(screen.getByText('نکته‌های فرم همین حرکت'));
@@ -75,18 +82,18 @@ describe('workout flow', () => {
     await screen.findByText('ست فعلی');
     await user.type(screen.getByRole('spinbutton', { name: 'وزنه به کیلوگرم' }), '20');
     await user.click(screen.getByRole('button', { name: /ثبت ست و شروع استراحت/i }));
-    await screen.findByText(/ست ۱ ثبت شد · ۲۰ کیلوگرم × ۶ · ۲ تکرار در ذخیره/);
+    await screen.findByText(/ست ۱ ثبت شد · ۲۰ کیلوگرم × ۵ · ۲ تکرار در ذخیره/);
     firstMount.unmount();
 
     renderWorkout();
-    expect(await screen.findByText(/ست ۱ ثبت شد · ۲۰ کیلوگرم × ۶ · ۲ تکرار در ذخیره/)).toBeInTheDocument();
+    expect(await screen.findByText(/ست ۱ ثبت شد · ۲۰ کیلوگرم × ۵ · ۲ تکرار در ذخیره/)).toBeInTheDocument();
     await expect(db.sessions.count()).resolves.toBe(1);
   });
 
   it('completes a session and shows totals, volume, and a place for notes', async () => {
     const user = userEvent.setup();
-    const optional = workoutTemplates.find((workout) => workout.id === 'optional-accessories');
-    if (!optional) throw new Error('Optional workout fixture is missing.');
+    const optional = workoutTemplates.find((workout) => workout.id === 'day-1');
+    if (!optional) throw new Error('Day 1 workout fixture is missing.');
     const finalExerciseIndex = optional.exercises.length - 1;
     const finalPrescription = optional.exercises[finalExerciseIndex]?.prescription;
     if (!finalPrescription) throw new Error('Final exercise fixture is missing.');
@@ -98,9 +105,11 @@ describe('workout flow', () => {
     };
     await db.sessions.put(session);
 
-    renderWorkout('/workout/optional-accessories');
+    renderWorkout('/workout/day-1');
     await screen.findByText('ست فعلی');
     await user.type(screen.getByRole('spinbutton', { name: 'وزنه به کیلوگرم' }), '10');
+    await user.clear(screen.getByRole('spinbutton', { name: 'تعداد تکرار' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'تعداد تکرار' }), '10');
     await user.click(screen.getByRole('button', { name: /ثبت ست و شروع استراحت/i }));
     await screen.findByText(/ست ۳ ثبت شد · ۱۰ کیلوگرم × ۱۰/);
     await user.click(screen.getByRole('button', { name: /پایان استراحت/ }));

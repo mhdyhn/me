@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
-import { getWorkoutTemplate } from '../data/workouts';
+import { getWorkoutTemplate, programExerciseName } from '../data/workouts';
 import { motionById } from '../motion/library';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
 import { faDigits, faNumber, formatDate, formatDuration, kg } from '../lib/format';
@@ -47,7 +47,7 @@ export function Workout() {
   const sessionExercise = session?.exercises[currentExerciseIndex];
   const setNumber = (session?.currentSetIndex ?? 0) + 1;
   const loggedSet = sessionExercise?.sets.find((set) => set.setNumber === setNumber);
-  const previous = exercise && session ? getLastExercisePerformance(sessions, exercise.id, session.id) : null;
+  const previous = currentWorkoutExercise && session ? getLastExercisePerformance(sessions, currentWorkoutExercise.exerciseId, session.id) : null;
   const plannedSetCount = activeTemplate?.exercises.reduce((total, item) => total + item.prescription.sets, 0) ?? 0;
   const loggedSetCount = session?.exercises.reduce((total, item) => total + item.sets.length, 0) ?? 0;
   const completedExercises = session?.exercises.filter((item) => item.sets.length > 0).length ?? 0;
@@ -70,7 +70,7 @@ export function Workout() {
   }, [session?.id, session?.restTimer?.endsAt, session?.restTimer?.pausedRemainingSeconds]);
 
   useEffect(() => {
-    if (!session || !prescription || !exercise || summary) return;
+    if (!session || !prescription || !currentWorkoutExercise || summary) return;
     const priorSameSession = session.exercises[currentExerciseIndex]?.sets.at(-1);
     const lastLogged = loggedSet;
     const previousWeight = previous?.sets[0]?.weightKg;
@@ -79,7 +79,7 @@ export function Workout() {
     setRirInput(lastLogged ? String(lastLogged.rir) : String(rirValue(prescription.targetRirLabel)));
     setSetNote(lastLogged?.notes ?? '');
     setFormError('');
-  }, [session?.id, currentExerciseIndex, session?.currentSetIndex, exercise?.id, summary]);
+  }, [session?.id, currentExerciseIndex, session?.currentSetIndex, currentWorkoutExercise?.exerciseId, summary]);
 
   useEffect(() => { setNotesDraft(session?.notes ?? ''); }, [session?.id]);
 
@@ -114,7 +114,7 @@ export function Workout() {
         </div>
         <div className="workout-summary-grid">
           <section className="panel-card summary-breakdown"><div className="card-topline"><span className="eyebrow">خلاصهٔ جلسه</span><Dumbbell size={16} className="icon-accent" /></div><h3>{getWorkoutTemplate(completed.templateId)?.name ?? completed.name}</h3><p className="muted">{formatDate(completed.startedAt, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{exerciseById(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
+            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{programExerciseName(item.exerciseId) ?? exerciseById(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
             <div className="volume-callout"><span>حجم کل تمرین</span><strong>{faNumber(Math.round(totals.volumeKg))} <small>کیلوگرم × تکرار</small></strong></div>
           </section>
           <section className="panel-card summary-notes"><div className="card-topline"><span className="eyebrow">یادداشت‌های جلسه</span><Info size={16} className="icon-muted" /></div><label htmlFor="workout-notes">نکته‌ای هست که بخواهی یادت بماند؟</label><textarea id="workout-notes" value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} onBlur={() => void saveSession({ ...completed, notes: notesDraft })} placeholder="انرژی، نکتهٔ فرم حرکت یا تنظیم وسیله…" rows={5} /><span className="field-hint">همراه این تمرین ذخیره می‌شود.</span>
@@ -126,7 +126,7 @@ export function Workout() {
     );
   }
 
-  if (!exercise || !prescription || !sessionExercise) return <EmptyState title="این جلسه به بررسی نیاز دارد" detail="بارگذاری یکی از حرکت‌های این جلسه ممکن نشد. ست‌های ذخیره‌شده همچنان در سوابق پیشرفت در دسترس‌اند." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />;
+  if (!currentWorkoutExercise || !prescription || !sessionExercise) return <EmptyState title="این جلسه به بررسی نیاز دارد" detail="بارگذاری یکی از حرکت‌های این جلسه ممکن نشد. ست‌های ذخیره‌شده همچنان در سوابق پیشرفت در دسترس‌اند." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />;
 
   const goToNextStep = async () => {
     if (!session || !activeTemplate || !prescription) return;
@@ -201,7 +201,7 @@ export function Workout() {
 
   const skipRest = () => updateTimer(undefined);
   const progressPercent = plannedSetCount ? Math.round((loggedSetCount / plannedSetCount) * 100) : 0;
-  const suggestedReference = exercise.referenceWeightKg;
+  const suggestedReference = exercise?.referenceWeightKg;
 
   return (
     <div className="workout-mode">
@@ -210,7 +210,7 @@ export function Workout() {
 
       <div className="workout-layout">
         <main className="workout-current-column">
-          <div className="current-exercise-heading"><div><span className="eyebrow">حرکت {faDigits(String(currentExerciseIndex + 1).padStart(2, '0'))} از {faDigits(String(activeTemplate.exercises.length).padStart(2, '0'))}</span><h1>{exercise.name}</h1><p>{exercise.primaryMuscles.join(' · ')} <span>·</span> {exercise.equipment[0]}</p></div><Link className="text-link" to={`/exercise/${exercise.id}`}>راهنمای اجرا <ChevronRight size={15} /></Link></div>
+          <div className="current-exercise-heading"><div><span className="eyebrow">حرکت {faDigits(String(currentExerciseIndex + 1).padStart(2, '0'))} از {faDigits(String(activeTemplate.exercises.length).padStart(2, '0'))}</span><h1>{currentWorkoutExercise.name}</h1>{exercise && <p>{exercise.primaryMuscles.join(' · ')} <span>·</span> {exercise.equipment[0]}</p>}</div>{exercise ? <Link className="text-link" to={`/exercise/${exercise.id}`}>راهنمای اجرا <ChevronRight size={15} /></Link> : <span className="muted">راهنمای تصویری برای این حرکت هنوز اضافه نشده است.</span>}</div>
 
           <div className="current-set-card panel-card">
             <div className="set-card-top"><div><span className="eyebrow">ست فعلی</span><div className="set-counter"><strong>{faDigits(String(setNumber).padStart(2, '0'))}</strong><span>/ {faDigits(String(prescription.sets).padStart(2, '0'))}</span></div></div><div className="target-chips"><span>{faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)} تکرار</span><span>{faDigits(prescription.targetRirLabel)} تکرار در ذخیره</span></div></div>
@@ -244,7 +244,7 @@ export function Workout() {
             <button className="button button--primary button--large button--full next-set-button" onClick={() => void goToNextStep()}>{isFinalSet ? 'پایان تمرین' : session.currentSetIndex + 1 < prescription.sets ? 'ست بعدی' : 'حرکت بعدی'} <ArrowRight size={17} /></button>
           ) : null}
 
-          {currentMotion && (
+          {exercise && currentMotion && (
             <details className="workout-form-cues">
               <summary>نکته‌های فرم همین حرکت</summary>
               <ul>{currentMotion.standards.map((standard) => <li key={standard.label}><strong>{standard.label}</strong><span>{standard.detail}</span></li>)}</ul>
@@ -257,11 +257,10 @@ export function Workout() {
 
         <aside className="workout-sidebar">
           <section className="panel-card workout-queue-card"><div className="card-topline"><span className="eyebrow">ترتیب حرکت‌های امروز</span><span className="queue-count">{faNumber(activeTemplate.exercises.length)} حرکت</span></div><div className="workout-queue">{activeTemplate.exercises.map((item, index) => {
-            const queueExercise = exerciseById(item.exerciseId);
             const queueSession = session.exercises[index];
             const isCurrent = index === currentExerciseIndex;
             const isDone = queueSession ? queueSession.sets.length >= item.prescription.sets : false;
-            return <div key={`${item.exerciseId}-${index}`} className={`queue-item${isCurrent ? ' is-current' : ''}${isDone ? ' is-done' : ''}`}><span className="queue-item__number">{isDone ? <Check size={14} /> : faDigits(String(index + 1).padStart(2, '0'))}</span><div><strong>{queueExercise?.name ?? item.exerciseId}</strong><span>{faNumber(queueSession?.sets.length ?? 0)}/{faNumber(item.prescription.sets)} ست · {faNumber(item.prescription.minReps)}–{faNumber(item.prescription.maxReps)}</span></div>{isCurrent && <span className="queue-current-mark" />}</div>;
+            return <div key={`${item.exerciseId}-${index}`} className={`queue-item${isCurrent ? ' is-current' : ''}${isDone ? ' is-done' : ''}`}><span className="queue-item__number">{isDone ? <Check size={14} /> : faDigits(String(index + 1).padStart(2, '0'))}</span><div><strong>{item.name}</strong><span>{faNumber(queueSession?.sets.length ?? 0)}/{faNumber(item.prescription.sets)} ست · {faNumber(item.prescription.minReps)}–{faNumber(item.prescription.maxReps)}</span></div>{isCurrent && <span className="queue-current-mark" />}</div>;
           })}</div></section>
           <section className="panel-card workout-coach-note"><span className="coach-note-icon"><Info size={16} /></span><div><span className="eyebrow">یادآوری پیشرفت تدریجی</span><p>ابتدا در همین بازه تکرارها را بیشتر کن. فقط وقتی همهٔ ست‌های برنامه‌ریزی‌شده با فرم خوب به بیشترین تکرار و مقدار هدفِ تکرار در ذخیره رسیدند، افزایش وزنه را بررسی کن.</p></div></section>
           <button className="workout-exit-link" onClick={() => navigate('/')}>ذخیره و خروج از جلسه <ArrowLeft size={14} /></button>

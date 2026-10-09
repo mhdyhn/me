@@ -43,7 +43,7 @@ describe('Persian training content', () => {
         !prescription.note || hasPersian(prescription.note),
       ), workout.id).toBe(true);
     }
-    expect(workoutTemplates.find((workout) => workout.optional)?.description).toContain('اگر ریکاوری‌ات ضعیف است، این روز را حذف کن');
+    expect(workoutTemplates.flatMap((workout) => workout.exercises).every((item) => hasPersian(item.name))).toBe(true);
   });
 
   it('localizes known legacy defaults but preserves personal profile text', () => {

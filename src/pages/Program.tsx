@@ -36,9 +36,9 @@ export function Program() {
                 <div className="program-day__meta"><span><Dumbbell size={14} /> {faNumber(exerciseCount)} حرکت · {faNumber(setCount)} ست</span><span><Clock3 size={14} /> حدود {faNumber(workout.durationMinutes)} دقیقه</span>{lastSession && <span className="program-day__last"><Check size={14} /> آخرین اجرا: {new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', { month: 'short', day: 'numeric' }).format(new Date(lastSession.startedAt))}</span>}</div>
                 <details className="program-exercise-details">
                   <summary>نمایش ترتیب حرکت‌ها <span>{faNumber(exerciseCount)} حرکت</span></summary>
-                  <ol>{workout.exercises.map(({ exerciseId, prescription }, itemIndex) => {
+                  <ol>{workout.exercises.map(({ exerciseId, name, prescription }, itemIndex) => {
                     const exercise = exerciseById(exerciseId);
-                    return <li key={`${exerciseId}-${itemIndex}`}><Link to={`/exercise/${exerciseId}`}>{exercise?.name ?? exerciseId}</Link><span>{faNumber(prescription.sets)} × {faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)}</span></li>;
+                    return <li key={`${exerciseId}-${itemIndex}`}>{exercise ? <Link to={`/exercise/${exerciseId}`}>{name}</Link> : <span>{name}</span>}<span>{faNumber(prescription.sets)} × {faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)}</span></li>;
                   })}</ol>
                 </details>
               </div>

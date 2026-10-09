@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { workoutTemplates } from '../data/workouts';
-import { exercises } from '../data/exercises';
+import { exerciseById, exercises } from '../data/exercises';
 import { getCompletedThisWeek, getProgressionAdvice, getRecentRecord, getSessionTotals } from './analytics';
 import type { WorkoutSession } from '../types';
 
 const sampleSession: WorkoutSession = {
-  id: 'session-1', templateId: 'push-a', name: 'Push A', startedAt: '2026-10-07T08:00:00.000Z',
+  id: 'session-1', templateId: 'day-1', name: 'روز ۱: سینه و سرشانه', startedAt: '2026-10-07T08:00:00.000Z',
   completedAt: '2026-10-07T09:00:00.000Z', status: 'completed', notes: '', currentExerciseIndex: 0, currentSetIndex: 0,
   exercises: [{ exerciseId: 'barbell-bench-press', sets: [
     { setNumber: 1, weightKg: 20, reps: 8, rir: 2, doneAt: '2026-10-07T08:10:00.000Z' },
@@ -14,10 +14,13 @@ const sampleSession: WorkoutSession = {
 };
 
 describe('training data integrity', () => {
-  it('has an exercise definition for every programmed movement', () => {
+  it('gives every programmed movement a name, and links the ones the 3D library covers', () => {
+    const items = workoutTemplates.flatMap((workout) => workout.exercises);
+    expect(items.filter((item) => !item.name)).toEqual([]);
     const ids = new Set(exercises.map((exercise) => exercise.id));
-    const missing = workoutTemplates.flatMap((workout) => workout.exercises.map((item) => item.exerciseId)).filter((id) => !ids.has(id));
-    expect(missing).toEqual([]);
+    const linked = items.filter((item) => ids.has(item.exerciseId));
+    expect(linked.length).toBeGreaterThan(0);
+    expect(linked.every((item) => exerciseById(item.exerciseId))).toBe(true);
   });
 
   it('calculates session totals from logged sets only', () => {
@@ -27,7 +30,7 @@ describe('training data integrity', () => {
   it('counts completed sessions in the local Monday-to-Sunday week', () => {
     expect(getCompletedThisWeek([sampleSession], new Date('2026-10-07T12:00:00.000Z'))).toBe(1);
     expect(getCompletedThisWeek([{ ...sampleSession, startedAt: '2026-09-30T08:00:00.000Z' }], new Date('2026-10-07T12:00:00.000Z'))).toBe(0);
-    expect(getCompletedThisWeek([{ ...sampleSession, templateId: 'optional-accessories' }], new Date('2026-10-07T12:00:00.000Z'))).toBe(0);
+    expect(getCompletedThisWeek([{ ...sampleSession, templateId: 'retired-template' }], new Date('2026-10-07T12:00:00.000Z'))).toBe(0);
   });
 
   it('does not call a first logged set a personal record before a comparison exists', () => {

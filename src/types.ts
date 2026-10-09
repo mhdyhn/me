@@ -10,6 +10,8 @@ export interface ExercisePrescription {
 
 export interface WorkoutExercise {
   exerciseId: string;
+  /** Persian name from the programme. Shown even when the movement has no 3D catalogue entry. */
+  name: string;
   prescription: ExercisePrescription;
 }
 

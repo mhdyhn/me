@@ -6,7 +6,7 @@ import { ProgressChart } from '../components/ProgressChart';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
-import { getWorkoutTemplate } from '../data/workouts';
+import { getWorkoutTemplate, programExerciseName } from '../data/workouts';
 import { getBestSet, getExercisePerformances, getSessionTotals, getWeekComparison, getWeeklyTotals } from '../lib/analytics';
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
@@ -144,7 +144,7 @@ export function Progress() {
                   <div className="session-history-detail">
                     {session.exercises.filter((item) => item.sets.length > 0).map((item) => (
                       <div className="session-history-exercise" key={item.exerciseId}>
-                        <strong>{exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? item.exerciseId}</strong>
+                        <strong>{programExerciseName(item.exerciseId) ?? exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? item.exerciseId}</strong>
                         <div>{item.sets.map((set) => <span key={set.setNumber}>ست {faNumber(set.setNumber)}: {kg(set.weightKg)} × {faNumber(set.reps)} · {faNumber(set.rir)} تکرار در ذخیره{set.notes ? ` · ${set.notes}` : ''}</span>)}</div>
                       </div>
                     ))}
