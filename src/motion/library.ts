@@ -46,16 +46,6 @@ const at = (family: keyof typeof armPoses, hinge: number): { upperarm: JointRota
   return { upperarm: { ...solved.upperarm }, lowerarm: { hinge } };
 };
 
-/** Shoulder channels of a family, shifted so a different trunk lean keeps the arm swing. */
-const leanAt = (family: keyof typeof armPoses, hinge: number, lean: number) => {
-  const arm = at(family, hinge);
-  return { upperarm: { ...arm.upperarm, x: (arm.upperarm.x ?? 0) - lean }, lowerarm: arm.lowerarm };
-};
-
-/** Both arms, leaning with a trunk that differs from the family's fitted base. */
-const bent = (family: keyof typeof armPoses, hinge: number, lean: number): PoseInputs['arms'] =>
-  leanAt(family, hinge, lean);
-
 /** The trunk lean the bent-over families are fitted on. */
 const BENT_LEAN = 72;
 
@@ -321,9 +311,37 @@ const romanianDeadlift = (): MotionDefinition => {
     ],
     keys: [
       { phase: 0, label: 'آماده', inputs: { legs: { thigh: -8, knee: 14 }, arms: both('side', -42) } },
-      { phase: 1, label: 'پایین رفتن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 36, arms: bent('side', -22, 36) } },
-      { phase: 2, label: 'انتهای کشش', inputs: { legs: { pelvis: 14, thigh: -24, knee: 34 }, torso: BENT_LEAN, arms: both('bent-hang', 32) } },
-      { phase: 3, label: 'بالا آمدن', inputs: { legs: { pelvis: 8, thigh: -16, knee: 24 }, torso: 36, arms: bent('side', -22, 36) } },
+      {
+        phase: 1,
+        label: 'پایین رفتن',
+        // The trunk is one rigid segment: spine_01 alone carries the lean, so
+        // the back stays flat instead of rounding. The arms hang straight down
+        // in world space (fitted on this exact body pose), so the bar tracks
+        // the legs instead of swinging forward.
+        inputs: {
+          legs: { pelvis: 3, thigh: -28, knee: 24 },
+          arms: both('rdl-hang-mid', -42),
+          extra: { spine_01: { x: 28 } },
+        },
+      },
+      {
+        phase: 2,
+        label: 'انتهای کشش',
+        inputs: {
+          legs: { pelvis: 5, thigh: -50, knee: 40 },
+          arms: both('rdl-hang', -42),
+          extra: { spine_01: { x: 60 } },
+        },
+      },
+      {
+        phase: 3,
+        label: 'بالا آمدن',
+        inputs: {
+          legs: { pelvis: 3, thigh: -28, knee: 24 },
+          arms: both('rdl-hang-mid', -42),
+          extra: { spine_01: { x: 28 } },
+        },
+      },
     ],
   });
 };
@@ -396,19 +414,19 @@ const benchPress = (options: {
       {
         phase: 1,
         label: 'پایین‌بردن',
-        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-forward-mid', 47) },
+        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-forward-mid', 61) },
         root: options.rootOffset,
       },
       {
         phase: 2,
         label: 'لمس سینه',
-        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-touch', 89) },
+        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-touch', 108) },
         root: options.rootOffset,
       },
       {
         phase: 3,
         label: 'پرس کردن',
-        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-forward-mid', 47) },
+        inputs: { rootRot: -90 + options.incline, legs: options.legs, arms: at('press-forward-mid', 61) },
         root: options.rootOffset,
       },
     ],

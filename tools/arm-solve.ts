@@ -49,6 +49,9 @@ interface Family {
   axis?: Target;
   /** Weight of the axis term. */
   weightAxis?: number;
+  /** Channel triple to seed the local refinement from (the coarse grid misses
+   * narrow basins, e.g. the lying press touch whose twist is tightly pinned). */
+  seed?: [number, number, number];
 }
 
 /**
@@ -76,18 +79,51 @@ const FAMILIES: Record<string, Family> = {
 
   /* Shoulder-driven: the whole arm travels and the elbow barely changes. */
 
-  // Bench press touch: bar on the chest, elbows out at shoulder height, arm bent
-  // about 90°.
-  'press-touch': { elbow: [0.46, 1.46, -0.1], palm: [0.3, 1.41, 0.26], hinge: 90, arc: [60, 90, 120] },
+  // Lying press (the flat bench body: root -90, knees up). The families are
+  // fitted on that base so the targets are world coordinates of the lying
+  // figure without the bench's root offset: the shoulder sits at about
+  // (0.199, 0.016, -1.480) and the bench pad top at y = -0.10.
+  // Touch: the bar rests on the chest (nipple surface + bar radius) at a
+  // standard grip width, elbow folded back near the pad, toward the head.
+  'press-touch': {
+    base: { rootRot: -90, legs: { thigh: -4, knee: 94 } },
+    elbow: [0.30, -0.06, -1.72],
+    // The knuckle-line palm point sits one hand-length above the seat the bar
+    // rests on, so the target is lifted by that offset to land the bar ON the
+    // chest surface instead of inside it.
+    palm: [0.31, 0.14, -1.38],
+    hinge: 110,
+    arc: [90, 110, 130],
+    // The lying pose's bend plane is x=const, which the generic front-plane and
+    // axis heuristics misread as a corner-cutting twist; the targets pin it.
+    weightElbow: 1.5,
+    weightPlane: 0,
+    weightAxis: 0,
+    seed: [58.6, -26.2, 91.9],
+  },
   // Bench press lockout: arms straight up above the shoulders.
   'press-lockout': { elbow: [0.24, 1.75, 0.03], palm: [0.21, 2.13, 0.05], hinge: -42, arc: [-42, 0, 40] },
   // Lying press, half way up: the elbow is flared out at shoulder height with
   // the bar on one line between the chest and the lockout.
-  'press-forward-mid': { elbow: [0.445, 1.478, 0.13], palm: [0.25, 1.4, 0.45], hinge: 45, arc: [80, 45, 10] },
+  'press-forward-mid': {
+    base: { rootRot: -90, legs: { thigh: -4, knee: 94 } },
+    elbow: [0.467, 0.046, -1.473],
+    palm: [0.32, 0.397, -1.43],
+    hinge: 61,
+    arc: [45, 61, 80],
+    seed: [2.5, -11.4, 48.1],
+  },
   // Lying press, lockout: the whole arm points straight out of the chest. Used
   // with a lying root, so the body's front axis is world up and the bar ends up
   // above the shoulders instead of past the head.
-  'press-forward-lockout': { elbow: [0.22, 1.48, 0.29], palm: [0.21, 1.475, 0.673], hinge: -42, arc: [-42, 0, 40] },
+  'press-forward-lockout': {
+    base: { rootRot: -90, legs: { thigh: -4, knee: 94 } },
+    elbow: [0.254, 0.281, -1.48],
+    palm: [0.32, 0.656, -1.48],
+    hinge: -42,
+    arc: [-42, 0, 40],
+    seed: [-89.4, -29.5, 1.4],
+  },
   // Shoulder press bottom: elbows out at shoulder height, forearms vertical,
   // dumbbells beside the ears.
   'shoulder-bottom': { elbow: [0.46, 1.43, 0.02], palm: [0.33, 1.76, 0.08], hinge: 95, arc: [60, 95, 125], weightAxis: 0, weightPlane: 0 },
@@ -148,6 +184,31 @@ const FAMILIES: Record<string, Family> = {
     palm: [0.24, 0.74, 0.26],
     hinge: 25,
     arc: [0, 25, 55],
+  },
+
+  /* Romanian deadlift: the trunk is one rigid segment (spine_01 carries the
+   * whole lean), so the arms hang straight down in world space at every depth.
+   * The bases below are the RDL's own mid and bottom body poses; the targets put
+   * the elbow and palm on the vertical line under the shoulder. */
+
+  // RDL half way down: trunk lean 28. Targets are in the solver's unplanted
+  // base frame: the shoulder sits at (0.198, 1.403, 0.214) there.
+  'rdl-hang-mid': {
+    base: { legs: { pelvis: 3, thigh: -28, knee: 24 }, extra: { spine_01: { x: 28 } } },
+    elbow: [0.218, 1.132, 0.224],
+    palm: [0.228, 0.758, 0.234],
+    hinge: -42,
+    arc: [-42, 0, 40],
+    seed: [-23, -23.7, -30.2],
+  },
+  // RDL at the bottom: trunk lean 60, hips back. Shoulder at (0.198, 1.217, 0.349).
+  'rdl-hang': {
+    base: { legs: { pelvis: 5, thigh: -50, knee: 40 }, extra: { spine_01: { x: 60 } } },
+    elbow: [0.218, 0.946, 0.359],
+    palm: [0.228, 0.572, 0.369],
+    hinge: -42,
+    arc: [-42, 0, 40],
+    seed: [-59.1, -37.7, -8],
   },
 };
 
@@ -262,6 +323,10 @@ function fit(family: Family): Fitted {
   }
   coarse.sort((a, b) => a.cost - b.cost);
   const seeds: typeof coarse = [];
+  if (family.seed) {
+    const shape = shapeOf(shoulder, parent, family.seed[0], family.seed[1], family.seed[2], palmTarget);
+    seeds.push({ x: family.seed[0], y: family.seed[1], z: family.seed[2], cost: score(shape), shape });
+  }
   for (const candidate of coarse) {
     if (seeds.length >= 8) break;
     if (seeds.every((seed) => Math.abs(seed.x - candidate.x) + Math.abs(seed.y - candidate.y) + Math.abs(seed.z - candidate.z) > 25)) {

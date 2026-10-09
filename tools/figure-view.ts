@@ -166,7 +166,9 @@ async function main() {
     const yaw = mode === 'side' ? Math.PI / 2 : mode === 'three-quarter' ? Math.PI / 5 : 0;
     camera.view.set(Math.sin(yaw), 0.12, Math.cos(yaw)).normalize();
     camera.right.set(Math.cos(yaw), 0, -Math.sin(yaw)).normalize();
-    camera.up.crossVectors(camera.right, camera.view).normalize();
+    // `project` maps +up to the top of the image, so the up vector must be
+    // view x right (right x view points down and flips the picture vertically).
+    camera.up.crossVectors(camera.view, camera.right).normalize();
     const zoom = args.find((a) => a.startsWith('--zoom='));
     const focusHands = args.includes('--focus=hands');
     const span = zoom ? Number(zoom.split('=')[1]) : radius * 2.4;

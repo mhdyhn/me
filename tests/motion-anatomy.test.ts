@@ -92,3 +92,89 @@ describe('movement anatomy', () => {
     });
   }
 });
+
+/**
+ * The two deep-reviewed movements pin their real form here, so a later edit
+ * that lifts the bar off the chest, bends the deadlift's arms or shoves its
+ * knees forward fails in CI instead of in the viewer.
+ */
+describe('movement form', () => {
+  /** Anatomical angle at a joint: 180° is straight. */
+  const angleAt = (state: ReturnType<typeof createMotionState>, joint: string, a: string, b: string) => {
+    const j = state.worldPosition.get(joint)!;
+    const toA = state.worldPosition.get(a)!.clone().sub(j).normalize();
+    const toB = state.worldPosition.get(b)!.clone().sub(j).normalize();
+    return (Math.acos(Math.max(-1, Math.min(1, toA.dot(toB)))) * 180) / Math.PI;
+  };
+  const elbowAngle = (state: ReturnType<typeof createMotionState>) =>
+    angleAt(state, 'lowerarm_l', 'upperarm_l', 'hand_l');
+
+  it('barbell-bench-press touches the chest and holds one grip width', () => {
+    const motion = motions['barbell-bench-press']!;
+    const state = createMotionState(rest, motion);
+    const samples = [0, 0.25, 0.5, 0.75, 1].map((phase) => {
+      sampleMotion(state, phase);
+      return {
+        phase,
+        wristX: state.worldPosition.get('hand_l')!.x,
+        elbow: elbowAngle(state),
+        bar: state.equipment[0]!.position.clone(),
+        chest: state.worldPosition.get('spine_03')!.clone(),
+      };
+    });
+    // Lockout: arms straight, bar a full reach above the shoulders.
+    expect(samples[0]!.elbow, 'lockout elbow').toBeGreaterThan(170);
+    // Touch: the bar rests ON the chest. Lying down, the pad of the chest sits
+    // 0.132 m above the spine_03 joint, and the bar is 0.014 m thick.
+    const touch = samples[2]!;
+    const chestSurface = touch.chest.y + 0.132;
+    expect(Math.abs(touch.bar.y - 0.014 - chestSurface), 'bar on the chest').toBeLessThan(0.03);
+    // The hands never slide along the bar: one grip width for the whole loop.
+    for (const sample of samples) {
+      expect(sample.wristX, `grip at ${sample.phase}`).toBeGreaterThan(0.24);
+      expect(sample.wristX, `grip at ${sample.phase}`).toBeLessThan(0.38);
+    }
+  });
+
+  it('romanian-deadlift hinges with straight arms and still knees', () => {
+    const motion = motions['romanian-deadlift']!;
+    const state = createMotionState(rest, motion);
+    const samples = [0, 0.25, 0.5, 0.75, 1].map((phase) => {
+      sampleMotion(state, phase);
+      return {
+        phase,
+        elbow: elbowAngle(state),
+        pelvis: state.worldPosition.get('pelvis')!.clone(),
+        knee: state.worldPosition.get('calf_l')!.clone(),
+        ankle: state.worldPosition.get('foot_l')!.clone(),
+        shoulder: state.worldPosition.get('upperarm_l')!.clone(),
+        bar: state.equipment[0]!.position.clone(),
+      };
+    });
+    for (const sample of samples) {
+      // A deadlift never bends its elbows.
+      expect(sample.elbow, `elbow at ${sample.phase}`).toBeGreaterThan(165);
+      // The knees stay over the ankles instead of shoving forward.
+      expect(Math.abs(sample.knee.z - sample.ankle.z), `knee at ${sample.phase}`).toBeLessThan(0.1);
+      // The arms hang plumb: the bar rides the vertical line under the shoulders.
+      expect(Math.abs(sample.bar.z - sample.shoulder.z), `bar at ${sample.phase}`).toBeLessThan(0.08);
+      const reach = sample.shoulder.y - sample.bar.y;
+      expect(reach, `reach at ${sample.phase}`).toBeGreaterThan(0.55);
+      expect(reach, `reach at ${sample.phase}`).toBeLessThan(0.7);
+    }
+    // The hinge sends the hips back and drops the bar along the legs.
+    expect(samples[2]!.pelvis.z, 'hips travel back').toBeLessThan(samples[0]!.pelvis.z - 0.2);
+    expect(samples[2]!.bar.y, 'bar descends').toBeLessThan(samples[0]!.bar.y - 0.3);
+    // ... and the trunk really leans: shoulders well past upright at the bottom.
+    const bottom = samples[2]!;
+    const lean =
+      (Math.atan2(
+        Math.hypot(bottom.shoulder.x - bottom.pelvis.x, bottom.shoulder.z - bottom.pelvis.z),
+        bottom.shoulder.y - bottom.pelvis.y,
+      ) *
+        180) /
+      Math.PI;
+    expect(lean, 'trunk lean').toBeGreaterThan(50);
+    expect(lean, 'trunk lean').toBeLessThan(72);
+  });
+});
