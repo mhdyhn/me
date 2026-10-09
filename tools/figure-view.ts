@@ -18,11 +18,15 @@ import { loadBrowserScene } from '../tests/helpers/glbScene';
 import { loadRig } from '../tests/helpers/motionRig';
 import { buildMotionRig, poseRig } from '../src/motion/modelRig';
 import { motions } from '../src/motion/library';
+import { buildPropScene } from '../src/motion/props';
 
 const MESHES = ['Body', 'Clothes_1', 'Clothes_2'];
 const SKIN: [number, number, number] = [214, 219, 222];
 const KIT: [number, number, number] = [46, 56, 59];
 const METAL: [number, number, number] = [185, 195, 198];
+// Fixtures (benches, pads, seats) are drawn lighter than the background so they read.
+const FIXTURE: [number, number, number] = [112, 124, 130];
+const CABLE: [number, number, number] = [226, 216, 120];
 const LIGHT = new Vector3(0.35, 0.55, 0.75).normalize();
 
 interface Camera {
@@ -179,7 +183,7 @@ async function main() {
     camera.origin.copy(focus).addScaledVector(camera.view, -radius * 4);
   }
 
-  const colour = new Uint8Array(width * height * 3).fill(18);
+  const colour = new Uint8Array(width * height * 3).fill(40);
   let meshPixels = 0;
   let coveredPixels = 0;
   const depth = new Float32Array(width * height).fill(Infinity);
@@ -274,6 +278,82 @@ async function main() {
       }
     }
   });
+
+  // Fixtures and cables. The grip close-ups (`hand`, `grip`) only show the bar, so skip these there.
+  const fillTriangle = (a: Vector3, b: Vector3, c: Vector3, base: [number, number, number], ambient: number) => {
+    let pa = project(a), pb = project(b), pc = project(c);
+    const minX = Math.max(0, Math.floor(Math.min(pa.x, pb.x, pc.x)));
+    const maxX = Math.min(width - 1, Math.ceil(Math.max(pa.x, pb.x, pc.x)));
+    const minY = Math.max(0, Math.floor(Math.min(pa.y, pb.y, pc.y)));
+    const maxY = Math.min(height - 1, Math.ceil(Math.max(pa.y, pb.y, pc.y)));
+    if (minX > maxX || minY > maxY) return;
+    let area = (pb.x - pa.x) * (pc.y - pa.y) - (pc.x - pa.x) * (pb.y - pa.y);
+    if (Math.abs(area) < 1e-9) return;
+    if (area < 0) {
+      const swap = pb;
+      pb = pc;
+      pc = swap;
+      area = -area;
+    }
+    const normal = new Vector3().crossVectors(new Vector3().subVectors(b, a), new Vector3().subVectors(c, a)).normalize();
+    if (normal.dot(camera.view) > 0) normal.negate();
+    const rgb = shade(base, normal, ambient);
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const px = x + 0.5, py = y + 0.5;
+        const w0 = ((pb.x - px) * (pc.y - py) - (pc.x - px) * (pb.y - py)) / area;
+        const w1 = ((pc.x - px) * (pa.y - py) - (pa.x - px) * (pc.y - py)) / area;
+        const w2 = 1 - w0 - w1;
+        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+        const w = w0 * pa.w + w1 * pb.w + w2 * pc.w;
+        const at = y * width + x;
+        if (w >= depth[at]!) continue;
+        depth[at] = w;
+        colour[at * 3] = rgb[0];
+        colour[at * 3 + 1] = rgb[1];
+        colour[at * 3 + 2] = rgb[2];
+      }
+    }
+  };
+  if (mode !== 'hand' && mode !== 'grip') {
+    const props = buildPropScene(rig.state);
+    props.group.updateMatrixWorld(true);
+    props.group.traverse((object: any) => {
+      if (!object.isMesh || object.geometry.type !== 'BoxGeometry') return;
+      const position = object.geometry.getAttribute('position');
+      const index = object.geometry.getIndex();
+      const count = index ? index.count : position.count;
+      const world = (i: number) => new Vector3().fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+      for (let triangle = 0; triangle < count; triangle += 3) {
+        const ia = index ? index.getX(triangle) : triangle;
+        const ib = index ? index.getX(triangle + 1) : triangle + 1;
+        const ic = index ? index.getX(triangle + 2) : triangle + 2;
+        fillTriangle(world(ia), world(ib), world(ic), FIXTURE, 0.5);
+      }
+    });
+    // Cables: a 2-px line from the pulley (or the anchor) to the hand, plus a dot at the pulley.
+    for (const placement of rig.state.equipment) {
+      if (placement.kind !== 'cable') continue;
+      const from = placement.anchor ?? placement.position;
+      const steps = 300;
+      for (let step = 0; step <= steps; step += 1) {
+        const p = new Vector3().lerpVectors(from, placement.position, step / steps);
+        const q = project(p);
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const x = Math.round(q.x) + dx, y = Math.round(q.y) + dy;
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            const at = y * width + x;
+            if (q.w >= depth[at]!) continue;
+            depth[at] = q.w;
+            colour[at * 3] = CABLE[0];
+            colour[at * 3 + 1] = CABLE[1];
+            colour[at * 3 + 2] = CABLE[2];
+          }
+        }
+      }
+    }
+  }
 
   for (const placement of rig.state.equipment) {
     if (placement.kind === 'cable') continue;
