@@ -19,7 +19,7 @@ export const armPoses = {
   'fly-closed': { upperarm: { x: 5.8, y: -5.9, z: 10.6 }, lowerarm: { hinge: 72 } },
   'pulldown-top': { upperarm: { x: -165.6, y: -2.4, z: 30 }, lowerarm: { hinge: -29 } },
   'pulldown-bottom': { upperarm: { x: -8, y: -4.1, z: -5.3 }, lowerarm: { hinge: 81.4 } },
-  'face-pull-in': { upperarm: { x: -17.5, y: -6.7, z: 35 }, lowerarm: { hinge: 64 } },
+  'face-pull-in': { upperarm: { x: -60, y: -6.7, z: 65 }, lowerarm: { hinge: 90 } },
   'face-pull-out': { upperarm: { x: -3.9, y: -7, z: 39.7 }, lowerarm: { hinge: -10.2 } },
   'row-up-extended': { upperarm: { x: -33.6, y: -29.7, z: -25.6 }, lowerarm: { hinge: -35 } },
   'row-up-pulled': { upperarm: { x: 36.7, y: 18.9, z: -23 }, lowerarm: { hinge: 65.1 } },
