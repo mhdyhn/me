@@ -25,11 +25,13 @@ const modelErrorLog = (): Plugin => ({
   },
 });
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const offlineSingleFile = mode === 'offline';
+  return {
   plugins: [
     modelErrorLog(),
     react(),
-    VitePWA({
+    ...(!offlineSingleFile ? [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['brand-mark.svg'],
       manifest: {
@@ -83,20 +85,23 @@ export default defineConfig({
         ],
       },
       devOptions: { enabled: false },
-    }),
+    })] : []),
   ],
   server: { host: '0.0.0.0', allowedHosts: true },
   preview: { host: '0.0.0.0', allowedHosts: true },
   build: {
     rolldownOptions: {
-      output: {
-        codeSplitting: {
-          groups: [
-            { name: 'three-core', test: /node_modules[\\/]three[\\/]/, priority: 20, maxSize: 400_000 },
-            { name: 'react-three-fiber', test: /node_modules[\\/]@react-three[\\/]/, priority: 10, maxSize: 400_000 },
-          ],
-        },
-      },
+      output: offlineSingleFile
+        ? { inlineDynamicImports: true }
+        : {
+            codeSplitting: {
+              groups: [
+                { name: 'three-core', test: /node_modules[\\/]three[\\/]/, priority: 20, maxSize: 400_000 },
+                { name: 'react-three-fiber', test: /node_modules[\\/]@react-three[\\/]/, priority: 10, maxSize: 400_000 },
+              ],
+            },
+          },
     },
   },
+};
 });
