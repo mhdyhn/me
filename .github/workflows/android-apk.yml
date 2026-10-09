@@ -34,16 +34,17 @@ jobs:
           npx cap sync android
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Set up the Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android platform 36 and build tools
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        # ubuntu-latest already ships the Android SDK in $ANDROID_HOME; only add what the project needs.
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Build the debug APK
         working-directory: android
