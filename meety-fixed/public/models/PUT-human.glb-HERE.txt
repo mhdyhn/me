@@ -1,0 +1,7 @@
+This patch did not contain the binary GLB payload.
+
+Place the exact CC0 model referenced by public/models/README.md at:
+
+public/models/human.glb
+
+The application has a safe fallback when the file is absent, but the real 3D rig and anatomy view require the GLB.

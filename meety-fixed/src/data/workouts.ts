@@ -1,0 +1,118 @@
+import type { WorkoutTemplate } from '../types';
+
+const prescription = (
+  sets: number,
+  minReps: number,
+  maxReps: number,
+  targetRirLabel: string,
+  minimumRir: number,
+  restSeconds: number,
+  note?: string,
+) => ({ sets, minReps, maxReps, targetRirLabel, minimumRir, restSeconds, note });
+
+export const workoutTemplates: WorkoutTemplate[] = [
+  {
+    id: 'push-a',
+    name: 'پرس ۱',
+    dayLabel: 'روز ۰۱',
+    focus: 'سینه · سرشانه · پشت بازو',
+    durationMinutes: 75,
+    description: 'جلسه‌ای متعادل با تمرکز بر پرس و حرکات کمکیِ کنترل‌شده.',
+    exercises: [
+      { exerciseId: 'barbell-bench-press', prescription: prescription(4, 6, 8, '2', 2, 150) },
+      { exerciseId: 'incline-dumbbell-press', prescription: prescription(3, 8, 10, '2', 2, 120) },
+      { exerciseId: 'shoulder-press', prescription: prescription(3, 8, 10, '2', 2, 120) },
+      { exerciseId: 'cable-fly', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'lateral-raise', prescription: prescription(4, 12, 20, '1–2', 1, 75) },
+      { exerciseId: 'cable-triceps-pushdown', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'overhead-cable-triceps-extension', prescription: prescription(2, 10, 15, '1–2', 1, 90) },
+    ],
+  },
+  {
+    id: 'pull-a',
+    name: 'کشش ۱',
+    dayLabel: 'روز ۰۲',
+    focus: 'پشت · پشت سرشانه · جلو بازو',
+    durationMinutes: 75,
+    description: 'ترکیبی از کشش عمودی و افقی و در پایان، تمرکز بر عضلات بازو.',
+    exercises: [
+      { exerciseId: 'lat-pulldown', prescription: prescription(4, 6, 10, '2', 2, 120) },
+      { exerciseId: 'seated-cable-row', prescription: prescription(3, 8, 12, '2', 2, 120) },
+      { exerciseId: 'one-arm-dumbbell-row', prescription: prescription(3, 8, 12, '2', 2, 120, 'برای هر سمت') },
+      { exerciseId: 'face-pull', prescription: prescription(3, 12, 20, '1–2', 1, 90) },
+      { exerciseId: 'reverse-fly', prescription: prescription(2, 12, 20, '1–2', 1, 90) },
+      { exerciseId: 'barbell-curl', prescription: prescription(3, 8, 12, '2', 2, 90) },
+      { exerciseId: 'incline-dumbbell-curl', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+    ],
+  },
+  {
+    id: 'legs-a',
+    name: 'پا ۱',
+    dayLabel: 'روز ۰۳',
+    focus: 'چهارسر ران · همسترینگ · ساق · میان‌تنه',
+    durationMinutes: 80,
+    description: 'جلسهٔ پایین‌تنه با محوریت اسکوات و تلاشی کنترل‌شده و تکرارپذیر.',
+    exercises: [
+      { exerciseId: 'barbell-squat', prescription: prescription(4, 6, 8, '2–3', 2, 165) },
+      { exerciseId: 'leg-press', prescription: prescription(3, 8, 12, '2', 2, 150) },
+      { exerciseId: 'leg-extension', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'leg-curl', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'standing-calf-raise', prescription: prescription(4, 8, 15, '1–2', 1, 90) },
+      { exerciseId: 'cable-crunch', prescription: prescription(3, 10, 15, '1–2', 1, 75) },
+    ],
+  },
+  {
+    id: 'upper-b',
+    name: 'بالاتنه ۲',
+    dayLabel: 'روز ۰۴',
+    focus: 'سینه · پشت · سرشانه · بازو',
+    durationMinutes: 70,
+    description: 'جلسهٔ دوم بالاتنه با حجم متعادل و تکیه بر دستگاه‌های پایدار.',
+    exercises: [
+      { exerciseId: 'incline-barbell-press', prescription: prescription(3, 6, 10, '2', 2, 150) },
+      { exerciseId: 'neutral-grip-lat-pulldown', prescription: prescription(3, 8, 12, '2', 2, 120) },
+      { exerciseId: 'machine-chest-press', prescription: prescription(3, 8, 12, '1–2', 1, 120) },
+      { exerciseId: 'machine-row', prescription: prescription(3, 8, 12, '1–2', 1, 120) },
+      { exerciseId: 'cable-lateral-raise', prescription: prescription(3, 12, 20, '1–2', 1, 75) },
+      { exerciseId: 'cable-curl', prescription: prescription(2, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'rope-triceps-pushdown', prescription: prescription(2, 10, 15, '1–2', 1, 90) },
+    ],
+  },
+  {
+    id: 'lower-b',
+    name: 'پایین‌تنه ۲',
+    dayLabel: 'روز ۰۵',
+    focus: 'زنجیرهٔ خلفی · چهارسر ران · ساق · میان‌تنه',
+    durationMinutes: 80,
+    description: 'جلسهٔ پایین‌تنه با محوریت حرکت لولای لگن؛ همهٔ تکرارها را کنترل کن.',
+    exercises: [
+      { exerciseId: 'romanian-deadlift', prescription: prescription(3, 6, 10, '2–3', 2, 165) },
+      { exerciseId: 'leg-press', prescription: prescription(3, 10, 15, '2', 2, 150) },
+      { exerciseId: 'bulgarian-split-squat', prescription: prescription(3, 8, 12, '2', 2, 120, 'برای هر پا') },
+      { exerciseId: 'leg-curl', prescription: prescription(3, 8, 12, '1–2', 1, 90) },
+      { exerciseId: 'leg-extension', prescription: prescription(2, 12, 15, '1–2', 1, 90) },
+      { exerciseId: 'seated-calf-raise', prescription: prescription(4, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'hanging-leg-raise', prescription: prescription(3, 10, 15, '1–2', 1, 75) },
+    ],
+  },
+  {
+    id: 'optional-accessories',
+    name: 'اختیاری · حرکات کمکی',
+    dayLabel: 'روز ۰۶',
+    focus: 'سرشانه · بازو · شکم',
+    durationMinutes: 45,
+    optional: true,
+    description: 'تمرین سبک و کم‌خستگی برای نقاط نیازمند توجه؛ اگر ریکاوری‌ات ضعیف است، این روز را حذف کن.',
+    exercises: [
+      { exerciseId: 'lateral-raise', prescription: prescription(3, 15, 20, '2', 2, 75) },
+      { exerciseId: 'reverse-fly', prescription: prescription(3, 15, 20, '2', 2, 75) },
+      { exerciseId: 'cable-curl', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'rope-triceps-pushdown', prescription: prescription(3, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'hammer-curl', prescription: prescription(2, 10, 15, '1–2', 1, 90) },
+      { exerciseId: 'cable-crunch', prescription: prescription(3, 10, 15, '1–2', 1, 75) },
+    ],
+  },
+];
+
+export const primaryWorkoutTemplates = workoutTemplates.filter((workout) => !workout.optional);
+export const getWorkoutTemplate = (id: string) => workoutTemplates.find((workout) => workout.id === id);
