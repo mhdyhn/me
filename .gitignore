@@ -28,3 +28,8 @@ pnpm-debug.log*
 
 # Reference screenshots pulled in while researching other apps (not ours to publish)
 image-search/
+
+# Capacitor: web build copied in by `npx cap sync` (regenerated, not source)
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
