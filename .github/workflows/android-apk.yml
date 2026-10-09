@@ -43,8 +43,14 @@ jobs:
         # ubuntu-latest already ships the Android SDK in $ANDROID_HOME; only add what the project needs.
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          ls "$ANDROID_HOME" || true
+          SDKMANAGER="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)"
+          echo "sdkmanager: ${SDKMANAGER:-not found}"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null || true
+            "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || true
+          fi
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" || true
 
       - name: Build the debug APK
         working-directory: android
