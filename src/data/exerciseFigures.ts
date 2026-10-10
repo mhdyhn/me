@@ -14,7 +14,7 @@ export const exerciseFigureIds = new Set<string>([
  * AI-generated realistic photos (public/exercise-photos). Only exercises whose BOTH states passed
  * visual review are listed here; the rest keep the SVG illustration.
  */
-export const exercisePhotoIds = new Set<string>(['romanian-deadlift']);
+export const exercisePhotoIds = new Set<string>(['romanian-deadlift', 'lat-pulldown']);
 
 export type FigureState = 'start' | 'main';
 
