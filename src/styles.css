@@ -963,3 +963,4 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .exercise-figures > div { display: grid; gap: 5px; }
 .exercise-figures img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid rgba(166,183,172,.14); background: #171d1b; }
 .exercise-figures figcaption { color: #98a49c; font-size: 11px; text-align: center; }
+.figure-note { margin: -4px 0 10px; color: #98a49c; font-size: 11px; line-height: 1.6; }

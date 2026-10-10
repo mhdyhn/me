@@ -10,8 +10,17 @@ export const exerciseFigureIds = new Set<string>([
   'barbell-curl',
 ]);
 
+/**
+ * AI-generated realistic photos (public/exercise-photos). Only exercises whose BOTH states passed
+ * visual review are listed here; the rest keep the SVG illustration.
+ */
+export const exercisePhotoIds = new Set<string>(['romanian-deadlift']);
+
 export type FigureState = 'start' | 'main';
 
 export function exerciseFigureSrc(exerciseId: string, state: FigureState): string {
-  return `${import.meta.env.BASE_URL}exercise-images/${exerciseId}-${state}.svg`;
+  const base = import.meta.env.BASE_URL;
+  return exercisePhotoIds.has(exerciseId)
+    ? `${base}exercise-photos/${exerciseId}-${state}.jpg`
+    : `${base}exercise-images/${exerciseId}-${state}.svg`;
 }
