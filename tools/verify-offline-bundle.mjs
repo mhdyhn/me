@@ -9,7 +9,7 @@ if (!existsSync(path)) {
 const html = await readFile(path, 'utf8');
 const info = await stat(path);
 const checks = [
-  ['embedded GLB data URI', html.includes('data:model/gltf-binary;base64,')],
+  ['no 3D model embedded (the app has no model asset)', !html.includes('data:model/gltf-binary')],
   ['no external module JS entrypoint', !/<script[^>]+src=["']https?:\/\//i.test(html) && !/<script[^>]+src=["']\/assets\//i.test(html)],
   ['no external CSS entrypoint', !/<link[^>]+href=["']https?:\/\//i.test(html) && !/<link[^>]+href=["']\/assets\//i.test(html)],
   ['viewport metadata present', /name=["']viewport["']/i.test(html)],

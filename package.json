@@ -13,24 +13,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:offline": "vite build --mode offline && node tools/make-single-file.mjs",
-    "fetch:model": "node tools/fetch-model.mjs",
-    "audit:motion": "node tools/audit-motion-source.mjs",
-    "verify:model": "node tools/verify-model.mjs",
-    "verify:offline": "node tools/verify-offline-bundle.mjs",
-    "verify:engine": "node tools/engine-report.mjs",
-    "test:engine": "vitest run tests/engine"
+    "verify:offline": "node tools/verify-offline-bundle.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@fontsource/vazirmatn": "^5.3.0",
-    "@react-three/fiber": "^9.8.1",
     "dexie": "^4.4.6",
     "lucide-react": "^0.468.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.4",
-    "three": "^0.183.2"
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
@@ -40,7 +33,6 @@
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^6.1.2",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.4.0",

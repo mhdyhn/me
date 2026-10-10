@@ -24,6 +24,7 @@ describe('complete application shell', () => {
     window.history.replaceState({}, '', '/exercise/barbell-bench-press');
     render(<App />);
     expect(await screen.findByText('پرس سینه با هالتر')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('پویانمایی حرکت فعال است');
+    // The written movement timeline has one tab per step; there is no 3D viewer any more.
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
   });
 });

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Info, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
-import { ExerciseViewer } from '../components/ExerciseViewer';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
@@ -18,7 +17,6 @@ export function ExerciseDetail() {
   const { sessions } = useGym();
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [replaying, setReplaying] = useState(false);
-  const [seek, setSeek] = useState<{ phase: number; token: number } | null>(null);
   const placements = workoutTemplates.flatMap((workout) => workout.exercises
     .filter((item) => item.exerciseId === exerciseId)
     .map((item) => ({ workout, prescription: item.prescription })));
@@ -48,14 +46,12 @@ export function ExerciseDetail() {
   const replaySteps = () => {
     setPhaseIndex(0);
     setReplaying(true);
-    setSeek({ phase: 0, token: (seek?.token ?? 0) + 1 });
   };
 
-  /** Shows one written step on the model and stops the loop there. */
+  /** Shows one written step and stops the timeline there. */
   const showStep = (index: number) => {
     setReplaying(false);
     setPhaseIndex(index);
-    setSeek({ phase: index, token: (seek?.token ?? 0) + 1 });
   };
 
   const beginWorkout = () => {
@@ -80,15 +76,6 @@ export function ExerciseDetail() {
 
       <div className="exercise-detail-grid">
         <div className="exercise-detail-main page-stack page-stack--tight">
-          <ExerciseViewer
-            modelAsset={exercise.modelAsset}
-            motionId={exercise.motionId ?? exercise.id}
-            seek={seek}
-            exerciseName={exercise.name}
-            primaryMuscles={exercise.primaryMuscles}
-            secondaryMuscles={exercise.secondaryMuscles}
-          />
-
           {placements.length > 0 && (
             <section className="panel-card prescription-card">
               <div className="card-topline"><span className="eyebrow">برنامهٔ فعلی</span><Sparkles size={16} className="icon-accent" /></div>

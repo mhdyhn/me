@@ -1,22 +1,17 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// Builds dist/meety-offline.html: one HTML file with the app JS, CSS and the GLB model
-// inlined. Everything here is synchronous on purpose. String.replace does not await a
+// Builds dist/meety-offline.html: one HTML file with the app JS and CSS inlined. Everything here is synchronous on purpose. String.replace does not await a
 // Promise returned from its callback, so an async callback writes "[object Promise]"
 // into the page in place of the script (this is how the first version broke the app).
 const dist = resolve('dist');
 let html = readFileSync(join(dist, 'index.html'), 'utf8');
 const jsFiles = new Set(readdirSync(join(dist, 'assets')).filter((name) => name.endsWith('.js')));
 
-const modelPath = join(resolve('public'), 'models', 'human.glb');
-const modelDataUri = `data:model/gltf-binary;base64,${readFileSync(modelPath).toString('base64')}`;
-const replaceModel = (content) => content.replaceAll('/models/human.glb', modelDataUri);
-
 html = html.replace(/<link[^>]+rel="modulepreload"[^>]*>/g, '');
 html = html.replace(/<script[^>]+src="\/assets\/([^"]+\.js)"[^>]*><\/script>/g, (_, file) => {
   if (!jsFiles.has(file)) return '';
-  const body = replaceModel(readFileSync(join(dist, 'assets', file), 'utf8'));
+  const body = readFileSync(join(dist, 'assets', file), 'utf8');
   if (body.includes('</script')) throw new Error(`${file} contains "</script", it cannot be inlined`);
   return `<script type="module">${body}</script>`;
 });

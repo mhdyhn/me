@@ -36,7 +36,7 @@ describe('browser safety', () => {
   const files = sourceFiles(resolve(process.cwd(), 'src'));
 
   it('has source files to check', () => {
-    expect(files.length).toBeGreaterThan(30);
+    expect(files.length).toBeGreaterThan(20);
   });
 
   it('never touches a Node global from a module the browser imports', () => {

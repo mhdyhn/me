@@ -49,9 +49,6 @@ export interface ExerciseDefinition {
   safetyCues: string[];
   movementPhases: MovementPhase[];
   machineSetup?: { title: string; points: string[] };
-  modelAsset?: string | null;
-  /** Movement loop in `src/motion/library.ts` that the 3D viewer plays. */
-  motionId?: string | null;
   referenceWeightKg?: number;
   referenceNote?: string;
 }

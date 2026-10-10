@@ -2,10 +2,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { ExerciseViewer } from '../src/components/ExerciseViewer';
 import { GymProvider } from '../src/context/GymProvider';
 import { workoutTemplates } from '../src/data/workouts';
-import { motions } from '../src/motion/library';
 import { db } from '../src/lib/db';
 import { Workout } from '../src/pages/Workout';
 import type { WorkoutSession } from '../src/types';
@@ -54,26 +52,10 @@ describe('workout flow', () => {
     expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲');
   });
 
-  it('trains a programmed movement that has no 3D entry, using the programme name', async () => {
+  it('trains a programmed movement using the programme name', async () => {
     renderWorkout('/workout/day-2');
     expect(await screen.findByRole('heading', { name: 'زیربغل سیمکش مچ برعکس' })).toBeInTheDocument();
-    expect(screen.getByText(/راهنمای تصویری برای این حرکت هنوز اضافه نشده است/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ثبت ست و شروع استراحت/i })).toBeInTheDocument();
-  });
-
-  it('offers the form cues of the current exercise while training', async () => {
-    const user = userEvent.setup();
-    renderWorkout();
-
-    await screen.findByText('ست فعلی');
-    const firstExercise = workoutTemplates.find((template) => template.id === 'day-1')!.exercises[0]!.exerciseId;
-    const standards = motions[firstExercise]!.standards;
-
-    await user.click(screen.getByText('نکته‌های فرم همین حرکت'));
-    for (const standard of standards) {
-      expect(screen.getByText(standard.label)).toBeInTheDocument();
-    }
-    expect(screen.getByRole('link', { name: /دیدن نمایش سه‌بعدی حرکت/ })).toHaveAttribute('href', `/exercise/${firstExercise}`);
   });
 
   it('restores the active session and logged set after remounting the app', async () => {
@@ -119,23 +101,5 @@ describe('workout flow', () => {
     expect(screen.getByText('خلاصهٔ جلسه')).toBeInTheDocument();
     expect(screen.getByText('۱۰۰')).toBeInTheDocument();
     expect(screen.getByLabelText('نکته‌ای هست که بخواهی یادت بماند؟')).toBeInTheDocument();
-  });
-});
-
-describe('3D reference model', () => {
-  it('plays the movement loop for the exercise and keeps the model honest without one', async () => {
-    const { unmount } = render(
-      <ExerciseViewer modelAsset="/models/human.glb" motionId="barbell-bench-press" exerciseName="پرس سینه با هالتر" />,
-    );
-    expect(await screen.findByTestId('exercise-model-canvas')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('پویانمایی حرکت فعال است');
-    expect(screen.getByRole('button', { name: 'توقف پویانمایی' })).toBeEnabled();
-    expect(screen.getByText('استانداردهای فرم همین حرکت')).toBeInTheDocument();
-    unmount();
-
-    render(<ExerciseViewer modelAsset="/models/human.glb" exerciseName="حرکت بدون پویانمایی" />);
-    expect(screen.getByRole('status')).toHaveTextContent('مدل ثابت · بدون پویانمایی');
-    expect(screen.getByRole('button', { name: 'پخش پویانمایی' })).toBeDisabled();
-    expect(screen.getByText(/برای این حرکت هنوز پویانمایی ثبت نشده است/)).toBeInTheDocument();
   });
 });

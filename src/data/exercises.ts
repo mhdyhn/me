@@ -1,16 +1,12 @@
 import type { ExerciseDefinition } from '../types';
-import { motions } from '../motion/library';
 import { persianExerciseTranslations } from './exercisePersian';
 
-type ExerciseInput = Omit<ExerciseDefinition, 'movementPhases' | 'modelAsset' | 'motionId'> & {
+type ExerciseInput = Omit<ExerciseDefinition, 'movementPhases'> & {
   execution: [string, string, string];
 };
 
 const defineExercise = (exercise: ExerciseInput): ExerciseDefinition => ({
   ...exercise,
-  modelAsset: '/models/human.glb',
-  // Every exercise in the catalogue has a matching loop in the movement library.
-  motionId: exercise.id,
   movementPhases: [
     { label: 'Start', instruction: exercise.startPosition },
     { label: 'Down', instruction: exercise.execution[0] },
@@ -20,7 +16,7 @@ const defineExercise = (exercise: ExerciseInput): ExerciseDefinition => ({
   ],
 });
 
-/** English source copy, before the Persian translation is applied. The exercise engine reads it. */
+/** English source copy, before the Persian translation is applied. */
 export const exerciseDefinitions: ExerciseDefinition[] = [
   defineExercise({
     id: 'barbell-bench-press', name: 'Barbell Bench Press', category: 'Push',
@@ -423,7 +419,6 @@ export const exercises: ExerciseDefinition[] = exerciseDefinitions.map((exercise
   const translation = persianExerciseTranslations[exercise.id];
   if (!translation) throw new Error(`Missing Persian copy for exercise "${exercise.id}".`);
   const localized = { ...exercise, ...translation };
-  const motion = motions[exercise.id];
   const instructions = [
     localized.startPosition,
     localized.execution[0] ?? localized.startPosition,
@@ -434,10 +429,8 @@ export const exercises: ExerciseDefinition[] = exerciseDefinitions.map((exercise
   const fallbackLabels = ['شروع', 'پایین‌بردن', 'مکث', 'بالاآوردن', 'پایان'];
   return {
     ...localized,
-    // The written steps carry the labels the movement loop itself is authored
-    // with, so the timeline and the 3D phase readout say the same thing.
     movementPhases: instructions.map((instruction, index) => ({
-      label: motion?.keys[index]?.label ?? fallbackLabels[index]!,
+      label: fallbackLabels[index]!,
       instruction,
     })),
   };
