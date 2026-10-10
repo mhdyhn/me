@@ -33,7 +33,7 @@ const INITIAL_LIBRARY = [
   ['Bulgarian Split Squat', 'bulgarian-split-squat'],
   ['Standing Calf Raise', 'standing-calf-raise'],
   ['Seated Calf Raise', 'seated-calf-raise'],
-  ['Dumbbell Biceps Curl', null],
+  ['Dumbbell Biceps Curl', 'dumbbell-biceps-curl'],
   ['Incline Dumbbell Curl', 'incline-dumbbell-curl'],
 ];
 

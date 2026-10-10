@@ -238,6 +238,17 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     safetyCues: ['Keep the load manageable and wrists straight.', 'Do not force a painful elbow range.'],
   }),
   defineExercise({
+    id: 'dumbbell-biceps-curl', name: 'Dumbbell Biceps Curl', category: 'Pull',
+    primaryMuscles: ['Biceps'], secondaryMuscles: ['Brachialis', 'Forearms'], equipment: ['Dumbbells'], difficulty: 'Beginner',
+    setup: 'Choose dumbbells you can curl with a quiet torso and steady elbows.',
+    startPosition: 'Stand tall with dumbbells by the sides and palms facing forward.',
+    execution: ['Curl the dumbbells up while keeping the palms facing forward.', 'Pause near the shoulders without lifting them.', 'Lower slowly to the starting position.'],
+    finishPosition: 'Return with the elbows by the sides and shoulders relaxed.',
+    breathing: 'Exhale on the curl; inhale as you lower.', tempo: '2 sec up, brief pause, 2 sec down.',
+    commonMistakes: ['Swinging the body', 'Moving the elbows forward', 'Shrugging to finish the rep'],
+    safetyCues: ['Keep the load controlled and wrists straight.', 'Do not force a painful elbow range.'],
+  }),
+  defineExercise({
     id: 'barbell-squat', name: 'Barbell Back Squat', category: 'Legs',
     primaryMuscles: ['Quads', 'Glutes'], secondaryMuscles: ['Adductors', 'Hamstrings', 'Core'], equipment: ['Barbell', 'Squat rack'], difficulty: 'Intermediate',
     setup: 'Set the rack just below shoulder height and safeties just below your controlled bottom position.',

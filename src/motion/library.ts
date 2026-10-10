@@ -551,17 +551,24 @@ const curl = (options: {
   });
 };
 
-const tricepsPushdown = (id: string, name: string, summary: string): MotionDefinition =>
+/** Rope attachments hang from one centre clip; the bar version has two side grips. */
+const tricepsPushdown = (id: string, name: string, summary: string, rope = false): MotionDefinition =>
   motion({
     id,
     name,
     summary,
     seconds: 2.6,
-    equipment: [cable('both-hands', { l: [0.25, 2.05, 0.45], r: [-0.25, 2.05, 0.45] })],
+    equipment: [
+      rope
+        ? cable('both-hands', { l: [0, 2.05, 0.45], r: [0, 2.05, 0.45] })
+        : cable('both-hands', { l: [0.25, 2.05, 0.45], r: [-0.25, 2.05, 0.45] }),
+    ],
     standards: [
       { label: 'آرنج چسبیده', detail: 'آرنج کنار بدن ثابت می‌ماند و به عقب نمی‌رود.' },
       { label: 'بدون کمک تنه', detail: 'تنه برای پایین بردن وزنه به جلو خم نمی‌شود.' },
-      { label: 'باز شدن کامل', detail: 'در انتها آرنج کامل باز می‌شود.' },
+      rope
+        ? { label: 'طناب در پایین', detail: 'با گیرهٔ مرکزی، دو سر طناب در انتها کمی از هم جدا می‌شوند.' }
+        : { label: 'باز شدن کامل', detail: 'در انتها آرنج کامل باز می‌شود.' },
     ],
     keys: [
       { phase: 0, label: 'آماده', inputs: { arms: both('side', 78) } },
@@ -593,15 +600,22 @@ const overheadExtension = (): MotionDefinition =>
 
 /* -------------------------------------------------------------------- pull */
 
-const pulldown = (id: string, name: string, summary: string): MotionDefinition =>
+/** A narrow V-handle (neutral grip) hangs closer than the wide bar; the pose is shared. */
+const pulldown = (id: string, name: string, summary: string, neutral = false): MotionDefinition =>
   motion({
     id,
     name,
     summary,
     seconds: 3,
-    equipment: [cable('both-hands', { l: [0.2, 2.15, 0.1], r: [-0.2, 2.15, 0.1] })],
+    equipment: [
+      neutral
+        ? cable('both-hands', { l: [0.1, 2.15, 0.1], r: [-0.1, 2.15, 0.1] })
+        : cable('both-hands', { l: [0.2, 2.15, 0.1], r: [-0.2, 2.15, 0.1] }),
+    ],
     fixtures: [SEAT_UPRIGHT],
-    standards: pullStandards,
+    standards: neutral
+      ? [...pullStandards, { label: 'دست‌ها رو به هم', detail: 'کف دست‌ها روبه‌روی هم است و آرنج‌ها کنار بدن پایین می‌آیند.' }]
+      : pullStandards,
     keys: [
       { phase: 0, label: 'آماده', inputs: { rootRot: -6, legs: { thigh: -84, knee: 88 }, arms: both('pulldown-top', -29) } },
       { phase: 1, label: 'پایین کشیدن', inputs: { rootRot: -6, legs: { thigh: -84, knee: 88 }, arms: both('pulldown-top', 20) } },
@@ -812,6 +826,17 @@ const catalogue: MotionDefinition[] = [
     ],
   }),
   curl({
+    id: 'dumbbell-biceps-curl',
+    name: 'جلوبازو با دمبل',
+    summary: 'جلوبازو با دمبل: کف دست‌ها رو به جلو (سوپینه)، آرنج ثابت کنار بدن و بالا آوردن کنترل‌شده.',
+    equipment: [dumbbells()],
+    standards: [
+      { label: 'کف دست رو به جلو', detail: 'کف دست‌ها در تمام مسیر رو به جلو و بالا می‌ماند.' },
+      { label: 'آرنج ثابت', detail: 'آرنج کنار بدن می‌ماند و به جلو نمی‌آید.' },
+      { label: 'بدون تاب', detail: 'تنه و لگن تاب نمی‌خورند.' },
+    ],
+  }),
+  curl({
     id: 'incline-dumbbell-curl',
     name: 'جلوبازو روی نیمکت شیب‌دار',
     summary: 'جلوبازو روی نیمکت شیب‌دار: بازوها زیر بدن آویزان می‌مانند و دامنهٔ کامل با آرنج ثابت اجرا می‌شود.',
@@ -828,10 +853,10 @@ const catalogue: MotionDefinition[] = [
     ],
   }),
   tricepsPushdown('cable-triceps-pushdown', 'پشت بازو با سیم‌کش', 'پشت بازو با سیم‌کش: آرنج ثابت کنار بدن و باز شدن کامل آرنج به پایین.'),
-  tricepsPushdown('rope-triceps-pushdown', 'پشت بازو با طناب', 'پشت بازو با طناب: همان الگوی سیم‌کش با طناب، آرنج ثابت و باز شدن کامل.'),
+  tricepsPushdown('rope-triceps-pushdown', 'پشت بازو با طناب', 'پشت بازو با طناب: گیرهٔ مرکزی، آرنج ثابت کنار بدن و جدا شدن دو سر طناب در پایین.', true),
   overheadExtension(),
   pulldown('lat-pulldown', 'زیربغل سیم‌کش', 'زیربغل: میله از بالای سر تا بالای سینه پایین کشیده می‌شود و با کنترل برمی‌گردد.'),
-  pulldown('neutral-grip-lat-pulldown', 'زیربغل دست‌شست‌دار', 'زیربغل با دست‌شست‌دار: میله با آرنج رو به پایین تا بالای سینه کشیده می‌شود.'),
+  pulldown('neutral-grip-lat-pulldown', 'زیربغل دست‌شست‌دار', 'زیربغل با دست‌شست‌دار: دستهٔ V باریک‌تر، کف دست‌ها روبه‌روی هم و کشیدن تا بالای سینه.', true),
   seatedRow(),
   machineRow(),
   oneArmRow(),

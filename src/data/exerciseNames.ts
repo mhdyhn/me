@@ -24,6 +24,7 @@ export const exerciseNames: Record<string, string> = {
   'incline-dumbbell-curl': 'جلو بازو دمبل روی میز شیب‌دار',
   'cable-curl': 'جلو بازو سیم‌کش',
   'hammer-curl': 'جلو بازو چکشی با دمبل',
+  'dumbbell-biceps-curl': 'جلو بازو با دمبل',
   'barbell-squat': 'اسکوات پشت با هالتر',
   'romanian-deadlift': 'ددلیفت رومانیایی',
   'leg-press': 'پرس پا دستگاه',

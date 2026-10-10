@@ -86,7 +86,7 @@ describe('licensed 3D reference model', () => {
     expect(license).toContain('CC0 1.0');
     expect(license).toContain('78a03f1bc6b9e832b75c97e66b3f185623c96a81');
 
-    expect(exercises).toHaveLength(32);
+    expect(exercises).toHaveLength(33); // 32 repo exercises + Dumbbell Biceps Curl (brief)
     expect(exercises.every((exercise) => exercise.modelAsset === '/models/human.glb')).toBe(true);
     // The 3D viewer plays these loops, so every exercise needs one that exists.
     const ids = exercises.map((exercise) => exercise.motionId);
