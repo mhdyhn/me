@@ -5,7 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
-import { exerciseFigureIds, exercisePhotoIds, exerciseFigureSrc } from '../data/exerciseFigures';
+import { exercisePhotoIds, exerciseFigureSrc, hasExerciseFigure } from '../data/exerciseFigures';
 import { getWorkoutTemplate, workoutTemplates } from '../data/workouts';
 import { getLastExercisePerformance, getProgressionAdvice } from '../lib/analytics';
 import { categoryLabels, difficultyLabels } from '../lib/labels';
@@ -86,7 +86,7 @@ export function ExerciseDetail() {
 
           <section className="panel-card movement-card">
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>
-            {exerciseFigureIds.has(exercise.id) ? (
+            {hasExerciseFigure(exercise.id) ? (
               <figure className="exercise-figures">
                 <div><img src={exerciseFigureSrc(exercise.id, 'start')} alt={`${exercise.name}: وضعیت شروع`} /><figcaption>شروع</figcaption></div>
                 <div><img src={exerciseFigureSrc(exercise.id, 'main')} alt={`${exercise.name}: وضعیت اجرا`} /><figcaption>اجرا</figcaption></div>

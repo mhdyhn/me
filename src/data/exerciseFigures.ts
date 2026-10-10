@@ -14,7 +14,19 @@ export const exerciseFigureIds = new Set<string>([
  * AI-generated realistic photos (public/exercise-photos). Only exercises whose BOTH states passed
  * visual review are listed here; the rest keep the SVG illustration.
  */
-export const exercisePhotoIds = new Set<string>(['romanian-deadlift', 'lat-pulldown']);
+export const exercisePhotoIds = new Set<string>([
+  'romanian-deadlift',
+  'lat-pulldown',
+  'lateral-raise',
+  'shoulder-press',
+  'one-arm-dumbbell-row',
+  'bulgarian-split-squat',
+]);
+
+/** True when the exercise has either a photo pair or an SVG pair. */
+export function hasExerciseFigure(exerciseId: string): boolean {
+  return exerciseFigureIds.has(exerciseId) || exercisePhotoIds.has(exerciseId);
+}
 
 export type FigureState = 'start' | 'main';
 
