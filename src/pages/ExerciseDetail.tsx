@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
+import { exerciseFigureIds, exerciseFigureSrc } from '../data/exerciseFigures';
 import { getWorkoutTemplate, workoutTemplates } from '../data/workouts';
 import { getLastExercisePerformance, getProgressionAdvice } from '../lib/analytics';
 import { categoryLabels, difficultyLabels } from '../lib/labels';
@@ -85,7 +86,13 @@ export function ExerciseDetail() {
 
           <section className="panel-card movement-card">
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>
-            <p className="movement-hint">با انتخاب هر مرحله، مدل سه‌بعدی همان وضعیت را نشان می‌دهد و می‌ایستد؛ برای دیدن کل چرخه «پخش دوبارهٔ مراحل» را بزن.</p>
+            {exerciseFigureIds.has(exercise.id) ? (
+              <figure className="exercise-figures">
+                <div><img src={exerciseFigureSrc(exercise.id, 'start')} alt={`${exercise.name}: وضعیت شروع`} /><figcaption>شروع</figcaption></div>
+                <div><img src={exerciseFigureSrc(exercise.id, 'main')} alt={`${exercise.name}: وضعیت اجرا`} /><figcaption>اجرا</figcaption></div>
+              </figure>
+            ) : null}
+            <p className="movement-hint">با انتخاب هر مرحله، متن آن مرحله نمایش داده می‌شود؛ برای دیدن کل چرخه «پخش دوبارهٔ مراحل» را بزن.</p>
             <div className="movement-timeline" role="tablist" aria-label="مراحل حرکت">
               {exercise.movementPhases.map((phase, index) => <button role="tab" aria-selected={phaseIndex === index} className={`movement-phase${phaseIndex === index ? ' is-active' : ''}`} key={phase.label} onClick={() => showStep(index)}><span>{faDigits(String(index + 1).padStart(2, '0'))}</span><strong>{phase.label}</strong></button>)}
             </div>

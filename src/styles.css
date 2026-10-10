@@ -957,3 +957,9 @@ html[dir='rtl'] svg.lucide-arrow-left,
 html[dir='rtl'] svg.lucide-chevron-right,
 html[dir='rtl'] svg.lucide-chevron-left,
 html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
+
+/* Exercise figures (static SVG illustrations) */
+.exercise-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+.exercise-figures > div { display: grid; gap: 5px; }
+.exercise-figures img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid rgba(166,183,172,.14); background: #171d1b; }
+.exercise-figures figcaption { color: #98a49c; font-size: 11px; text-align: center; }
