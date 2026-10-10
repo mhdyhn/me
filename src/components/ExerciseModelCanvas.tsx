@@ -9,12 +9,19 @@ import { buildAthleticFigure, figureLookFor, muscleHighlights, type FigureStyle 
 import type { MotionDefinition } from '../motion/types';
 import { buildMotionRig, motionBounds, poseRig, restRig } from '../motion/modelRig';
 import { buildPropScene } from '../motion/props';
+import { stepPosition } from '../engine/playback';
 
-type ViewAngle = 'front' | 'side' | 'back';
+type ViewAngle = 'front' | 'side' | 'back' | 'free';
 
 /** Jump the loop to the key of one written step (phase 0…4). */
 export interface SeekRequest {
   phase: number;
+  token: number;
+}
+
+/** Jump to any position of the loop, in [0, 1]. Used by the timeline scrubber. */
+export interface ScrubRequest {
+  position: number;
   token: number;
 }
 
@@ -27,6 +34,16 @@ interface RiggedProps {
   restartToken: number;
   seek?: SeekRequest | null;
   onKeyLabel?: (label: string, phase: number) => void;
+  /** Continuous jump for the timeline. Ignored unless its token changes. */
+  scrub?: ScrubRequest | null;
+  /** False plays the movement once and stops at its end. Defaults to true. */
+  loop?: boolean;
+  /** Called when a non-looping movement reaches its end. */
+  onFinish?: () => void;
+  /** Reports the loop position while playing, about ten times a second. */
+  onPosition?: (position: number) => void;
+  /** Changing this value puts the camera back on the current preset framing. */
+  cameraResetToken?: number;
   /** Illuminate the muscles the exercise works. */
   anatomy?: boolean;
   /** Neutral mannequin, or the figure with the textures the file shipped. */
@@ -45,6 +62,11 @@ function ExerciseRig({
   restartToken,
   seek,
   onKeyLabel,
+  scrub,
+  loop = true,
+  onFinish,
+  onPosition,
+  cameraResetToken = 0,
   anatomy = false,
   figureStyle = 'statue',
   primaryMuscles = [],
@@ -69,6 +91,7 @@ function ExerciseRig({
   // Posed once after every jump; a paused loop does not need to re-pose the
   // skeleton sixty times a second while the reader studies one step.
   const needsPose = useRef(true);
+  const reportClock = useRef(0);
 
   useEffect(() => {
     phase.current = 0;
@@ -90,6 +113,15 @@ function ExerciseRig({
   }, [rig, motion, props, seek, seek?.token]);
 
   useEffect(() => {
+    if (!rig || !motion || !scrub) return;
+    phase.current = Math.min(1, Math.max(0, scrub.position));
+    poseRig(rig, phase.current);
+    props?.update();
+    needsPose.current = true;
+    // As with seek, only the token gates the jump.
+  }, [rig, motion, props, scrub, scrub?.token]);
+
+  useEffect(() => {
     if (!rig) return undefined;
     return () => restRig(rig);
   }, [rig]);
@@ -102,8 +134,16 @@ function ExerciseRig({
 
   useFrame((_, delta) => {
     if (!rig || !motion) return;
-    if (playing) phase.current = (phase.current + (delta * speed) / motion.durationSeconds) % 1;
-    else if (!needsPose.current) return;
+    if (playing) {
+      const step = stepPosition(phase.current, delta, speed, motion.durationSeconds, loop);
+      phase.current = step.position;
+      reportClock.current += delta;
+      if (reportClock.current >= 0.1) {
+        reportClock.current = 0;
+        onPosition?.(phase.current);
+      }
+      if (step.finished) onFinish?.();
+    } else if (!needsPose.current) return;
     needsPose.current = false;
     const state = poseRig(rig, phase.current);
     props?.update();
@@ -117,13 +157,23 @@ function ExerciseRig({
     <>
       <primitive object={gltf.scene} dispose={null} />
       {props ? <primitive object={props.group} dispose={null} /> : null}
-      <CameraControls view={view} target={frame.centre} radius={frame.radius} />
+      <CameraControls view={view} target={frame.centre} radius={frame.radius} resetToken={cameraResetToken} />
     </>
   );
 }
 
 /** Frames the camera on the movement and keeps it stable while the loop plays. */
-function CameraControls({ view, target, radius }: { view: ViewAngle; target: [number, number, number]; radius: number }) {
+function CameraControls({
+  view,
+  target,
+  radius,
+  resetToken,
+}: {
+  view: ViewAngle;
+  target: [number, number, number];
+  radius: number;
+  resetToken: number;
+}) {
   const { camera, gl } = useThree();
   const controls = useRef<OrbitControls | null>(null);
 
@@ -138,19 +188,22 @@ function CameraControls({ view, target, radius }: { view: ViewAngle; target: [nu
     control.maxDistance = distance * 2.1;
     control.target.set(target[0], target[1], target[2]);
     controls.current = control;
-    const positions: Record<ViewAngle, [number, number, number]> = {
-      front: [0, target[1] + 0.15, distance],
-      side: [distance, target[1] + 0.15, 0],
-      back: [0, target[1] + 0.15, -distance],
-    };
-    camera.position.set(...positions[view]);
+    // The free camera keeps wherever the reader last left it; only presets move it.
+    if (view !== 'free') {
+      const positions: Record<Exclude<ViewAngle, 'free'>, [number, number, number]> = {
+        front: [0, target[1] + 0.15, distance],
+        side: [distance, target[1] + 0.15, 0],
+        back: [0, target[1] + 0.15, -distance],
+      };
+      camera.position.set(...positions[view]);
+    }
     camera.lookAt(target[0], target[1], target[2]);
     control.update();
     return () => {
       control.dispose();
       controls.current = null;
     };
-  }, [camera, gl, view, target, radius]);
+  }, [camera, gl, view, target, radius, resetToken]);
 
   useFrame(() => controls.current?.update());
   return null;
@@ -165,6 +218,11 @@ export default function ExerciseModelCanvas({
   restartToken,
   seek,
   onKeyLabel,
+  scrub,
+  loop,
+  onFinish,
+  onPosition,
+  cameraResetToken,
   anatomy,
   figureStyle,
   primaryMuscles,
@@ -188,6 +246,11 @@ export default function ExerciseModelCanvas({
         restartToken={restartToken}
         seek={seek}
         onKeyLabel={onKeyLabel}
+        scrub={scrub}
+        loop={loop}
+        onFinish={onFinish}
+        onPosition={onPosition}
+        cameraResetToken={cameraResetToken}
         anatomy={anatomy}
         figureStyle={figureStyle}
         primaryMuscles={primaryMuscles}

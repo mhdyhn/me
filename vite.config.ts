@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -91,6 +92,14 @@ export default defineConfig(({ mode }) => {
   preview: { host: '0.0.0.0', allowedHosts: true },
   build: {
     rolldownOptions: {
+      // The standalone exercise-engine demo is a second page. The single-file offline build
+      // keeps only the app, so the offline bundle stays one file.
+      input: offlineSingleFile
+        ? undefined
+        : {
+            main: fileURLToPath(new URL('./index.html', import.meta.url)),
+            'engine-demo': fileURLToPath(new URL('./engine-demo.html', import.meta.url)),
+          },
       output: offlineSingleFile
         ? { inlineDynamicImports: true }
         : {

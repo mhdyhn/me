@@ -16,7 +16,9 @@
     "fetch:model": "node tools/fetch-model.mjs",
     "audit:motion": "node tools/audit-motion-source.mjs",
     "verify:model": "node tools/verify-model.mjs",
-    "verify:offline": "node tools/verify-offline-bundle.mjs"
+    "verify:offline": "node tools/verify-offline-bundle.mjs",
+    "verify:engine": "node tools/engine-report.mjs",
+    "test:engine": "vitest run tests/engine"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

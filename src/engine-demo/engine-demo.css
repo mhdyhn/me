@@ -1,0 +1,42 @@
+/* Standalone demo styles. Independent of the app's stylesheet. */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #101312; color: #ecf2ef; font-family: 'Vazirmatn', system-ui, sans-serif; }
+.engine-page { max-width: 1180px; margin: 0 auto; padding: 16px; }
+.engine-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.engine-header h1 { font-size: 1.25rem; margin: 0; }
+.engine-layout { display: grid; gap: 16px; }
+@media (min-width: 900px) { .engine-layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; } }
+.engine-card { background: #171d1b; border: 1px solid #2a3432; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.engine-card h2, .engine-card h3 { margin: 0 0 10px; font-size: 1rem; }
+.engine-card h3 { margin-top: 12px; color: #b9c9c3; }
+.engine-stage { position: relative; height: min(62vh, 520px); min-height: 280px; background: #171d1b; border-radius: 10px; overflow: hidden; display: grid; place-items: center; }
+.engine-stage canvas { width: 100% !important; height: 100% !important; touch-action: none; }
+.engine-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.engine-button { min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 10px; border: 1px solid #3a4a45; background: #222b28; color: inherit; font: inherit; cursor: pointer; }
+.engine-button[aria-pressed='true'], .engine-button--primary { background: #2f6f5a; border-color: #3f8f75; }
+.engine-button:disabled { opacity: .45; cursor: not-allowed; }
+.engine-button:focus-visible, .engine-link:focus-visible, input:focus-visible { outline: 3px solid #8fd3b8; outline-offset: 2px; }
+.engine-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.engine-timeline { display: grid; gap: 6px; margin-top: 12px; }
+.engine-timeline input { width: 100%; min-height: 44px; }
+.engine-phase { margin-top: 10px; padding: 10px; border-radius: 10px; background: #1d2623; }
+.engine-phase p { margin: 6px 0 0; }
+.engine-eyebrow { font-size: .8rem; color: #9fb3ab; }
+.engine-side { min-width: 0; }
+.engine-steps { padding-inline-start: 18px; margin: 0; display: grid; gap: 6px; }
+.engine-steps li { padding: 6px; border-radius: 8px; }
+.engine-steps li.is-current { background: #24443a; }
+.engine-steps li span { display: block; color: #c6d3ce; font-size: .92rem; }
+.engine-tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.engine-tags li { background: #222b28; border-radius: 999px; padding: 4px 10px; font-size: .9rem; }
+.engine-facts { display: grid; gap: 6px; margin: 0; }
+.engine-facts dt { color: #9fb3ab; font-size: .85rem; }
+.engine-facts dd { margin: 0 0 4px; }
+.engine-library { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.engine-link { width: 100%; min-height: 44px; text-align: start; padding: 8px 10px; border-radius: 10px; background: #1d2623; border: 1px solid transparent; color: inherit; font: inherit; cursor: pointer; }
+.engine-link[aria-current='true'] { border-color: #3f8f75; }
+.engine-badge { border: 1px solid #5b6b65; border-radius: 999px; padding: 2px 8px; font-size: .85rem; }
+.engine-notice { margin: 12px; text-align: center; color: #c6d3ce; }
+.engine-notice--error { color: #ffb4a8; }
+.engine-hint { color: #9fb3ab; font-size: .85rem; }

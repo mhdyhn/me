@@ -20,7 +20,8 @@ const defineExercise = (exercise: ExerciseInput): ExerciseDefinition => ({
   ],
 });
 
-const exerciseDefinitions: ExerciseDefinition[] = [
+/** English source copy, before the Persian translation is applied. The exercise engine reads it. */
+export const exerciseDefinitions: ExerciseDefinition[] = [
   defineExercise({
     id: 'barbell-bench-press', name: 'Barbell Bench Press', category: 'Push',
     primaryMuscles: ['Chest'], secondaryMuscles: ['Triceps', 'Front delts'], equipment: ['Barbell', 'Flat bench', 'Rack'], difficulty: 'Intermediate',
