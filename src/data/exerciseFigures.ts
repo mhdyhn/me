@@ -24,6 +24,8 @@ export const exercisePhotoIds = new Set<string>([
   'leg-press',
   'cable-crunch',
   'machine-chest-press',
+  'cable-triceps-pushdown',
+  'seated-cable-row',
 ]);
 
 /** True when the exercise has either a photo pair or an SVG pair. */
