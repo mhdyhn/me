@@ -8,7 +8,7 @@ const hasPersian = (value: string) => /[\u0600-\u06FF]/.test(value);
 
 describe('Persian training content', () => {
   it('provides Persian descriptions and labels for every exercise', () => {
-    expect(exercises).toHaveLength(33); // 32 repo exercises + Dumbbell Biceps Curl (brief)
+    expect(exercises).toHaveLength(56); // 33 library movements + 23 programme-only movements
     for (const exercise of exercises) {
       const visibleCopy = [
         exercise.name,

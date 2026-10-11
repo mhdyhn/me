@@ -1,5 +1,6 @@
 import type { ExerciseDefinition } from '../types';
 import { persianExerciseTranslations } from './exercisePersian';
+import { programExerciseDefinitions, programExerciseTranslations } from './programExercises';
 
 type ExerciseInput = Omit<ExerciseDefinition, 'movementPhases'> & {
   execution: [string, string, string];
@@ -415,8 +416,8 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
   }),
 ];
 
-export const exercises: ExerciseDefinition[] = exerciseDefinitions.map((exercise) => {
-  const translation = persianExerciseTranslations[exercise.id];
+export const exercises: ExerciseDefinition[] = [...exerciseDefinitions, ...programExerciseDefinitions].map((exercise) => {
+  const translation = persianExerciseTranslations[exercise.id] ?? programExerciseTranslations[exercise.id];
   if (!translation) throw new Error(`Missing Persian copy for exercise "${exercise.id}".`);
   const localized = { ...exercise, ...translation };
   const instructions = [

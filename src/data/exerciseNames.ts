@@ -1,3 +1,5 @@
+import { programExerciseTranslations } from './programExercises';
+
 /**
  * Movement names only. The card on the dashboard and the progression advice just
  * need to label a movement, so they read this small map instead of the full
@@ -40,5 +42,10 @@ export const exerciseNames: Record<string, string> = {
   'bulgarian-split-squat': 'اسکوات بلغاری',
   'hanging-leg-raise': 'بالاآوردن زانو یا پا در حالت آویزان',
 };
+
+// Programme-only movements share their Persian name with the full catalogue.
+for (const [id, translation] of Object.entries(programExerciseTranslations)) {
+  exerciseNames[id] = translation.name;
+}
 
 export const exerciseName = (id: string) => exerciseNames[id] ?? 'حرکت';
