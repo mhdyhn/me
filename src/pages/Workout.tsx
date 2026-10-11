@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
-import { getWorkoutTemplate, programExerciseName } from '../data/workouts';
+import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
 import { faDigits, faNumber, formatDate, formatDuration, kg } from '../lib/format';
 import type { LoggedSet, RestTimerState, WorkoutSession } from '../types';
@@ -17,6 +17,7 @@ export function Workout() {
   const template = getWorkoutTemplate(templateId);
   const navigate = useNavigate();
   const { sessions, loading, activeSession, startWorkout, saveSession } = useGym();
+  useProgram();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [summary, setSummary] = useState<WorkoutSession | null>(null);
   const [weightValue, setWeightValue] = useState('');

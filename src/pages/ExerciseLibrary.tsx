@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
-import { workoutTemplates } from '../data/workouts';
+import { useProgram } from '../lib/programStore';
 import { categoryLabels, normalizePersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
 import type { ExerciseDefinition } from '../types';
@@ -17,6 +17,7 @@ const filters: ({ id: ExerciseDefinition['category'] | 'All'; label: string })[]
 ];
 
 export function ExerciseLibrary() {
+  const program = useProgram();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<(typeof filters)[number]['id']>('All');
   const results = useMemo(() => exercises.filter((exercise) => {
@@ -38,7 +39,7 @@ export function ExerciseLibrary() {
       {results.length ? (
         <div className="exercise-grid">
           {results.map((exercise, index) => {
-            const prescription = workoutTemplates.flatMap((workout) => workout.exercises).find((item) => item.exerciseId === exercise.id)?.prescription;
+            const prescription = program.flatMap((workout) => workout.exercises).find((item) => item.exerciseId === exercise.id)?.prescription;
             return (
               <Link to={`/exercise/${exercise.id}`} className="exercise-card" key={exercise.id}>
                 <div className={`exercise-card__visual exercise-card__visual--${exercise.category.toLowerCase()}`}>

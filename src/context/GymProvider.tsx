@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { defaultNutritionGoals, defaultProfile, localizeKnownProfileCopy } from '../data/profile';
-import { getWorkoutTemplate } from '../data/workouts';
 import { db } from '../lib/db';
+import { loadStoredProgram } from '../lib/programPersistence';
+import { getWorkoutTemplate } from '../lib/programStore';
 import { dateInputValue } from '../lib/format';
 import type { BodyweightEntry, NutritionDay, NutritionGoals, UserProfile, WorkoutSession } from '../types';
 
@@ -39,6 +40,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     const load = async () => {
       try {
+        await loadStoredProgram();
         const [storedSessions, storedBodyweights, storedNutrition, storedProfile, storedGoals] = await Promise.all([
           db.sessions.toArray(),
           db.bodyweights.toArray(),

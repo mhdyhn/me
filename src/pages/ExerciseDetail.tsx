@@ -6,7 +6,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
 import { exercisePhotoIds, exerciseFigureSrc, hasExerciseFigure } from '../data/exerciseFigures';
-import { getWorkoutTemplate, workoutTemplates } from '../data/workouts';
+import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getProgressionAdvice } from '../lib/analytics';
 import { categoryLabels, difficultyLabels } from '../lib/labels';
 import { faDigits, faNumber, formatDate, kg } from '../lib/format';
@@ -18,7 +18,8 @@ export function ExerciseDetail() {
   const { sessions } = useGym();
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [replaying, setReplaying] = useState(false);
-  const placements = workoutTemplates.flatMap((workout) => workout.exercises
+  const program = useProgram();
+  const placements = program.flatMap((workout) => workout.exercises
     .filter((item) => item.exerciseId === exerciseId)
     .map((item) => ({ workout, prescription: item.prescription })));
   const previous = getLastExercisePerformance(sessions, exerciseId);

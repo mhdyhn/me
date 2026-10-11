@@ -6,12 +6,13 @@ import { ProgressChart } from '../components/ProgressChart';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
-import { getWorkoutTemplate, programExerciseName } from '../data/workouts';
+import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
 import { getBestSet, getExercisePerformances, getSessionTotals, getWeekComparison, getWeeklyTotals } from '../lib/analytics';
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
 export function Progress() {
   const { sessions, bodyweights, profile, addBodyweight } = useGym();
+  useProgram();
   const [selectedExercise, setSelectedExercise] = useState('barbell-bench-press');
   const [selectedMetric, setSelectedMetric] = useState<'weight' | 'reps' | 'volume'>('weight');
   const [weightInput, setWeightInput] = useState('');

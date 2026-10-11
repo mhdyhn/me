@@ -964,3 +964,26 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .exercise-figures img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid rgba(166,183,172,.14); background: #171d1b; }
 .exercise-figures figcaption { color: #98a49c; font-size: 11px; text-align: center; }
 .figure-note { margin: -4px 0 10px; color: #98a49c; font-size: 11px; line-height: 1.6; }
+
+/* Programme editor */
+.program-editor-entry { display: flex; justify-content: flex-end; }
+.program-editor__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
+.program-editor__errors { padding: 14px 16px; border-color: #7a3b33; color: #f0b9ae; }
+.program-editor__errors ul { margin: 8px 0 0; padding-inline-start: 18px; font-size: 11px; line-height: 1.8; }
+.program-editor__status { color: var(--accent); font-size: 11px; font-weight: 600; }
+.editor-day { display: grid; gap: 12px; padding: 16px 18px; }
+.editor-day__heading, .editor-exercise__top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.editor-day__actions { display: flex; gap: 6px; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid #303a34; border-radius: 9px; color: #d4ddd5; background: #111614; cursor: pointer; }
+.icon-button:disabled { opacity: .35; cursor: not-allowed; }
+.editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.editor-grid--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.editor-grid .field-control, .editor-day > .field-control { display: grid; gap: 5px; }
+.editor-grid .field-control > span, .editor-day > .field-control > span { color: #8f9b92; font-size: 9px; font-weight: 600; }
+.editor-check { display: flex; align-items: center; gap: 8px; color: #a9b5ab; font-size: 10px; }
+.editor-exercises { display: grid; gap: 10px; }
+.editor-exercise { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 12px; background: rgba(255,255,255,.012); }
+.editor-exercise__name { flex: 1; }
+.editor-add { display: grid; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--line-soft); }
+.editor-add .button { justify-self: start; }
+@media (max-width: 640px) { .editor-grid, .editor-grid--four { grid-template-columns: 1fr; } }

@@ -2,12 +2,13 @@ import { ArrowRight, ArrowUpRight, CalendarCheck2, Clock3, Dumbbell, Flame, Plus
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
-import { getWorkoutTemplate, workoutTemplates } from '../data/workouts';
+import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
 import { faNumber, formatDate, kg } from '../lib/format';
 
 export function Dashboard() {
   const { sessions, bodyweights, profile, activeSession } = useGym();
+  const program = useProgram();
   const navigate = useNavigate();
   const now = new Date();
   const hour = now.getHours();
@@ -146,7 +147,7 @@ export function Dashboard() {
         <Link to="/exercises" className="button button--secondary">دیدن حرکت‌ها <ArrowRight size={16} /></Link>
       </section>
 
-      {workoutTemplates.length === 0 && <p className="muted">هنوز برنامهٔ تمرینی‌ای در دسترس نیست.</p>}
+      {program.length === 0 && <p className="muted">هنوز برنامهٔ تمرینی‌ای در دسترس نیست.</p>}
     </div>
   );
 }

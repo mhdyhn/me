@@ -37,10 +37,10 @@ const WARMUP = 'ابتدا با وزن سبک‌تر گرم کنید.';
 const DROP = 'دراپ ست: آخرین ست را با وزن اصلی ۸ تا ۱۰ تکرار کنید، بلافاصله وزن را ۲۵٪ کم کنید (بدون استراحت) و ۵ تا ۹ تکرار دیگر تا نزدیک خستگی بزنید.';
 
 const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-const toPersianNumber = (value: number) => String(value).padStart(2, '0').split('').map((digit) => persianDigits[Number(digit)]).join('');
+export const toPersianNumber = (value: number) => String(value).padStart(2, '0').split('').map((digit) => persianDigits[Number(digit)]).join('');
 
 /** Rough session length: each set plus its rest, plus about 7 minutes of cardio. */
-const estimateMinutes = (exercises: WorkoutExercise[]) =>
+export const estimateMinutes = (exercises: WorkoutExercise[]) =>
   Math.round(exercises.reduce((total, { prescription: p }) => total + p.sets * (p.restSeconds + 40), 0) / 60) + 7;
 
 const day = (
@@ -115,9 +115,4 @@ export const workoutTemplates: WorkoutTemplate[] = [
   ]),
 ];
 
-export const primaryWorkoutTemplates = workoutTemplates.filter((workout) => !workout.optional);
-export const getWorkoutTemplate = (id: string) => workoutTemplates.find((workout) => workout.id === id);
-
-/** Programme name for an exercise id, used where a session has no catalogue entry to read from. */
-export const programExerciseName = (exerciseId: string) =>
-  workoutTemplates.flatMap((workout) => workout.exercises).find((item) => item.exerciseId === exerciseId)?.name;
+/** The original RAGE programme. The active programme (which the user may edit) lives in `lib/programStore.ts`. */

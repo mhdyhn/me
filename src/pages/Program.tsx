@@ -1,19 +1,21 @@
-import { ArrowRight, Check, Clock3, Dumbbell, Info, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Clock3, Dumbbell, Info, Pencil, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
-import { workoutTemplates } from '../data/workouts';
 import { getCompletedThisWeek } from '../lib/analytics';
+import { useProgram } from '../lib/programStore';
 import { faDigits, faNumber } from '../lib/format';
 
 export function Program() {
   const { sessions } = useGym();
   const weeklyCount = getCompletedThisWeek(sessions);
+  const workoutTemplates = useProgram();
 
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="تقسیم‌بندی تمرین‌ها" title="هفته‌ات را با برنامه پیش ببر." description="پنج جلسهٔ اصلی، یک روز اختیاری با خستگی کم و فرصت کافی برای ریکاوری. ترتیب جلسه‌ها را با سرعت مناسب خودت پیش ببر." />
+      <div className="program-editor-entry"><Link to="/program/edit" className="button button--secondary button--small"><Pencil size={14} /> ویرایش برنامه</Link></div>
       <div className="program-overview panel-card">
         <div className="program-overview__main"><span className="eyebrow">ساختار هفتگی</span><strong>پرس · کشش · پا · بالاتنه · پایین‌تنه</strong><span>برای رشد متعادل و پیشرفت تدریجی طراحی شده است.</span></div>
         <div className="program-overview__stat"><b>{faNumber(weeklyCount)}<small> / {faNumber(5)}</small></b><span>جلسهٔ اصلی<br />این هفته</span></div>

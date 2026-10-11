@@ -16,6 +16,7 @@ const ExerciseDetail = lazy(() => import('./pages/ExerciseDetail').then((module)
 const ExerciseLibrary = lazy(() => import('./pages/ExerciseLibrary').then((module) => ({ default: module.ExerciseLibrary })));
 const Nutrition = lazy(() => import('./pages/Nutrition').then((module) => ({ default: module.Nutrition })));
 const Program = lazy(() => import('./pages/Program').then((module) => ({ default: module.Program })));
+const ProgramEditor = lazy(() => import('./pages/ProgramEditor').then((module) => ({ default: module.ProgramEditor })));
 const Progress = lazy(() => import('./pages/Progress').then((module) => ({ default: module.Progress })));
 const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
 const Workout = lazy(() => import('./pages/Workout').then((module) => ({ default: module.Workout })));
@@ -34,6 +35,7 @@ export function App() {
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="program" element={<Program />} />
+              <Route path="program/edit" element={<ProgramEditor />} />
               <Route path="exercises" element={<ExerciseLibrary />} />
               <Route path="exercise/:exerciseId" element={<ExerciseDetail />} />
               <Route path="workout/:templateId" element={<Workout />} />

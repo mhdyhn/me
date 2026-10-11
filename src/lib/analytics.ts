@@ -1,6 +1,6 @@
 import { exerciseName } from '../data/exerciseNames';
 import { faNumber } from './format';
-import { primaryWorkoutTemplates, workoutTemplates } from '../data/workouts';
+import { getPrimaryWorkoutTemplates } from './programStore';
 import type { ExercisePrescription, LoggedSet, WorkoutSession } from '../types';
 
 export interface SessionTotals {
@@ -110,7 +110,7 @@ export const getCompletedThisWeek = (sessions: WorkoutSession[], now = new Date(
   const start = getWeekStart(now).getTime();
   const end = start + 7 * 24 * 60 * 60 * 1000;
   return sessions.filter((session) => {
-    if (session.status !== 'completed' || !primaryWorkoutTemplates.some((workout) => workout.id === session.templateId)) return false;
+    if (session.status !== 'completed' || !getPrimaryWorkoutTemplates().some((workout) => workout.id === session.templateId)) return false;
     const started = new Date(session.startedAt).getTime();
     return started >= start && started < end;
   }).length;
@@ -205,12 +205,13 @@ export const getWeekComparison = (weeks: WeekTotals[]): WeekComparison | null =>
 };
 
 export const getNextWorkout = (sessions: WorkoutSession[]) => {
+  const primary = getPrimaryWorkoutTemplates();
   const lastPrimary = sessions
-    .filter((session) => session.status === 'completed' && primaryWorkoutTemplates.some((item) => item.id === session.templateId))
+    .filter((session) => session.status === 'completed' && primary.some((item) => item.id === session.templateId))
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
-  if (!lastPrimary) return primaryWorkoutTemplates[0] ?? workoutTemplates[0];
-  const lastIndex = primaryWorkoutTemplates.findIndex((item) => item.id === lastPrimary.templateId);
-  return primaryWorkoutTemplates[(lastIndex + 1) % primaryWorkoutTemplates.length] ?? primaryWorkoutTemplates[0];
+  if (!lastPrimary) return primary[0];
+  const lastIndex = primary.findIndex((item) => item.id === lastPrimary.templateId);
+  return primary[(lastIndex + 1) % primary.length] ?? primary[0];
 };
 
 export const getProgressionAdvice = (
