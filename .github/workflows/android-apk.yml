@@ -5,6 +5,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
+    branches:
+      - arena/b53a1e35-me
     tags:
       - 'v*'
 
