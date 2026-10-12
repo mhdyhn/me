@@ -346,3 +346,79 @@ describe('generated passwords on the cards', () => {
     expect(raw.password_enc).not.toContain(created.json.password);
   });
 });
+
+describe('nutrition plans', () => {
+  function emptyWeek() {
+    return ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ name, meals: [] as { name: string; items: { foodId: string; grams: number }[] }[] }));
+  }
+
+  it('lets the coach save a weekly plan, and the student read it back', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد تغذیه' }, coach.token);
+    const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-2' }, studentToken);
+
+    const days = emptyWeek();
+    days[0]!.meals = [{ name: 'صبحانه', items: [{ foodId: 'egg-whole', grams: 100 }, { foodId: 'bread-white', grams: 60.04 }] }];
+    const saved = await call('PUT', `/api/students/${created.json.user.id}/nutrition`, { targets: { kcal: 2400, proteinG: 160 }, days }, coach.token);
+    expect(saved.status).toBe(200);
+    expect(saved.json.plan.days[0].name).toBe('شنبه');
+    expect(saved.json.plan.days[0].meals[0].items[1].grams).toBe(60);
+    expect(saved.json.plan.targets).toEqual({ kcal: 2400, proteinG: 160, carbsG: null, fatG: null });
+
+    const forStudent = await call('GET', '/api/me/nutrition', undefined, studentToken);
+    expect(forStudent.json.coachName).toBe('مربی یک');
+    expect(forStudent.json.plan.days[0].meals[0].name).toBe('صبحانه');
+  });
+
+  it('gives the student no plan until the coach makes one, and the coach an empty week', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد خالی' }, coach.token);
+    const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-3' }, studentToken);
+    expect((await call('GET', '/api/me/nutrition', undefined, studentToken)).json.plan).toBeNull();
+    const coachView = await call('GET', `/api/students/${created.json.user.id}/nutrition`, undefined, coach.token);
+    expect(coachView.json.plan.days).toHaveLength(7);
+    expect(coachView.json.plan.days.every((day: { meals: unknown[] }) => day.meals.length === 0)).toBe(true);
+  });
+
+  it('rejects plans the app cannot calculate or display safely', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد نامعتبر' }, coach.token);
+    const url = `/api/students/${created.json.user.id}/nutrition`;
+    const withMeal = (items: unknown[], name = 'ناهار') => {
+      const days = emptyWeek();
+      days[1]!.meals = [{ name, items: items as { foodId: string; grams: number }[] }];
+      return { days };
+    };
+    expect((await call('PUT', url, { days: emptyWeek().slice(0, 6) }, coach.token)).status).toBe(400);
+    expect((await call('PUT', url, withMeal([{ foodId: 'no-such-food', grams: 100 }]), coach.token)).status).toBe(400);
+    expect((await call('PUT', url, withMeal([{ foodId: 'banana', grams: 0 }]), coach.token)).status).toBe(400);
+    expect((await call('PUT', url, withMeal([{ foodId: 'banana', grams: 2001 }]), coach.token)).status).toBe(400);
+    expect((await call('PUT', url, withMeal([{ foodId: 'banana', grams: 'ده' }]), coach.token)).status).toBe(400);
+    expect((await call('PUT', url, withMeal([], '   '), coach.token)).status).toBe(400);
+    expect((await call('PUT', url, { targets: { kcal: -5 }, days: emptyWeek() }, coach.token)).status).toBe(400);
+    expect((await call('PUT', url, { targets: { proteinG: 'زیاد' }, days: emptyWeek() }, coach.token)).status).toBe(400);
+  });
+
+  it('keeps each student\'s plan to their own coach and keeps the admin out', async () => {
+    const coach = await coachSession();
+    const other = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد خصوصی تغذیه' }, coach.token);
+    const url = `/api/students/${created.json.user.id}/nutrition`;
+    expect((await call('GET', url, undefined, other.token)).status).toBe(404);
+    expect((await call('PUT', url, { days: emptyWeek() }, other.token)).status).toBe(404);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    expect((await call('GET', url, undefined, admin)).status).toBe(403);
+    expect((await call('GET', '/api/me/nutrition', undefined, admin)).status).toBe(403);
+  });
+
+  it('removes the plan when the student is deleted', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد حذف تغذیه' }, coach.token);
+    await call('PUT', `/api/students/${created.json.user.id}/nutrition`, { days: emptyWeek() }, coach.token);
+    await call('DELETE', `/api/students/${created.json.user.id}`, {}, coach.token);
+    const count = db.prepare('SELECT COUNT(*) AS n FROM nutrition_plans WHERE student_id = ?').get(created.json.user.id) as { n: number };
+    expect(Number(count.n)).toBe(0);
+  });
+});

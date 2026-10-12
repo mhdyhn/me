@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { GymProvider } from '../src/context/GymProvider';
+import { SessionProvider } from '../src/context/SessionContext';
 import { Dashboard } from '../src/pages/Dashboard';
 import { ExerciseDetail } from '../src/pages/ExerciseDetail';
 import { ExerciseLibrary } from '../src/pages/ExerciseLibrary';
@@ -40,6 +41,7 @@ const completedSession = (
 function renderPage(path: string) {
   return render(
     <GymProvider>
+      <SessionProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -51,6 +53,7 @@ function renderPage(path: string) {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </MemoryRouter>
+      </SessionProvider>
     </GymProvider>,
   );
 }

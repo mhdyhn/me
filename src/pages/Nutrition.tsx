@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, Info, Leaf, Save, Utensils } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
+import { useSession } from '../context/SessionContext';
+import { StudentNutritionPlan } from './account/StudentNutrition';
 import { faNumber, formatDate } from '../lib/format';
 import { getLocalDateKey } from '../lib/format';
 
 const numeric = (value: string) => value.trim() ? Number(value) : undefined;
 
 export function Nutrition() {
+  const { user } = useSession();
   const { nutritionGoals, nutritionDays, profile, bodyweights, saveNutritionGoals, saveNutritionDay } = useGym();
   const currentWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
   const proteinLow = Math.round(currentWeight * 1.6);
@@ -75,6 +78,7 @@ export function Nutrition() {
 
   return (
     <div className="page-stack nutrition-page">
+      {user?.role === 'student' && <StudentNutritionPlan />}
       <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="یک هدف آغازین معقول انتخاب کن، موارد مهم را ثبت کن و بر اساس روند واقعی وزن و تمرینت تنظیمش کن." />
       <div className="nutrition-context panel-card">
         <span className="nutrition-context__icon"><Leaf size={19} /></span>

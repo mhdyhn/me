@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { migrateChat } from './chat.ts';
+import { migrateNutrition } from './nutrition.ts';
 
 /**
  * SQLite storage for the server. The schema is created on open with IF NOT EXISTS so a
@@ -43,6 +44,7 @@ function migrate(db: DatabaseSync): void {
     );
   `);
   migrateChat(db);
+  migrateNutrition(db);
   const columns = db.prepare('PRAGMA table_info(users)').all() as unknown as { name: string }[];
   if (!columns.some((column) => column.name === 'password_enc')) {
     db.exec('ALTER TABLE users ADD COLUMN password_enc TEXT;');

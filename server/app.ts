@@ -6,6 +6,7 @@ import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
+import { emptyPlan, loadPlan, savePlan, validatePlan } from './nutrition.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -271,6 +272,37 @@ export function createApp(options: AppOptions) {
         const student = ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
         return { status: 200, body: { program: saveProgramme(db, student.id, user!.id, programme, now()) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/nutrition$/,
+      auth: ['student'],
+      handler: ({ user }) => {
+        const coach = findUserById(db, user!.coachId!);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: loadPlan(db, user!.id) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/nutrition$/,
+      auth: ['coach'],
+      handler: ({ user, params }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { plan: loadPlan(db, student.id) ?? emptyPlan() } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/nutrition$/,
+      auth: ['coach'],
+      handler: ({ user, params, body }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        const plan = validatePlan(body);
+        return { status: 200, body: { plan: savePlan(db, student.id, user!.id, plan, now().toISOString()) } };
       },
     },
 
