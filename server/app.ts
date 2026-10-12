@@ -87,6 +87,13 @@ export function createApp(options: AppOptions) {
   const routes: Route[] = [
     {
       method: 'GET',
+      pattern: /^\/api\/?$/,
+      auth: 'public',
+      handler: () => ({ status: 200, body: { name: 'Meety API', ok: true } }),
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/health$/,
       auth: 'public',
       handler: () => ({ status: 200, body: { ok: true } }),
