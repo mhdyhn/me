@@ -190,13 +190,6 @@ export function createApp(options: AppOptions) {
     },
 
     {
-      method: 'GET',
-      pattern: /^\/api\/coaches\/(\d+)\/students$/,
-      auth: ['admin'],
-      handler: ({ params }) => ({ status: 200, body: { students: listStudents(db, ownCoach(Number(params[0])).id) } }),
-    },
-
-    {
       method: 'POST',
       pattern: /^\/api\/coaches\/(\d+)\/reset-password$/,
       auth: ['admin'],
@@ -206,18 +199,6 @@ export function createApp(options: AppOptions) {
         updatePassword(db, coach.id, hashPassword(password), true);
         deleteSessionsForUser(db, coach.id);
         return { status: 200, body: { username: coach.username, password } };
-      },
-    },
-
-    {
-      method: 'GET',
-      pattern: /^\/api\/coaches\/(\d+)\/students\/(\d+)\/program$/,
-      auth: ['admin'],
-      handler: ({ params }) => {
-        const coach = ownCoach(Number(params[0]));
-        const student = findUserById(db, Number(params[1]));
-        if (!student || student.role !== 'student' || student.coachId !== coach.id) throw new HttpError(404, 'شاگرد پیدا نشد.');
-        return { status: 200, body: { program: loadProgramme(db, student.id) } };
       },
     },
 

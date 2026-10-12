@@ -190,22 +190,19 @@ describe('admin and coaches', () => {
     expect(fresh.json.user.mustChangePassword).toBe(true);
   });
 
-  it('shows the admin a coach\'s students and their programmes, read-only', async () => {
+  it('does not expose a coach\'s students or their programmes to the admin', async () => {
     const coach = await coachSession();
     const created = await call('POST', '/api/students', { displayName: 'شاگرد یک' }, coach.token);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-    const students = await call('GET', `/api/coaches/${coach.id}/students`, undefined, admin);
-    expect(students.json.students).toEqual([expect.objectContaining({ id: created.json.user.id, displayName: 'شاگرد یک' })]);
-    const program = await call('GET', `/api/coaches/${coach.id}/students/${created.json.user.id}/program`, undefined, admin);
-    expect(program.status).toBe(200);
-    expect(program.json.program).toBeNull();
+    expect((await call('GET', `/api/coaches/${coach.id}/students`, undefined, admin)).status).toBe(404);
+    expect((await call('GET', `/api/coaches/${coach.id}/students/${created.json.user.id}/program`, undefined, admin)).status).toBe(404);
+    expect(JSON.stringify((await call('GET', '/api/coaches', undefined, admin)).json)).not.toContain('شاگرد یک');
   });
 
   it('refuses the coach list and the admin routes to anyone else, and hides ids that are not coaches', async () => {
     const coach = await coachSession();
     expect((await call('GET', '/api/coaches', undefined, coach.token)).status).toBe(403);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-    expect((await call('GET', `/api/coaches/${coach.id + 99}/students`, undefined, admin)).status).toBe(404);
     expect((await call('POST', `/api/coaches/${coach.id + 99}/reset-password`, {}, admin)).status).toBe(404);
   });
 });
