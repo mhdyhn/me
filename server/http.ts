@@ -41,3 +41,29 @@ export function requireText(body: Record<string, unknown>, key: string, min: num
   if (trimmed.length < min || trimmed.length > max) throw new HttpError(400, `${label} باید بین ${min} تا ${max} نویسه باشد.`);
   return trimmed;
 }
+
+export const SESSION_COOKIE = 'meety_session';
+const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+/**
+ * The session also travels as an HttpOnly cookie. Some proxies drop the Authorization header,
+ * and a cookie is the usual way a browser app keeps its session. SameSite=Strict keeps it
+ * from being sent on cross-site requests.
+ */
+export function sessionCookie(token: string): string {
+  const secure = process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MAX_AGE_SECONDS}${secure}`;
+}
+
+export function clearSessionCookie(): string {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+}
+
+export function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=') || null;
+  }
+  return null;
+}

@@ -1,16 +1,28 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { db } from '../src/lib/db';
 
 beforeEach(async () => {
+  // The app sits behind sign-in: pretend a signed-in student session is present.
+  window.localStorage.setItem('meety.session-token', 'test-session-token-000000000000');
+  vi.stubGlobal('fetch', async () =>
+    new Response(JSON.stringify({ user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
   window.history.replaceState({}, '', '/');
   await db.sessions.clear();
   await db.bodyweights.clear();
   await db.nutritionDays.clear();
   await db.preferences.clear();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  window.localStorage.clear();
+});
 
 describe('complete application shell', () => {
   it('boots the dashboard through the production router and shared navigation', async () => {

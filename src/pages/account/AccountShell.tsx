@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useLocation } from 'react-router-dom';
 import { Copy, Dumbbell, LogOut } from 'lucide-react';
 import { useSession } from '../../context/SessionContext';
 import type { Credentials, Role } from '../../lib/api';
@@ -34,6 +34,16 @@ export function AccountShell({ title, children }: { title: string; children: Rea
       </main>
     </div>
   );
+}
+
+/** The whole app sits behind sign-in: nothing is shown until a session exists. */
+export function RequireSignIn({ children }: { children: ReactNode }) {
+  const { status, user } = useSession();
+  const location = useLocation();
+  if (status === 'loading') return <p className="account-muted account-loading">در حال بارگذاری…</p>;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (user.mustChangePassword) return <Navigate to="/account/change-password" replace />;
+  return <>{children}</>;
 }
 
 /** Keeps a route for specific roles. Students with a temporary password go to the change-password screen first. */

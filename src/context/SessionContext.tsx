@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, api, clearToken, getToken, setToken, type PublicUser } from '../lib/api';
+import { ApiError, UNAUTHORIZED_EVENT, api, clearToken, setToken, type PublicUser } from '../lib/api';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
 
@@ -17,15 +17,11 @@ const SessionContext = createContext<SessionValue | null>(null);
 
 /** Keeps the signed-in account (or none) for the account and coach screens. */
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>(() => (getToken() ? 'loading' : 'signed-out'));
+  // Always ask the server: the session cookie works even when no token is stored in this browser.
+  const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<PublicUser | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!getToken()) {
-      setUser(null);
-      setStatus('signed-out');
-      return;
-    }
     try {
       const { user: current } = await api<{ user: PublicUser }>('GET', '/me');
       setUser(current);
@@ -46,6 +42,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Any request that comes back 401 ends the session everywhere.
+  useEffect(() => {
+    const handle = () => {
+      clearToken();
+      setUser(null);
+      setStatus('signed-out');
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, handle);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handle);
+  }, []);
 
   const signIn = useCallback(async (username: string, password: string) => {
     const result = await api<{ token: string; user: PublicUser }>('POST', '/auth/login', { username, password });

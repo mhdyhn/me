@@ -1,6 +1,7 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, CalendarDays, Dumbbell, House, Settings2, Utensils, Zap } from 'lucide-react';
 import { useGym } from '../context/GymProvider';
+import { useSession } from '../context/SessionContext';
 
 const navigation = [
   { label: 'خانه', to: '/', icon: House, end: true },
@@ -22,6 +23,12 @@ const titles: Record<string, string> = {
 export function Layout() {
   const location = useLocation();
   const { activeSession, storageWarning } = useGym();
+  const { user, signOut } = useSession();
+  const navigate = useNavigate();
+  async function signOutAndLeave() {
+    await signOut();
+    navigate('/login', { replace: true });
+  }
   const title = titles[location.pathname] ?? (location.pathname.startsWith('/exercise/') ? 'راهنمای حرکت' : 'تمرین در حال انجام');
 
   return (
@@ -63,9 +70,15 @@ export function Layout() {
                 <span className="resume-dot" /> ادامهٔ تمرین
               </NavLink>
             )}
-            <NavLink to="/login" className="account-entry">
-              ورود مربی یا شاگرد
-            </NavLink>
+            {user ? (
+              <button type="button" className="account-entry" onClick={() => void signOutAndLeave()}>
+                خروج {user.displayName}
+              </button>
+            ) : (
+              <NavLink to="/login" className="account-entry">
+                ورود مربی یا شاگرد
+              </NavLink>
+            )}
             <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">
               <span className="profile-avatar">م</span>
               <span className="profile-button__text">پروفایل من</span>

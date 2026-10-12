@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { SessionProvider } from './context/SessionContext';
+import { RequireSignIn } from './pages/account/AccountShell';
+import type { ReactElement } from 'react';
 import { Dashboard } from './pages/Dashboard';
 
 /**
@@ -31,6 +33,14 @@ function NotFound() {
   return <div className="not-found"><span className="eyebrow">صفحه پیدا نشد</span><h2>این مسیر در برنامه نیست.</h2><p>ممکن است صفحه جابه‌جا شده باشد، اما اطلاعات ثبت‌شدهٔ شما همچنان محفوظ است.</p><Link className="button button--primary" to="/">بازگشت به خانه</Link></div>;
 }
 
+/**
+ * Sign-in comes first: the personal app and every other screen sit behind it. The offline
+ * single-file build has no server, so it opens directly.
+ */
+function signedIn(element: ReactElement): ReactElement {
+  return import.meta.env.MODE === 'offline' ? element : <RequireSignIn>{element}</RequireSignIn>;
+}
+
 export function App() {
   return (
     <ErrorBoundary>
@@ -44,7 +54,7 @@ export function App() {
             <Route path="coach" element={<CoachEntry />} />
             <Route path="coach/students/:studentId/program" element={<ProgramBuilder />} />
             <Route path="my-program" element={<StudentProgram />} />
-            <Route element={<Layout />}>
+            <Route element={signedIn(<Layout />)}>
               <Route index element={<Dashboard />} />
               <Route path="program" element={<Program />} />
               <Route path="program/edit" element={<ProgramEditor />} />

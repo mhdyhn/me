@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
-import { HttpError, readJsonBody, requireObject, requireText } from './http.ts';
+import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, sessionCookie } from './http.ts';
 import { findUserById, findUserByUsername, insertUser, listCoaches, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 
@@ -23,6 +23,7 @@ interface Context {
 interface RouteResult {
   status: number;
   body: unknown;
+  headers?: Record<string, string>;
 }
 
 type Auth = 'public' | 'signed-in' | Role[];
@@ -116,7 +117,7 @@ export function createApp(options: AppOptions) {
         }
         failures.delete(username);
         const token = createSession(db, user.id, now());
-        return { status: 200, body: { token, user: toPublic(user) } };
+        return { status: 200, body: { token, user: toPublic(user) }, headers: { 'Set-Cookie': sessionCookie(token) } };
       },
     },
 
@@ -126,7 +127,7 @@ export function createApp(options: AppOptions) {
       auth: 'signed-in',
       handler: ({ token }) => {
         if (token) deleteSession(db, token);
-        return { status: 200, body: { ok: true } };
+        return { status: 200, body: { ok: true }, headers: { 'Set-Cookie': clearSessionCookie() } };
       },
     },
 
@@ -255,12 +256,15 @@ export function createApp(options: AppOptions) {
     },
   ];
 
-  function authenticate(request: IncomingMessage): { user: StoredUser | null; token: string | null } {
+  /** Accepts the bearer header or the session cookie. Reports which one was used, because cookie requests need a CSRF check. */
+  function authenticate(request: IncomingMessage): { user: StoredUser | null; token: string | null; viaCookie: boolean } {
     const match = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(request.headers.authorization ?? '');
-    if (!match) return { user: null, token: null };
-    const userId = userIdForToken(db, match[1], now());
-    if (userId === null) return { user: null, token: null };
-    return { user: findUserById(db, userId), token: match[1] };
+    const cookie = readCookie(request.headers.cookie, SESSION_COOKIE);
+    const candidate = match ? match[1] : cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
+    if (!candidate) return { user: null, token: null, viaCookie: false };
+    const userId = userIdForToken(db, candidate, now());
+    if (userId === null) return { user: null, token: null, viaCookie: false };
+    return { user: findUserById(db, userId), token: candidate, viaCookie: !match };
   }
 
   function dispatch(request: IncomingMessage, body: unknown): RouteResult {
@@ -271,7 +275,12 @@ export function createApp(options: AppOptions) {
     const route = pathMatches.find((candidate) => candidate.method === method);
     if (!route) throw new HttpError(405, 'این روش برای این مسیر مجاز نیست.');
 
-    const { user, token } = authenticate(request);
+    const { user, token, viaCookie } = authenticate(request);
+    // Cookie-authenticated writes must be JSON. A cross-site form cannot send that type without a preflight.
+    if (viaCookie && method !== 'GET') {
+      const type = String(request.headers['content-type'] ?? '');
+      if (!type.startsWith('application/json')) throw new HttpError(415, 'درخواست باید JSON باشد.');
+    }
     if (route.auth !== 'public') {
       if (!user) throw new HttpError(401, 'ابتدا وارد شوید.');
       if (Array.isArray(route.auth) && !route.auth.includes(user.role)) throw new HttpError(403, 'دسترسی به این بخش ندارید.');
@@ -292,7 +301,7 @@ export function createApp(options: AppOptions) {
     try {
       const body = request.method === 'GET' ? {} : await readJsonBody(request);
       const result = dispatch(request, body);
-      send(response, result.status, result.body);
+      send(response, result.status, result.body, result.headers);
     } catch (error) {
       if (error instanceof HttpError) {
         send(response, error.status, { error: error.message });
@@ -322,12 +331,13 @@ function sendHtml(response: ServerResponse, html: string): void {
   response.end(html);
 }
 
-function send(response: ServerResponse, status: number, body: unknown): void {
+function send(response: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
   const payload = JSON.stringify(body);
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload),
     'Cache-Control': 'no-store',
+    ...headers,
   });
   response.end(payload);
 }
