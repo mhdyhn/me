@@ -87,7 +87,7 @@ export function createApp(options: AppOptions) {
   const routes: Route[] = [
     {
       method: 'GET',
-      pattern: /^\/(api\/?)?$/,
+      pattern: /^\/api\/?$/,
       auth: 'public',
       handler: () => ({ status: 200, body: { name: 'Meety API', ok: true } }),
     },
@@ -284,6 +284,11 @@ export function createApp(options: AppOptions) {
   }
 
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    // A human opening the API address gets a readable page, not a blank JSON view.
+    if (request.method === 'GET' && new URL(request.url ?? '/', 'http://localhost').pathname === '/') {
+      sendHtml(response, STATUS_PAGE);
+      return;
+    }
     try {
       const body = request.method === 'GET' ? {} : await readJsonBody(request);
       const result = dispatch(request, body);
@@ -297,6 +302,24 @@ export function createApp(options: AppOptions) {
       }
     }
   };
+}
+
+const STATUS_PAGE = `<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meety API</title></head>
+<body style="font-family:Tahoma,Arial,sans-serif;background:#0e1110;color:#edf1ec;padding:24px;line-height:1.9">
+<h1 style="font-size:20px">سرور میتی در حال اجراست</h1>
+<p>این آدرس فقط سرور API است و صفحهٔ برنامه نیست. برای باز کردن برنامه، پیش‌نمایش پورت <strong>5180</strong> را باز کن.</p>
+<p>وضعیت سرور: <a style="color:#d9f66f" href="/api/">/api/</a></p>
+</body></html>`;
+
+function sendHtml(response: ServerResponse, html: string): void {
+  response.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': Buffer.byteLength(html),
+    'Cache-Control': 'no-store',
+  });
+  response.end(html);
 }
 
 function send(response: ServerResponse, status: number, body: unknown): void {
