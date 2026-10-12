@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
 import { HttpError, readJsonBody, requireObject, requireText } from './http.ts';
 import { findUserById, findUserByUsername, insertUser, listCoaches, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
+import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -27,7 +28,7 @@ interface RouteResult {
 type Auth = 'public' | 'signed-in' | Role[];
 
 interface Route {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   pattern: RegExp;
   auth: Auth;
   handler: (ctx: Context) => RouteResult;
@@ -199,6 +200,37 @@ export function createApp(options: AppOptions) {
           now: now(),
         });
         return { status: 201, body: { user: toPublic(findUserById(db, id)!), username, password } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/program$/,
+      auth: ['coach'],
+      handler: ({ user, params }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { program: loadProgramme(db, student.id) } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/program$/,
+      auth: ['coach'],
+      handler: ({ user, params, body }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        const programme = validateProgramme(body);
+        return { status: 200, body: { program: saveProgramme(db, student.id, user!.id, programme, now()) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/program$/,
+      auth: ['student'],
+      handler: ({ user }) => {
+        const coach = findUserById(db, user!.coachId!);
+        return { status: 200, body: { program: loadProgramme(db, user!.id), coachName: coach?.displayName ?? null } };
       },
     },
 

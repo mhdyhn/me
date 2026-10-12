@@ -4,6 +4,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
+import { SessionProvider } from './context/SessionContext';
 import { Dashboard } from './pages/Dashboard';
 
 /**
@@ -20,6 +21,11 @@ const ProgramEditor = lazy(() => import('./pages/ProgramEditor').then((module) =
 const Progress = lazy(() => import('./pages/Progress').then((module) => ({ default: module.Progress })));
 const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
 const Workout = lazy(() => import('./pages/Workout').then((module) => ({ default: module.Workout })));
+const Login = lazy(() => import('./pages/account/Login').then((module) => ({ default: module.Login })));
+const ChangePassword = lazy(() => import('./pages/account/ChangePassword').then((module) => ({ default: module.ChangePassword })));
+const CoachEntry = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.CoachEntry })));
+const ProgramBuilder = lazy(() => import('./pages/account/ProgramBuilder').then((module) => ({ default: module.ProgramBuilder })));
+const StudentProgram = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.StudentProgram })));
 
 function NotFound() {
   return <div className="not-found"><span className="eyebrow">صفحه پیدا نشد</span><h2>این مسیر در برنامه نیست.</h2><p>ممکن است صفحه جابه‌جا شده باشد، اما اطلاعات ثبت‌شدهٔ شما همچنان محفوظ است.</p><Link className="button button--primary" to="/">بازگشت به خانه</Link></div>;
@@ -29,9 +35,15 @@ export function App() {
   return (
     <ErrorBoundary>
       <GymProvider>
+        <SessionProvider>
         <BrowserRouter>
           <Suspense fallback={<RouteLoading />}>
           <Routes>
+            <Route path="login" element={<Login />} />
+            <Route path="account/change-password" element={<ChangePassword />} />
+            <Route path="coach" element={<CoachEntry />} />
+            <Route path="coach/students/:studentId/program" element={<ProgramBuilder />} />
+            <Route path="my-program" element={<StudentProgram />} />
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="program" element={<Program />} />
@@ -47,6 +59,7 @@ export function App() {
           </Routes>
           </Suspense>
         </BrowserRouter>
+        </SessionProvider>
       </GymProvider>
     </ErrorBoundary>
   );

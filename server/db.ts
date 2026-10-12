@@ -27,6 +27,14 @@ function migrate(db: DatabaseSync): void {
       CHECK ((role = 'student') = (coach_id IS NOT NULL))
     );
 
+    -- One active programme per student. The coach replaces it; the body is validated by programs.ts.
+    CREATE TABLE IF NOT EXISTS student_programs (
+      student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      coach_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -1,0 +1,110 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SessionProvider } from '../../context/SessionContext';
+import { ProgramBuilder } from './ProgramBuilder';
+import { CoachEntry } from './CoachHome';
+
+const coachUser = { id: 2, username: 'c100001', role: 'coach', displayName: 'مربی یک', coachId: null, mustChangePassword: false };
+const student = { id: 3, username: 's200002', role: 'student', displayName: 'شاگرد الف', coachId: 2, mustChangePassword: false };
+
+interface Sent {
+  method: string;
+  path: string;
+  body: unknown;
+}
+
+function mockApi(program: unknown = null) {
+  const sent: Sent[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      sent.push({ method, path: input, body });
+      let json: unknown = { error: 'nope' };
+      let status = 404;
+      if (method === 'GET' && input === '/api/me') [json, status] = [{ user: coachUser }, 200];
+      if (method === 'GET' && input === '/api/students') [json, status] = [{ students: [student] }, 200];
+      if (method === 'GET' && input === '/api/students/3/program') [json, status] = [{ program }, 200];
+      if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), updatedAt: 'now' } }, 200];
+      return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
+  return sent;
+}
+
+function renderBuilder() {
+  return render(
+    <SessionProvider>
+      <MemoryRouter initialEntries={['/coach/students/3/program']}>
+        <Routes>
+          <Route path="/coach" element={<CoachEntry />} />
+          <Route path="/coach/students/:studentId/program" element={<ProgramBuilder />} />
+        </Routes>
+      </MemoryRouter>
+    </SessionProvider>,
+  );
+}
+
+beforeEach(() => {
+  window.localStorage.setItem('meety.session-token', 'tok-coach-0000000000000001');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('coach programme builder', () => {
+  it('builds a day from the catalogue and saves it for the student', async () => {
+    const sent = mockApi();
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText('عنوان برنامه'), 'برنامهٔ تست');
+    await user.click(screen.getByRole('button', { name: /روز جدید/ }));
+    const firstAdd = (await screen.findAllByRole('button', { name: 'افزودن' }))[0];
+    await user.click(firstAdd!);
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+
+    expect(await screen.findByText(/برنامه ذخیره شد/)).toBeInTheDocument();
+    const put = sent.find((call) => call.method === 'PUT');
+    expect(put?.path).toBe('/api/students/3/program');
+    const body = put!.body as { title: string; days: { name: string; exercises: { sets: number; reps: string; restSeconds: number }[] }[] };
+    expect(body.title).toBe('برنامهٔ تست');
+    expect(body.days).toHaveLength(1);
+    expect(body.days[0]!.exercises).toHaveLength(1);
+    expect(body.days[0]!.exercises[0]).toMatchObject({ sets: 3, reps: '8-12', restSeconds: 90 });
+  });
+
+  it('refuses to save an invalid rep range and does not call the server', async () => {
+    const sent = mockApi({
+      title: 'برنامهٔ قبلی',
+      updatedAt: 'x',
+      days: [{ name: 'روز اول', exercises: [{ exerciseId: 'a-b', name: 'حرکت', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],
+    });
+    renderBuilder();
+    const user = userEvent.setup();
+
+    const repsInput = await screen.findByDisplayValue('8-12');
+    await user.clear(repsInput);
+    await user.type(repsInput, 'تا خستگی');
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('تکرار');
+    expect(sent.some((call) => call.method === 'PUT')).toBe(false);
+  });
+
+  it('deleting a day asks for confirmation first', async () => {
+    mockApi({ title: 'برنامه', updatedAt: 'x', days: [{ name: 'روز اول', exercises: [] }] });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderBuilder();
+    const user = userEvent.setup();
+    const head = (await screen.findByRole('textbox', { name: 'نام روز' })).parentElement as HTMLElement;
+    await user.click(within(head).getByRole('button', { name: /حذف روز/ }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox', { name: 'نام روز' })).toHaveValue('روز اول');
+    confirm.mockRestore();
+  });
+});

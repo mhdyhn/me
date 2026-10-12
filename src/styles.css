@@ -987,3 +987,68 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .editor-add { display: grid; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--line-soft); }
 .editor-add .button { justify-self: start; }
 @media (max-width: 640px) { .editor-grid, .editor-grid--four { grid-template-columns: 1fr; } }
+
+/* ---- Account, coach and student screens (outside the personal app shell) ---- */
+.button--ghost { color: #d3ddd5; background: transparent; border-color: #38433d; }
+.button--ghost:hover:not(:disabled) { border-color: #526057; background: #1c231f; }
+.account-shell { min-height: 100dvh; background: var(--bg); color: var(--text); }
+.account-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
+.account-brand { text-decoration: none; color: var(--text); }
+.account-user { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.account-main { max-width: 760px; margin: 0 auto; padding: 22px 18px 48px; }
+.account-title { margin: 0 0 16px; font-size: 20px; font-weight: 800; }
+.account-muted { color: var(--muted); font-size: 12px; line-height: 1.9; }
+.account-form { display: grid; gap: 14px; max-width: 420px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.account-form--inline { display: flex; flex-wrap: wrap; align-items: flex-end; max-width: none; margin-bottom: 16px; }
+.account-form--inline .field { flex: 1 1 220px; }
+.field { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.field input, .mini-field input, .day-editor__head input, .picker__search {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-soft); color: var(--text); font: inherit; font-size: 13px;
+}
+.mini-field input { min-width: 70px; width: 90px; }
+.form-error { margin: 0; padding: 10px 12px; border-radius: 10px; color: var(--red); background: rgba(242, 143, 130, .08); font-size: 12px; }
+.form-success { margin: 0; padding: 10px 12px; border-radius: 10px; color: var(--accent); background: rgba(217, 246, 111, .08); font-size: 12px; }
+.badge { margin-inline-start: 8px; padding: 2px 8px; border-radius: 999px; font-size: 10px; color: var(--blue); border: 1px solid rgba(140, 188, 240, .35); }
+.credentials-card { display: grid; gap: 12px; margin-bottom: 18px; padding: 16px; border: 1px solid rgba(217, 246, 111, .35); border-radius: var(--radius); background: var(--surface); }
+.credentials-warning { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.9; }
+.credentials-list { display: grid; gap: 8px; margin: 0; }
+.credentials-list div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-soft); }
+.credentials-list dt { color: var(--muted); font-size: 12px; }
+.credentials-list dd { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: .04em; }
+.credentials-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.student-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.student-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.student-row > div:first-child { display: grid; gap: 4px; }
+.student-row__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.student-row__actions a { text-decoration: none; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--muted); text-decoration: none; font-size: 12px; }
+.builder-section { margin-bottom: 22px; }
+.builder-section__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.builder-section h2 { margin: 0; font-size: 15px; }
+.day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.day-tab { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.day-tab.is-active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.day-tab small { opacity: .75; }
+.day-editor { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.day-editor__head { display: flex; gap: 10px; align-items: center; }
+.day-editor__head input { max-width: 260px; }
+.item-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.item-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 10px; border-radius: 12px; background: var(--surface-soft); }
+.item-row__name { flex: 1 1 180px; display: grid; gap: 2px; font-size: 13px; }
+.item-row__name .account-muted { font-size: 11px; }
+.mini-field { display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.picker { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.picker h3 { margin: 0; font-size: 13px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.chip.is-active { color: var(--accent); border-color: rgba(217, 246, 111, .5); background: rgba(217, 246, 111, .08); }
+.picker-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 340px; overflow: auto; }
+.picker-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-soft); font-size: 13px; }
+.builder-save { position: sticky; bottom: 0; display: flex; justify-content: flex-end; padding: 12px 0; background: var(--bg); }
+.student-day { margin-bottom: 18px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.student-day h2 { margin: 0 0 10px; font-size: 15px; }
+.student-exercises { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.student-exercises li { display: grid; gap: 3px; font-size: 13px; }
+.student-exercises__prescription { font-size: 12px; color: var(--accent); }
