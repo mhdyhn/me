@@ -108,3 +108,29 @@ describe('coach programme builder', () => {
     confirm.mockRestore();
   });
 });
+
+describe('ordering in the builder', () => {
+  it('moves an exercise up and the saved order follows', async () => {
+    const sent = mockApi({
+      title: 'برنامه',
+      updatedAt: 'x',
+      days: [
+        {
+          name: 'روز اول',
+          exercises: [
+            { exerciseId: 'first-move', name: 'حرکت اول', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 },
+            { exerciseId: 'second-move', name: 'حرکت دوم', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 },
+          ],
+        },
+      ],
+    });
+    renderBuilder();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'بالاتر بردن حرکت دوم' }));
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+    await screen.findByText(/برنامه ذخیره شد/);
+    const put = sent.find((call) => call.method === 'PUT')!;
+    const names = (put.body as { days: { exercises: { name: string }[] }[] }).days[0]!.exercises.map((item) => item.name);
+    expect(names).toEqual(['حرکت دوم', 'حرکت اول']);
+  });
+});

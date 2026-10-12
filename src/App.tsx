@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { SessionProvider } from './context/SessionContext';
-import { RequireSignIn } from './pages/account/AccountShell';
+import { RequireRole, RequireSignIn } from './pages/account/AccountShell';
 import type { ReactElement } from 'react';
 import { Dashboard } from './pages/Dashboard';
 
@@ -38,7 +38,13 @@ function NotFound() {
  * single-file build has no server, so it opens directly.
  */
 function signedIn(element: ReactElement): ReactElement {
-  return import.meta.env.MODE === 'offline' ? element : <RequireSignIn>{element}</RequireSignIn>;
+  if (import.meta.env.MODE === 'offline') return element;
+  // The personal app is the student's version. Coaches and the admin only get the coach screens.
+  return (
+    <RequireSignIn>
+      <RequireRole roles={['student']}>{element}</RequireRole>
+    </RequireSignIn>
+  );
 }
 
 export function App() {

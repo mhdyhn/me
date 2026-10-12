@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Plus, Save, Trash2 } from 'lucide-react';
 import { exercises as catalog } from '../../data/exercises';
 import { ApiError, api, type ProgramDay, type ProgramItem, type Programme, type PublicUser } from '../../lib/api';
 import { AccountShell, RequireRole } from './AccountShell';
@@ -85,6 +85,26 @@ function Builder() {
     if (!window.confirm(`«${target.name}» و همهٔ حرکت‌هایش از برنامه حذف شوند؟`)) return;
     updateDays(days.filter((_, position) => position !== index));
     setActiveDay(0);
+  }
+
+  /** Swaps an entry with its neighbour. Used for both days and exercises. */
+  function swap<T>(list: T[], index: number, direction: -1 | 1): T[] {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return list;
+    const next = [...list];
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    return next;
+  }
+
+  function moveDay(index: number, direction: -1 | 1) {
+    const next = swap(days, index, direction);
+    if (next === days) return;
+    updateDays(next);
+    setActiveDay(index + direction);
+  }
+
+  function moveItem(dayIndex: number, itemIndex: number, direction: -1 | 1) {
+    updateDays(days.map((day, position) => (position === dayIndex ? { ...day, exercises: swap(day.exercises, itemIndex, direction) } : day)));
   }
 
   function renameDay(index: number, name: string) {
@@ -184,6 +204,14 @@ function Builder() {
           <div className="day-editor">
             <div className="day-editor__head">
               <input aria-label="نام روز" value={days[activeDay].name} maxLength={40} onChange={(event) => renameDay(activeDay, event.target.value)} />
+              <div className="order-buttons">
+                <button type="button" className="icon-button" aria-label="جابه‌جایی روز به بالا" disabled={activeDay === 0} onClick={() => moveDay(activeDay, -1)}>
+                  <ArrowUp size={16} />
+                </button>
+                <button type="button" className="icon-button" aria-label="جابه‌جایی روز به پایین" disabled={activeDay >= days.length - 1} onClick={() => moveDay(activeDay, 1)}>
+                  <ArrowDown size={16} />
+                </button>
+              </div>
               <button type="button" className="button button--ghost" onClick={() => removeDay(activeDay)}>
                 <Trash2 size={16} /> حذف روز
               </button>
@@ -209,6 +237,14 @@ function Builder() {
                     <span>استراحت (ثانیه)</span>
                     <input type="number" min={0} max={600} step={15} value={item.restSeconds} onChange={(event) => editItem(activeDay, itemIndex, { restSeconds: Number(event.target.value) })} />
                   </label>
+                  <div className="order-buttons">
+                    <button type="button" className="icon-button" aria-label={`بالاتر بردن ${item.name}`} disabled={itemIndex === 0} onClick={() => moveItem(activeDay, itemIndex, -1)}>
+                      <ArrowUp size={16} />
+                    </button>
+                    <button type="button" className="icon-button" aria-label={`پایین بردن ${item.name}`} disabled={itemIndex >= (days[activeDay]?.exercises.length ?? 0) - 1} onClick={() => moveItem(activeDay, itemIndex, 1)}>
+                      <ArrowDown size={16} />
+                    </button>
+                  </div>
                   <button type="button" className="icon-button" aria-label={`حذف ${item.name}`} onClick={() => removeItem(activeDay, itemIndex)}>
                     <Trash2 size={16} />
                   </button>
