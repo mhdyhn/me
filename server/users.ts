@@ -82,6 +82,21 @@ export function listCoaches(db: DatabaseSync): PublicUser[] {
   return rows.map((row) => toPublic(fromRow(row)));
 }
 
+/** Coaches with how many students each one has, for the admin's coach list. */
+export interface CoachSummary extends PublicUser {
+  studentCount: number;
+}
+
+export function listCoachSummaries(db: DatabaseSync): CoachSummary[] {
+  const rows = db
+    .prepare(
+      `SELECT u.*, (SELECT COUNT(*) FROM users s WHERE s.role = 'student' AND s.coach_id = u.id) AS student_count
+       FROM users u WHERE u.role = 'coach' ORDER BY u.id`,
+    )
+    .all() as unknown as (UserRow & { student_count: number })[];
+  return rows.map((row) => ({ ...toPublic(fromRow(row)), studentCount: Number(row.student_count) }));
+}
+
 export function listStudents(db: DatabaseSync, coachId: number): PublicUser[] {
   const rows = db.prepare("SELECT * FROM users WHERE role = 'student' AND coach_id = ? ORDER BY id").all(coachId) as unknown as UserRow[];
   return rows.map((row) => toPublic(fromRow(row)));

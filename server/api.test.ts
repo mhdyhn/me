@@ -166,3 +166,46 @@ describe('roles and student provisioning', () => {
     expect(wrong.status).toBe(400);
   });
 });
+
+describe('admin and coaches', () => {
+  it('lists coaches with their student counts', async () => {
+    const coach = await coachSession();
+    await call('POST', '/api/students', { displayName: 'شاگرد یک' }, coach.token);
+    await call('POST', '/api/students', { displayName: 'شاگرد دو' }, coach.token);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const list = await call('GET', '/api/coaches', undefined, admin);
+    expect(list.json.coaches).toEqual([expect.objectContaining({ id: coach.id, displayName: 'مربی یک', studentCount: 2 })]);
+    expect(JSON.stringify(list.json)).not.toContain('passwordHash');
+  });
+
+  it('lets the admin regenerate a coach password, which invalidates the old one and the coach sessions', async () => {
+    const coach = await coachSession();
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const reset = await call('POST', `/api/coaches/${coach.id}/reset-password`, {}, admin);
+    expect(reset.status).toBe(200);
+    expect(reset.json.password).toEqual(expect.any(String));
+    expect((await call('GET', '/api/me', undefined, coach.token)).status).toBe(401);
+    expect((await login(reset.json.username, 'coach-new-pass-1')).status).toBe(401);
+    const fresh = await login(reset.json.username, reset.json.password);
+    expect(fresh.json.user.mustChangePassword).toBe(true);
+  });
+
+  it('shows the admin a coach\'s students and their programmes, read-only', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد یک' }, coach.token);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const students = await call('GET', `/api/coaches/${coach.id}/students`, undefined, admin);
+    expect(students.json.students).toEqual([expect.objectContaining({ id: created.json.user.id, displayName: 'شاگرد یک' })]);
+    const program = await call('GET', `/api/coaches/${coach.id}/students/${created.json.user.id}/program`, undefined, admin);
+    expect(program.status).toBe(200);
+    expect(program.json.program).toBeNull();
+  });
+
+  it('refuses the coach list and the admin routes to anyone else, and hides ids that are not coaches', async () => {
+    const coach = await coachSession();
+    expect((await call('GET', '/api/coaches', undefined, coach.token)).status).toBe(403);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    expect((await call('GET', `/api/coaches/${coach.id + 99}/students`, undefined, admin)).status).toBe(404);
+    expect((await call('POST', `/api/coaches/${coach.id + 99}/reset-password`, {}, admin)).status).toBe(404);
+  });
+});

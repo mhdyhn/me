@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
 import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { findUserById, findUserByUsername, insertUser, listCoaches, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
+import { findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 
 export interface AppOptions {
@@ -74,6 +74,13 @@ export function createApp(options: AppOptions) {
       entry.count = 0;
     }
     failures.set(username, entry);
+  }
+
+  /** The admin's view of a coach. Same answer for missing and non-coach ids. */
+  function ownCoach(coachId: number): StoredUser {
+    const coach = findUserById(db, coachId);
+    if (!coach || coach.role !== 'coach') throw new HttpError(404, 'مربی پیدا نشد.');
+    return coach;
   }
 
   function ownStudent(coach: StoredUser, studentId: number): StoredUser {
@@ -157,7 +164,7 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/coaches$/,
       auth: ['admin'],
-      handler: () => ({ status: 200, body: { coaches: listCoaches(db) } }),
+      handler: () => ({ status: 200, body: { coaches: listCoachSummaries(db) } }),
     },
 
     {
@@ -179,6 +186,38 @@ export function createApp(options: AppOptions) {
           now: now(),
         });
         return { status: 201, body: { user: toPublic(findUserById(db, id)!), username, password } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coaches\/(\d+)\/students$/,
+      auth: ['admin'],
+      handler: ({ params }) => ({ status: 200, body: { students: listStudents(db, ownCoach(Number(params[0])).id) } }),
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/coaches\/(\d+)\/reset-password$/,
+      auth: ['admin'],
+      handler: ({ params }) => {
+        const coach = ownCoach(Number(params[0]));
+        const password = generatePassword();
+        updatePassword(db, coach.id, hashPassword(password), true);
+        deleteSessionsForUser(db, coach.id);
+        return { status: 200, body: { username: coach.username, password } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coaches\/(\d+)\/students\/(\d+)\/program$/,
+      auth: ['admin'],
+      handler: ({ params }) => {
+        const coach = ownCoach(Number(params[0]));
+        const student = findUserById(db, Number(params[1]));
+        if (!student || student.role !== 'student' || student.coachId !== coach.id) throw new HttpError(404, 'شاگرد پیدا نشد.');
+        return { status: 200, body: { program: loadProgramme(db, student.id) } };
       },
     },
 
