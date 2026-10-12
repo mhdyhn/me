@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
+import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase } from './db.ts';
 import type { DatabaseSync } from 'node:sqlite';
@@ -18,7 +19,7 @@ beforeEach(async () => {
   db = openDatabase(':memory:');
   clock = new Date('2026-10-13T08:00:00Z');
   ensureAdmin(db, 'owner', 'owner-pass-123', clock);
-  server = createServer(createApp({ db, now: () => clock }));
+  server = createServer(createApp({ db, now: () => clock, secretKey: keyFromSecret('test-secret-for-the-suite') }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -310,5 +311,38 @@ describe('text chat between a coach and a student', () => {
     expect((await call('DELETE', `/api/students/${student.id}`, {}, coach.token)).status).toBe(200);
     const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE student_id = ?').get(student.id) as { n: number };
     expect(Number(count.n)).toBe(0);
+  });
+});
+
+describe('generated passwords on the cards', () => {
+  it('shows the admin a coach\'s generated password until the coach chooses their own', async () => {
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const created = await call('POST', '/api/coaches', { displayName: 'مربی رمز' }, admin);
+    const before = (await call('GET', '/api/coaches', undefined, admin)).json.coaches.find((c: { id: number }) => c.id === created.json.user.id);
+    expect(before.password).toBe(created.json.password);
+
+    const token = (await login(created.json.username, created.json.password)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'my-own-pass-42' }, token);
+    const after = (await call('GET', '/api/coaches', undefined, admin)).json.coaches.find((c: { id: number }) => c.id === created.json.user.id);
+    expect(after.password).toBeNull();
+  });
+
+  it('shows a coach their students\' generated passwords, and a reset replaces them', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد رمز' }, coach.token);
+    const listed = await call('GET', '/api/students', undefined, coach.token);
+    expect(listed.json.students[0].password).toBe(created.json.password);
+    const reset = await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, coach.token);
+    const relisted = await call('GET', '/api/students', undefined, coach.token);
+    expect(relisted.json.students[0].password).toBe(reset.json.password);
+    expect(reset.json.password).not.toBe(created.json.password);
+  });
+
+  it('stores generated passwords only as a hash and an encrypted copy', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد مخفی' }, coach.token);
+    const raw = db.prepare('SELECT password_hash, password_enc FROM users WHERE id = ?').get(created.json.user.id) as { password_hash: string; password_enc: string };
+    expect(raw.password_hash).not.toContain(created.json.password);
+    expect(raw.password_enc).not.toContain(created.json.password);
   });
 });

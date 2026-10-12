@@ -43,4 +43,8 @@ function migrate(db: DatabaseSync): void {
     );
   `);
   migrateChat(db);
+  const columns = db.prepare('PRAGMA table_info(users)').all() as unknown as { name: string }[];
+  if (!columns.some((column) => column.name === 'password_enc')) {
+    db.exec('ALTER TABLE users ADD COLUMN password_enc TEXT;');
+  }
 }

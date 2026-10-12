@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { decryptSecret, type SecretKey } from './secrets.ts';
 
 export type Role = 'admin' | 'coach' | 'student';
 
@@ -20,10 +21,13 @@ interface UserRow {
   display_name: string;
   coach_id: number | null;
   must_change_password: number;
+  password_enc: string | null;
 }
 
 export interface StoredUser extends PublicUser {
   passwordHash: string;
+  /** The generated password, encrypted, while the user still has it. Null after they choose their own. */
+  passwordEnc: string | null;
 }
 
 function fromRow(row: UserRow): StoredUser {
@@ -35,6 +39,7 @@ function fromRow(row: UserRow): StoredUser {
     coachId: row.coach_id === null ? null : Number(row.coach_id),
     mustChangePassword: Number(row.must_change_password) === 1,
     passwordHash: row.password_hash,
+    passwordEnc: row.password_enc ?? null,
   };
 }
 
@@ -55,11 +60,11 @@ export function findUserByUsername(db: DatabaseSync, username: string): StoredUs
 
 export function insertUser(
   db: DatabaseSync,
-  input: { username: string; passwordHash: string; role: Role; displayName: string; coachId: number | null; mustChangePassword: boolean; now: Date },
+  input: { username: string; passwordHash: string; passwordEnc?: string | null; role: Role; displayName: string; coachId: number | null; mustChangePassword: boolean; now: Date },
 ): number {
   const result = db
     .prepare(
-      'INSERT INTO users (username, password_hash, role, display_name, coach_id, must_change_password, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO users (username, password_hash, role, display_name, coach_id, must_change_password, created_at, password_enc) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .run(
       input.username,
@@ -69,6 +74,7 @@ export function insertUser(
       input.coachId,
       input.mustChangePassword ? 1 : 0,
       input.now.toISOString(),
+      input.passwordEnc ?? null,
     );
   return Number(result.lastInsertRowid);
 }
@@ -83,8 +89,8 @@ export function countStudents(db: DatabaseSync, coachId: number): number {
   return Number(row.n);
 }
 
-export function updatePassword(db: DatabaseSync, id: number, passwordHash: string, mustChangePassword: boolean): void {
-  db.prepare('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?').run(passwordHash, mustChangePassword ? 1 : 0, id);
+export function updatePassword(db: DatabaseSync, id: number, passwordHash: string, mustChangePassword: boolean, passwordEnc: string | null): void {
+  db.prepare('UPDATE users SET password_hash = ?, must_change_password = ?, password_enc = ? WHERE id = ?').run(passwordHash, mustChangePassword ? 1 : 0, passwordEnc, id);
 }
 
 export function listCoaches(db: DatabaseSync): PublicUser[] {
@@ -95,19 +101,27 @@ export function listCoaches(db: DatabaseSync): PublicUser[] {
 /** Coaches with how many students each one has, for the admin's coach list. */
 export interface CoachSummary extends PublicUser {
   studentCount: number;
+  /** The generated password, if it is still the one in use. */
+  password: string | null;
 }
 
-export function listCoachSummaries(db: DatabaseSync): CoachSummary[] {
+export function listCoachSummaries(db: DatabaseSync, key: SecretKey): CoachSummary[] {
   const rows = db
     .prepare(
       `SELECT u.*, (SELECT COUNT(*) FROM users s WHERE s.role = 'student' AND s.coach_id = u.id) AS student_count
        FROM users u WHERE u.role = 'coach' ORDER BY u.id`,
     )
     .all() as unknown as (UserRow & { student_count: number })[];
-  return rows.map((row) => ({ ...toPublic(fromRow(row)), studentCount: Number(row.student_count) }));
+  return rows.map((row) => {
+    const user = fromRow(row);
+    return { ...toPublic(user), studentCount: Number(row.student_count), password: decryptSecret(key, user.passwordEnc) };
+  });
 }
 
-export function listStudents(db: DatabaseSync, coachId: number): PublicUser[] {
+export function listStudents(db: DatabaseSync, coachId: number, key: SecretKey): (PublicUser & { password: string | null })[] {
   const rows = db.prepare("SELECT * FROM users WHERE role = 'student' AND coach_id = ? ORDER BY id").all(coachId) as unknown as UserRow[];
-  return rows.map((row) => toPublic(fromRow(row)));
+  return rows.map((row) => {
+    const user = fromRow(row);
+    return { ...toPublic(user), password: decryptSecret(key, user.passwordEnc) };
+  });
 }

@@ -2,9 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { KeyRound, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
+import { PersonCard } from './PersonCard';
 
 interface CoachSummary extends PublicUser {
   studentCount: number;
+  password: string | null;
 }
 
 /** The admin (the developer) creates coaches, gives them a username and password, and can regenerate a password. */
@@ -95,31 +97,33 @@ function AdminCoaches() {
       {coaches?.length === 0 && <p className="account-muted">هنوز مربی‌ای ساخته نشده است. بالا یکی بسازید.</p>}
 
       {coaches && coaches.length > 0 && (
-        <ul className="student-list">
+        <ul className="person-card-grid">
           {coaches.map((coach) => (
-            <li key={coach.id} className="student-row student-row--stacked">
-              <div className="student-row__head">
-                <div>
-                  <strong>{coach.displayName}</strong>
-                  <span className="account-muted" dir="ltr">{coach.username}</span>
-                  {coach.mustChangePassword && <span className="badge">رمز موقت</span>}
-                </div>
-                <span className="badge"><Users size={13} /> {coach.studentCount} شاگرد</span>
-              </div>
-              <div className="student-row__actions">
-                <button type="button" className="button button--ghost" onClick={() => void resetPassword(coach)}>
-                  <KeyRound size={16} /> رمز تازه
-                </button>
-                <button
-                  type="button"
-                  className="button button--ghost"
-                  disabled={coach.studentCount > 0}
-                  title={coach.studentCount > 0 ? 'اول شاگردهای این مربی را حذف کنید' : undefined}
-                  onClick={() => void deleteCoach(coach)}
-                >
-                  <Trash2 size={16} /> حذف
-                </button>
-              </div>
+            <li key={coach.id}>
+              <PersonCard
+                name={coach.displayName}
+                username={coach.username}
+                password={coach.password}
+                mustChangePassword={coach.mustChangePassword}
+                roleLabel="مربی"
+                badges={<span className="badge"><Users size={13} /> {coach.studentCount} شاگرد</span>}
+                actions={
+                  <>
+                    <button type="button" className="button button--ghost" onClick={() => void resetPassword(coach)}>
+                      <KeyRound size={16} /> رمز تازه
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      disabled={coach.studentCount > 0}
+                      title={coach.studentCount > 0 ? 'اول شاگردهای این مربی را حذف کنید' : undefined}
+                      onClick={() => void deleteCoach(coach)}
+                    >
+                      <Trash2 size={16} /> حذف
+                    </button>
+                  </>
+                }
+              />
             </li>
           ))}
         </ul>

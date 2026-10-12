@@ -1097,3 +1097,27 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .chat-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
 .chat-form textarea { resize: vertical; min-height: 44px; }
 .chat-form .form-error { grid-column: 1 / -1; margin: 0; }
+
+/* Person cards: coaches on the admin screen, students on the coach screen */
+.person-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.person-card { display: flex; flex-direction: column; gap: 14px; height: 100%; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.person-card__head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.person-card__avatar { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: rgba(217,246,111,.14); color: var(--accent); font-weight: 800; font-size: 18px; flex: none; }
+.person-card__identity { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.person-card__identity strong { overflow-wrap: anywhere; font-size: 16px; }
+.person-card__role { color: var(--muted, #9aa59e); font-size: 12px; }
+.person-card__badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.person-card__badges .badge { margin: 0; }
+.person-card__credentials { display: grid; gap: 8px; margin: 0; padding: 12px; border-radius: 12px; background: var(--surface-soft); }
+.person-card__row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; min-width: 0; }
+.person-card__row dt { color: var(--muted, #9aa59e); font-size: 12px; }
+.person-card__row dd { margin: 0; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.person-card__value { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; min-width: 0; }
+.person-card__note { color: var(--muted, #9aa59e); font-size: 12px; line-height: 1.6; }
+.person-card__hint { margin: -4px 0 0; color: var(--blue); font-size: 12px; }
+.person-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.person-card__actions .button { flex: 1 1 auto; justify-content: center; min-height: 40px; }
+.person-card__actions .button:disabled { opacity: .45; cursor: not-allowed; }
+.icon-button { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: inherit; cursor: pointer; flex: none; }
+.icon-button:hover { background: var(--surface-raised); }
+.icon-button:focus-visible, .person-card__actions .button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

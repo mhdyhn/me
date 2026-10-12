@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
+import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase } from './db.ts';
 
@@ -17,7 +18,7 @@ const clock = new Date('2026-10-13T08:00:00Z');
 beforeEach(async () => {
   db = openDatabase(':memory:');
   ensureAdmin(db, 'owner', 'owner-pass-123', clock);
-  server = createServer(createApp({ db, now: () => clock }));
+  server = createServer(createApp({ db, now: () => clock, secretKey: keyFromSecret('test-secret-for-the-suite') }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });

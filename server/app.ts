@@ -5,9 +5,12 @@ import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject,
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
+import { encryptSecret, type SecretKey } from './secrets.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
+  /** Key for the encrypted copy of generated passwords. Required: there is no built-in default. */
+  secretKey: SecretKey;
   /** Injected clock so tests can move time forward (session expiry, lock windows). */
   now?: () => Date;
   maxFailedLogins?: number;
@@ -50,7 +53,7 @@ const ALWAYS_ALLOWED = new Set(['/api/me', '/api/me/password', '/api/auth/logout
  * repeated tries.
  */
 export function createApp(options: AppOptions) {
-  const { db } = options;
+  const { db, secretKey } = options;
   const now = options.now ?? (() => new Date());
   const maxFailed = options.maxFailedLogins ?? 5;
   const lockMs = (options.lockMinutes ?? 15) * 60 * 1000;
@@ -156,7 +159,7 @@ export function createApp(options: AppOptions) {
         const next = requireText(input, 'newPassword', PASSWORD_MIN, PASSWORD_MAX, 'رمز جدید');
         if (!verifyPassword(current, user!.passwordHash)) throw new HttpError(400, 'رمز فعلی درست نیست.');
         if (next === current) throw new HttpError(400, 'رمز جدید باید با رمز فعلی فرق داشته باشد.');
-        updatePassword(db, user!.id, hashPassword(next), false);
+        updatePassword(db, user!.id, hashPassword(next), false, null);
         return { status: 200, body: { ok: true } };
       },
     },
@@ -165,7 +168,7 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/coaches$/,
       auth: ['admin'],
-      handler: () => ({ status: 200, body: { coaches: listCoachSummaries(db) } }),
+      handler: () => ({ status: 200, body: { coaches: listCoachSummaries(db, secretKey) } }),
     },
 
     {
@@ -180,6 +183,7 @@ export function createApp(options: AppOptions) {
         const id = insertUser(db, {
           username,
           passwordHash: hashPassword(password),
+          passwordEnc: encryptSecret(secretKey, password),
           role: 'coach',
           displayName,
           coachId: null,
@@ -213,7 +217,7 @@ export function createApp(options: AppOptions) {
       handler: ({ params }) => {
         const coach = ownCoach(Number(params[0]));
         const password = generatePassword();
-        updatePassword(db, coach.id, hashPassword(password), true);
+        updatePassword(db, coach.id, hashPassword(password), true, encryptSecret(secretKey, password));
         deleteSessionsForUser(db, coach.id);
         return { status: 200, body: { username: coach.username, password } };
       },
@@ -223,7 +227,7 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students$/,
       auth: ['coach'],
-      handler: ({ user }) => ({ status: 200, body: { students: listStudents(db, user!.id) } }),
+      handler: ({ user }) => ({ status: 200, body: { students: listStudents(db, user!.id, secretKey) } }),
     },
 
     {
@@ -238,6 +242,7 @@ export function createApp(options: AppOptions) {
         const id = insertUser(db, {
           username,
           passwordHash: hashPassword(password),
+          passwordEnc: encryptSecret(secretKey, password),
           role: 'student',
           displayName,
           coachId: user!.id,
@@ -341,7 +346,7 @@ export function createApp(options: AppOptions) {
       handler: ({ user, params }) => {
         const student = ownStudent(user!, Number(params[0]));
         const password = generatePassword();
-        updatePassword(db, student.id, hashPassword(password), true);
+        updatePassword(db, student.id, hashPassword(password), true, encryptSecret(secretKey, password));
         deleteSessionsForUser(db, student.id);
         return { status: 200, body: { username: student.username, password } };
       },

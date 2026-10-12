@@ -5,6 +5,11 @@ import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api'
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
+import { PersonCard } from './PersonCard';
+
+interface StudentView extends PublicUser {
+  password: string | null;
+}
 
 export function CoachHome() {
   return (
@@ -15,7 +20,7 @@ export function CoachHome() {
 }
 
 function CoachStudents() {
-  const [students, setStudents] = useState<PublicUser[] | null>(null);
+  const [students, setStudents] = useState<StudentView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -24,7 +29,7 @@ function CoachStudents() {
 
   async function load() {
     try {
-      const result = await api<{ students: PublicUser[] }>('GET', '/students');
+      const result = await api<{ students: StudentView[] }>('GET', '/students');
       setStudents(result.students);
       setLoadError(null);
     } catch (caught) {
@@ -93,28 +98,32 @@ function CoachStudents() {
       {students?.length === 0 && <p className="account-muted">هنوز شاگردی ندارید. بالا یک شاگرد بسازید.</p>}
 
       {students && students.length > 0 && (
-        <ul className="student-list">
+        <ul className="person-card-grid">
           {students.map((student) => (
-            <li key={student.id} className="student-row">
-              <div>
-                <strong>{student.displayName}</strong>
-                <span className="account-muted" dir="ltr">{student.username}</span>
-                {student.mustChangePassword && <span className="badge">رمز موقت</span>}
-              </div>
-              <div className="student-row__actions">
-                <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
-                  <ListChecks size={16} /> برنامه
-                </Link>
-                <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
-                  <MessageCircle size={16} /> گفتگو
-                </Link>
-                <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
-                  <KeyRound size={16} /> رمز تازه
-                </button>
-                <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
-                  <Trash2 size={16} /> حذف
-                </button>
-              </div>
+            <li key={student.id}>
+              <PersonCard
+                name={student.displayName}
+                username={student.username}
+                password={student.password}
+                mustChangePassword={student.mustChangePassword}
+                roleLabel="شاگرد"
+                actions={
+                  <>
+                    <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
+                      <ListChecks size={16} /> برنامه
+                    </Link>
+                    <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
+                      <MessageCircle size={16} /> گفتگو
+                    </Link>
+                    <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
+                      <KeyRound size={16} /> رمز تازه
+                    </button>
+                    <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
+                      <Trash2 size={16} /> حذف
+                    </button>
+                  </>
+                }
+              />
             </li>
           ))}
         </ul>
