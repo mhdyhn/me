@@ -63,7 +63,7 @@ export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
+export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
   // The session cookie is sent automatically (same origin); the bearer header is a fallback for proxies that drop cookies.
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';

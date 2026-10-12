@@ -47,7 +47,7 @@ async function coachSession() {
   const coachLogin = await login(created.json.username, created.json.password);
   const token = coachLogin.json.token as string;
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-new-pass-1' }, token);
-  return { token, id: created.json.user.id as number };
+  return { token, id: created.json.user.id as number, username: created.json.username as string };
 }
 
 describe('authentication', () => {
@@ -204,5 +204,55 @@ describe('admin and coaches', () => {
     expect((await call('GET', '/api/coaches', undefined, coach.token)).status).toBe(403);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     expect((await call('POST', `/api/coaches/${coach.id + 99}/reset-password`, {}, admin)).status).toBe(404);
+  });
+});
+
+describe('deleting coaches and students', () => {
+  it('lets a coach delete one of their students, and the student can no longer sign in', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد حذفی' }, coach.token);
+    const studentId = created.json.user.id as number;
+    const student = await login(created.json.username as string, created.json.password as string);
+    expect(student.status).toBe(200);
+    const removed = await call('DELETE', `/api/students/${studentId}`, {}, coach.token);
+    expect(removed.status).toBe(200);
+    const list = await call('GET', '/api/students', undefined, coach.token);
+    expect(list.json.students).toEqual([]);
+    expect((await login(created.json.username as string, created.json.password as string)).status).toBe(401);
+  });
+
+  it('does not let a coach delete another coach\'s student', async () => {
+    const coach = await coachSession();
+    const other = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد مال مربی یک' }, coach.token);
+    const removed = await call('DELETE', `/api/students/${created.json.user.id}`, {}, other.token);
+    expect(removed.status).toBe(404);
+  });
+
+  it('refuses to delete a coach who still has students, and deletes the coach once none are left', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد باقی‌مانده' }, coach.token);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+
+    const blocked = await call('DELETE', `/api/coaches/${coach.id}`, {}, admin);
+    expect(blocked.status).toBe(409);
+    expect((await call('GET', '/api/coaches', undefined, admin)).json.coaches).toEqual([
+      expect.objectContaining({ id: coach.id, studentCount: 1 }),
+    ]);
+
+    await call('DELETE', `/api/students/${created.json.user.id}`, {}, coach.token);
+    const removed = await call('DELETE', `/api/coaches/${coach.id}`, {}, admin);
+    expect(removed.status).toBe(200);
+    expect((await call('GET', '/api/coaches', undefined, admin)).json.coaches).not.toContainEqual(expect.objectContaining({ id: coach.id }));
+    expect((await login(coach.username, 'coach-new-pass-1')).status).toBe(401);
+  });
+
+  it('only lets the admin delete coaches, and never a student or the admin', async () => {
+    const coach = await coachSession();
+    const student = await call('POST', '/api/students', { displayName: 'شاگرد' }, coach.token);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    expect((await call('DELETE', `/api/coaches/${coach.id}`, {}, coach.token)).status).toBe(403);
+    expect((await call('DELETE', `/api/coaches/${student.json.user.id}`, {}, admin)).status).toBe(404);
+    expect((await call('DELETE', `/api/students/${student.json.user.id}`, {}, admin)).status).toBe(403);
   });
 });

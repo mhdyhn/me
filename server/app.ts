@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
 import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 
 export interface AppOptions {
@@ -29,7 +29,7 @@ interface RouteResult {
 type Auth = 'public' | 'signed-in' | Role[];
 
 interface Route {
-  method: 'GET' | 'POST' | 'PUT';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   pattern: RegExp;
   auth: Auth;
   handler: (ctx: Context) => RouteResult;
@@ -190,6 +190,22 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'DELETE',
+      pattern: /^\/api\/coaches\/(\d+)$/,
+      auth: ['admin'],
+      handler: ({ params }) => {
+        const coach = ownCoach(Number(params[0]));
+        const students = countStudents(db, coach.id);
+        if (students > 0) {
+          throw new HttpError(409, `این مربی هنوز ${students} شاگرد دارد. ابتدا شاگردهایش را حذف کنید.`);
+        }
+        deleteSessionsForUser(db, coach.id);
+        deleteUser(db, coach.id);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+
+    {
       method: 'POST',
       pattern: /^\/api\/coaches\/(\d+)\/reset-password$/,
       auth: ['admin'],
@@ -259,6 +275,18 @@ export function createApp(options: AppOptions) {
       handler: ({ user }) => {
         const coach = findUserById(db, user!.coachId!);
         return { status: 200, body: { program: loadProgramme(db, user!.id), coachName: coach?.displayName ?? null } };
+      },
+    },
+
+    {
+      method: 'DELETE',
+      pattern: /^\/api\/students\/(\d+)$/,
+      auth: ['coach'],
+      handler: ({ user, params }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        deleteSessionsForUser(db, student.id);
+        deleteUser(db, student.id);
+        return { status: 200, body: { ok: true } };
       },
     },
 

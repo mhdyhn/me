@@ -73,6 +73,16 @@ export function insertUser(
   return Number(result.lastInsertRowid);
 }
 
+/** Removes an account. Its sessions and any programme are removed by the foreign-key cascade. */
+export function deleteUser(db: DatabaseSync, id: number): void {
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
+export function countStudents(db: DatabaseSync, coachId: number): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'student' AND coach_id = ?").get(coachId) as { n: number };
+  return Number(row.n);
+}
+
 export function updatePassword(db: DatabaseSync, id: number, passwordHash: string, mustChangePassword: boolean): void {
   db.prepare('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?').run(passwordHash, mustChangePassword ? 1 : 0, id);
 }

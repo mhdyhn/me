@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, ListChecks, UserPlus } from 'lucide-react';
+import { KeyRound, ListChecks, Trash2, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -51,6 +51,16 @@ function CoachStudents() {
     }
   }
 
+  async function deleteStudent(student: PublicUser) {
+    if (!window.confirm(`شاگرد ${student.displayName} و برنامهٔ او حذف شود؟ این کار برگشت ندارد.`)) return;
+    try {
+      await api('DELETE', `/students/${student.id}`, {});
+      await load();
+    } catch (caught) {
+      setLoadError(caught instanceof ApiError ? caught.message : 'شاگرد حذف نشد.');
+    }
+  }
+
   async function resetPassword(student: PublicUser) {
     if (!window.confirm(`رمز ${student.displayName} دوباره ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`)) return;
     try {
@@ -97,6 +107,9 @@ function CoachStudents() {
                 </Link>
                 <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
                   <KeyRound size={16} /> رمز تازه
+                </button>
+                <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
+                  <Trash2 size={16} /> حذف
                 </button>
               </div>
             </li>

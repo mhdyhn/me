@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 
@@ -63,6 +63,16 @@ function AdminCoaches() {
     }
   }
 
+  async function deleteCoach(coach: CoachSummary) {
+    if (!window.confirm(`مربی ${coach.displayName} حذف شود؟ این کار برگشت ندارد.`)) return;
+    try {
+      await api('DELETE', `/coaches/${coach.id}`, {});
+      await load();
+    } catch (caught) {
+      setLoadError(caught instanceof ApiError ? caught.message : 'مربی حذف نشد.');
+    }
+  }
+
   return (
     <PanelPage title="مربی‌ها">
       {credentials ? (
@@ -99,6 +109,15 @@ function AdminCoaches() {
               <div className="student-row__actions">
                 <button type="button" className="button button--ghost" onClick={() => void resetPassword(coach)}>
                   <KeyRound size={16} /> رمز تازه
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  disabled={coach.studentCount > 0}
+                  title={coach.studentCount > 0 ? 'اول شاگردهای این مربی را حذف کنید' : undefined}
+                  onClick={() => void deleteCoach(coach)}
+                >
+                  <Trash2 size={16} /> حذف
                 </button>
               </div>
             </li>
