@@ -15,7 +15,7 @@ export function AccountShell({ title, children }: { title: string; children: Rea
   return (
     <div className="account-shell">
       <header className="account-header">
-        <Link to="/login" className="brand-lockup account-brand" aria-label="میتی">
+        <Link to="/" className="brand-lockup account-brand" aria-label="بازگشت به برنامهٔ شخصی">
           <span className="brand-mark"><Dumbbell size={18} strokeWidth={2.3} /></span>
           <strong>میتی</strong>
         </Link>

@@ -63,6 +63,9 @@ export function Layout() {
                 <span className="resume-dot" /> ادامهٔ تمرین
               </NavLink>
             )}
+            <NavLink to="/login" className="account-entry">
+              ورود مربی یا شاگرد
+            </NavLink>
             <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">
               <span className="profile-avatar">م</span>
               <span className="profile-button__text">پروفایل من</span>
