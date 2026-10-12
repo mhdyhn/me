@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, Settings2, ShieldCheck, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
 import { useGym } from '../context/GymProvider';
@@ -11,7 +12,7 @@ interface NavItem {
   end?: boolean;
 }
 
-/** The offline single-file build has no account: it keeps the personal app's navigation. */
+/** The whole personal app: every signed-in user has it. The offline single-file build has only this. */
 const personalNavigation: NavItem[] = [
   { label: 'خانه', to: '/', icon: House, end: true },
   { label: 'برنامه', to: '/program', icon: CalendarDays },
@@ -20,24 +21,15 @@ const personalNavigation: NavItem[] = [
   { label: 'تغذیه', to: '/nutrition', icon: Utensils },
 ];
 
-/** Students: their coach's program, progress and nutrition. The full exercise library is not shown. */
-const studentNavigation: NavItem[] = [
-  { label: 'برنامه من', to: '/', icon: CalendarDays, end: true },
-  { label: 'پیشرفت', to: '/progress', icon: BarChart3 },
-  { label: 'تغذیه', to: '/nutrition', icon: Utensils },
-  { label: 'پروفایل', to: '/settings', icon: Settings2 },
-];
-
-/** Coaches: students, then building a program for a student. */
-const coachNavigation: NavItem[] = [
-  { label: 'شاگرد', to: '/coach', icon: Users, end: true },
-  { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus },
-];
-
-/** Admin: the coach section of the app. */
-const adminNavigation: NavItem[] = [{ label: 'مربی', to: '/coach', icon: ShieldCheck, end: true }];
-
-const navigationFor: Record<Role, NavItem[]> = { student: studentNavigation, coach: coachNavigation, admin: adminNavigation };
+/** Extra sections added to the same toolbar for each role. Students get none: their program comes from the coach. */
+const roleNavigation: Record<Role, NavItem[]> = {
+  student: [],
+  coach: [
+    { label: 'شاگرد', to: '/coach', icon: Users, end: true },
+    { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus },
+  ],
+  admin: [{ label: 'مربی', to: '/coach', icon: ShieldCheck, end: true }],
+};
 
 const personalTitles: Record<string, string> = {
   '/': 'تمرین امروزت',
@@ -53,18 +45,16 @@ export function Layout() {
   const { activeSession, storageWarning } = useGym();
   const { user, signOut } = useSession();
   const navigate = useNavigate();
-  const navigation = user ? navigationFor[user.role] : personalNavigation;
-  const isPanel = user !== null;
+  const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
+  // Screens that bring their own heading (coach screens, a student's coach program and movements).
+  const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises'));
 
   async function signOutAndLeave() {
     await signOut();
     navigate('/login', { replace: true });
   }
 
-  // Panel screens show their own name inside the page; the top bar only names the personal screens.
-  const personalTitle = personalTitles[location.pathname] ?? (location.pathname.startsWith('/exercise/') ? 'راهنمای حرکت' : 'تمرین در حال انجام');
-  const hasOwnHeading = location.pathname === '/' || location.pathname.startsWith('/coach');
-  const title = isPanel ? (hasOwnHeading ? null : personalTitles[location.pathname] ?? null) : personalTitle;
+  const title = ownHeading ? null : personalTitles[location.pathname] ?? (location.pathname.startsWith('/exercise/') ? 'راهنمای حرکت' : 'تمرین در حال انجام');
 
   return (
     <div className="app-shell">
@@ -82,29 +72,25 @@ export function Layout() {
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        {!isPanel && (
-          <div className="sidebar-coach-note">
+        <div className="sidebar-coach-note">
             <span className="note-mark"><Zap size={15} fill="currentColor" /></span>
             <p><strong>با هدف تمرین کن.</strong><br />پیشرفت از قدم‌های کوچک می‌آید.</p>
-          </div>
-        )}
-        {!isPanel && (
-          <NavLink to="/settings" className={({ isActive }) => `nav-link settings-link${isActive ? ' is-active' : ''}`}>
-            <Settings2 size={18} /><span>پروفایل و تنظیمات</span>
-          </NavLink>
-        )}
-        {!isPanel && <div className="sidebar-footer"><span className="status-dot" /> خصوصی · ذخیره‌شده روی این دستگاه</div>}
+        </div>
+        <NavLink to="/settings" className={({ isActive }) => `nav-link settings-link${isActive ? ' is-active' : ''}`}>
+          <Settings2 size={18} /><span>پروفایل و تنظیمات</span>
+        </NavLink>
+        <div className="sidebar-footer"><span className="status-dot" /> ذخیره‌شده روی این دستگاه</div>
       </aside>
 
       <div className="app-main">
         <header className="topbar">
           <div className="topbar-title">
             <span className="mobile-brand"><span className="brand-mark"><Dumbbell size={17} /></span> میتی</span>
-            {!isPanel && <span className="eyebrow topbar-eyebrow">مربی تمرین شخصی</span>}
+            <span className="eyebrow topbar-eyebrow">مربی تمرین شخصی</span>
             {title && <h1>{title}</h1>}
           </div>
           <div className="topbar-actions">
-            {!isPanel && activeSession && location.pathname !== `/workout/${activeSession.templateId}` && (
+            {activeSession && location.pathname !== `/workout/${activeSession.templateId}` && (
               <NavLink className="resume-pill" to={`/workout/${activeSession.templateId}`}>
                 <span className="resume-dot" /> ادامهٔ تمرین
               </NavLink>
@@ -118,20 +104,18 @@ export function Layout() {
                 ورود مربی یا شاگرد
               </NavLink>
             )}
-            {!isPanel && (
-              <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">
-                <span className="profile-avatar">م</span>
-                <span className="profile-button__text">پروفایل من</span>
-              </NavLink>
-            )}
+            <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">
+              <span className="profile-avatar">م</span>
+              <span className="profile-button__text">پروفایل من</span>
+            </NavLink>
           </div>
         </header>
 
-        {storageWarning && !isPanel && <div className="storage-warning" role="status">{storageWarning}</div>}
+        {storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}
         <main className="page-content" id="main-content"><Outlet /></main>
       </div>
 
-      <nav className="mobile-nav" aria-label="ناوبری موبایل">
+      <nav className="mobile-nav" aria-label="ناوبری موبایل" style={{ '--nav-count': navigation.length } as CSSProperties}>
         {navigation.map(({ label, to, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav__item${isActive ? ' is-active' : ''}`}>
             <Icon size={19} strokeWidth={1.9} /><span>{label}</span>

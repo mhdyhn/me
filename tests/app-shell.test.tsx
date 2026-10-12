@@ -27,15 +27,22 @@ afterEach(() => {
 describe('complete application shell', () => {
   it('boots the dashboard through the production router and shared navigation', async () => {
     render(<App />);
-    expect(await screen.findByText('هنوز برنامه‌ای از مربی برای شما ثبت نشده است.')).toBeInTheDocument();
+    expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
     const mobile = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
     expect(mobile).toBeInTheDocument();
-    // A student sees the coach's program, not the whole exercise library.
-    expect(within(mobile).getByText('برنامه من')).toBeInTheDocument();
-    expect(within(mobile).queryByText('حرکت‌ها')).not.toBeInTheDocument();
+    // A student keeps the whole app; the program and movements tabs show the coach's selection.
+    expect(within(mobile).getByText('برنامه')).toBeInTheDocument();
+    expect(within(mobile).getByText('حرکت‌ها')).toBeInTheDocument();
+    expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();
   });
 
   it('supports a direct exercise-detail URL without a prior dashboard visit', async () => {
+    // A student may open a movement only when it is in the coach's program.
+    vi.stubGlobal('fetch', async (input: string) => {
+      const program = { title: 'برنامه', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز ۱', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه با هالتر', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] };
+      const body = String(input).includes('/me/program') ? { program, coachName: 'مربی' } : { user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
     window.history.replaceState({}, '', '/exercise/barbell-bench-press');
     render(<App />);
     expect(await screen.findByText('پرس سینه با هالتر')).toBeInTheDocument();

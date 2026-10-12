@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { SessionProvider } from './context/SessionContext';
-import { ForRoles, RequireSignIn, homeFor } from './pages/account/AccountShell';
+import { ForRoles, RequireSignIn } from './pages/account/AccountShell';
 import { useSession } from './context/SessionContext';
 import type { ReactElement } from 'react';
 import { Dashboard } from './pages/Dashboard';
@@ -30,6 +30,8 @@ const CoachEntry = lazy(() => import('./pages/account/CoachHome').then((module) 
 const ProgramPicker = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.ProgramPicker })));
 const ProgramBuilder = lazy(() => import('./pages/account/ProgramBuilder').then((module) => ({ default: module.ProgramBuilder })));
 const StudentProgram = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.StudentProgram })));
+const StudentMovements = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.StudentMovements })));
+const AssignedMovementGate = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.AssignedMovementGate })));
 
 function NotFound() {
   return <div className="not-found"><span className="eyebrow">صفحه پیدا نشد</span><h2>این مسیر در برنامه نیست.</h2><p>ممکن است صفحه جابه‌جا شده باشد، اما اطلاعات ثبت‌شدهٔ شما همچنان محفوظ است.</p><Link className="button button--primary" to="/">بازگشت به خانه</Link></div>;
@@ -44,12 +46,28 @@ function signedIn(element: ReactElement): ReactElement {
   return <RequireSignIn>{element}</RequireSignIn>;
 }
 
-/** `/` is the personal home offline, the student's program when signed in, and the coach area for coaches and the admin. */
-function Home() {
+/** "برنامه": a student sees the coach's program; everyone else sees their own training program. */
+function ProgramRoute() {
   const { user } = useSession();
-  if (!user) return <Dashboard />;
-  if (user.role === 'student') return <StudentProgram />;
-  return <Navigate to={homeFor(user.role)} replace />;
+  return user?.role === 'student' ? <StudentProgram /> : <Program />;
+}
+
+/** "حرکت‌ها": a student sees only the movements of the coach's program; everyone else sees the full library. */
+function ExercisesRoute() {
+  const { user } = useSession();
+  return user?.role === 'student' ? <StudentMovements /> : <ExerciseLibrary />;
+}
+
+/** A movement's guide: a student can open only movements in the coach's program. */
+function ExerciseRoute() {
+  const { user } = useSession();
+  return user?.role === 'student' ? (
+    <AssignedMovementGate>
+      <ExerciseDetail />
+    </AssignedMovementGate>
+  ) : (
+    <ExerciseDetail />
+  );
 }
 
 export function App() {
@@ -63,20 +81,19 @@ export function App() {
             <Route path="login" element={<Login />} />
             <Route path="account/change-password" element={<ChangePassword />} />
             <Route element={signedIn(<Layout />)}>
-              <Route index element={<Home />} />
-              <Route path="my-program" element={<Navigate to="/" replace />} />
+              <Route index element={<Dashboard />} />
+              <Route path="my-program" element={<Navigate to="/program" replace />} />
+              <Route path="program" element={<ProgramRoute />} />
+              <Route path="program/edit" element={<ProgramEditor />} />
+              <Route path="exercises" element={<ExercisesRoute />} />
+              <Route path="exercise/:exerciseId" element={<ExerciseRoute />} />
+              <Route path="workout/:templateId" element={<Workout />} />
+              <Route path="progress" element={<Progress />} />
+              <Route path="nutrition" element={<Nutrition />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="coach" element={<ForRoles roles={['coach', 'admin']}><CoachEntry /></ForRoles>} />
               <Route path="coach/programs/new" element={<ForRoles roles={['coach']}><ProgramPicker /></ForRoles>} />
               <Route path="coach/students/:studentId/program" element={<ForRoles roles={['coach']}><ProgramBuilder /></ForRoles>} />
-              {/* Personal training screens: the offline build only. Signed-in users are sent to their own home. */}
-              <Route path="program" element={<ForRoles roles={[]}><Program /></ForRoles>} />
-              <Route path="program/edit" element={<ForRoles roles={[]}><ProgramEditor /></ForRoles>} />
-              <Route path="exercises" element={<ForRoles roles={[]}><ExerciseLibrary /></ForRoles>} />
-              <Route path="workout/:templateId" element={<ForRoles roles={[]}><Workout /></ForRoles>} />
-              <Route path="exercise/:exerciseId" element={<ExerciseDetail />} />
-              <Route path="progress" element={<ForRoles roles={['student']}><Progress /></ForRoles>} />
-              <Route path="nutrition" element={<ForRoles roles={['student']}><Nutrition /></ForRoles>} />
-              <Route path="settings" element={<ForRoles roles={['student']}><Settings /></ForRoles>} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
