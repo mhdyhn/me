@@ -33,3 +33,6 @@ image-search/
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
+
+# Local API data (SQLite file and its WAL files): never commit
+/server/data/

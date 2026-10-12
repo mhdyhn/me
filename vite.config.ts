@@ -40,7 +40,12 @@ export default defineConfig(({ mode }) => {
           ]
         : []),
     ],
-    server: { host: '0.0.0.0', allowedHosts: true },
+    server: {
+      host: '0.0.0.0',
+      allowedHosts: true,
+      // The app calls relative /api paths; the dev server forwards them to the local API.
+      proxy: { '/api': { target: process.env.API_URL ?? 'http://127.0.0.1:8787', changeOrigin: false } },
+    },
     preview: { host: '0.0.0.0', allowedHosts: true },
     build: {
       rolldownOptions: {

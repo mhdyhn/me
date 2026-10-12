@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:offline": "vite build --mode offline && node tools/make-single-file.mjs",
-    "verify:offline": "node tools/verify-offline-bundle.mjs"
+    "verify:offline": "node tools/verify-offline-bundle.mjs",
+    "server": "node server/index.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
