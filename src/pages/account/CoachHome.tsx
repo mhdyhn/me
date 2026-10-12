@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, ListChecks, Trash2, UserPlus } from 'lucide-react';
+import { KeyRound, ListChecks, MessageCircle, Trash2, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -104,6 +104,9 @@ function CoachStudents() {
               <div className="student-row__actions">
                 <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
                   <ListChecks size={16} /> برنامه
+                </Link>
+                <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
+                  <MessageCircle size={16} /> گفتگو
                 </Link>
                 <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
                   <KeyRound size={16} /> رمز تازه

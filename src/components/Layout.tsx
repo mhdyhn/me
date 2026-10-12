@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, Settings2, ShieldCheck, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Settings2, ShieldCheck, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import type { Role } from '../lib/api';
@@ -21,9 +21,9 @@ const personalNavigation: NavItem[] = [
   { label: 'تغذیه', to: '/nutrition', icon: Utensils },
 ];
 
-/** Extra sections added to the same toolbar for each role. Students get none: their program comes from the coach. */
+/** Extra sections added to the same toolbar for each role. Students get one: the chat with their coach. */
 const roleNavigation: Record<Role, NavItem[]> = {
-  student: [],
+  student: [{ label: 'مربی', to: '/chat', icon: MessageCircle }],
   coach: [
     { label: 'شاگرد', to: '/coach', icon: Users, end: true },
     { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus },
@@ -38,6 +38,7 @@ const personalTitles: Record<string, string> = {
   '/progress': 'پیشرفت و سوابق',
   '/nutrition': 'تغذیه',
   '/settings': 'پروفایل و تنظیمات',
+  '/chat': 'گفتگو با مربی',
 };
 
 export function Layout() {
@@ -47,7 +48,7 @@ export function Layout() {
   const navigate = useNavigate();
   const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
-  const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises'));
+  const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
 
   async function signOutAndLeave() {
     await signOut();

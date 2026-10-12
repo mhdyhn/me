@@ -4,6 +4,7 @@ import { createSession, deleteSession, deleteSessionsForUser, generatePassword, 
 import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
+import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -265,6 +266,49 @@ export function createApp(options: AppOptions) {
         const student = ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
         return { status: 200, body: { program: saveProgramme(db, student.id, user!.id, programme, now()) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/chat$/,
+      auth: ['student'],
+      handler: ({ user }) => {
+        const coach = findUserById(db, user!.coachId!);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, messages: listMessages(db, user!.coachId!, user!.id) } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/me\/chat$/,
+      auth: ['student'],
+      handler: ({ user, body }) => {
+        const input = requireObject(body);
+        const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
+        return { status: 201, body: { message: addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString()) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/chat$/,
+      auth: ['coach'],
+      handler: ({ user, params }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { studentName: student.displayName, messages: listMessages(db, user!.id, student.id) } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/students\/(\d+)\/chat$/,
+      auth: ['coach'],
+      handler: ({ user, params, body }) => {
+        const student = ownStudent(user!, Number(params[0]));
+        const input = requireObject(body);
+        const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
+        return { status: 201, body: { message: addMessage(db, user!.id, student.id, user!.id, text, now().toISOString()) } };
       },
     },
 

@@ -1084,3 +1084,16 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 /* ---------- Panels inside the app shell (coach and admin screens) ---------- */
 .panel-page { display: grid; gap: 16px; }
 .panel-title { margin: 0; font-size: 20px; }
+
+/* Text chat between a coach and a student */
+.chat { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.chat-partner { margin: 0; color: var(--muted, #9aa59e); font-size: 14px; }
+.chat-back { align-self: flex-start; }
+.chat-log { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; }
+.chat-bubble { align-self: flex-start; max-width: 80%; padding: 9px 12px; border-radius: 14px; background: rgba(255,255,255,.06); }
+.chat-bubble--mine { align-self: flex-end; background: rgba(217,246,111,.14); }
+.chat-bubble p { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-bubble time { font-size: 11px; color: var(--muted, #9aa59e); }
+.chat-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.chat-form textarea { resize: vertical; min-height: 44px; }
+.chat-form .form-error { grid-column: 1 / -1; margin: 0; }

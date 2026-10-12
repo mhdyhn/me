@@ -256,3 +256,59 @@ describe('deleting coaches and students', () => {
     expect((await call('DELETE', `/api/students/${student.json.user.id}`, {}, admin)).status).toBe(403);
   });
 });
+
+describe('text chat between a coach and a student', () => {
+  /** A student who has already changed the temporary password, so the app is open to them. */
+  async function studentSession(coachToken: string, displayName: string) {
+    const created = await call('POST', '/api/students', { displayName }, coachToken);
+    const token = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
+    return { token, id: created.json.user.id as number };
+  }
+
+  it('lets the coach and the student exchange messages in one thread', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد چت');
+    expect((await call('POST', '/api/me/chat', { body: 'سلام مربی' }, student.token)).status).toBe(201);
+    expect((await call('POST', `/api/students/${student.id}/chat`, { body: 'سلام، برنامه آماده است' }, coach.token)).status).toBe(201);
+
+    const forStudent = await call('GET', '/api/me/chat', undefined, student.token);
+    expect(forStudent.json.messages.map((m: { body: string }) => m.body)).toEqual(['سلام مربی', 'سلام، برنامه آماده است']);
+    expect(forStudent.json.messages[0].senderId).toBe(student.id);
+    const forCoach = await call('GET', `/api/students/${student.id}/chat`, undefined, coach.token);
+    expect(forCoach.json.studentName).toBe('شاگرد چت');
+    expect(forCoach.json.messages).toHaveLength(2);
+  });
+
+  it('keeps each student\'s thread private, and keeps the admin out', async () => {
+    const coach = await coachSession();
+    const first = await studentSession(coach.token, 'شاگرد اول');
+    const second = await studentSession(coach.token, 'شاگرد دوم');
+    await call('POST', '/api/me/chat', { body: 'راز شاگرد اول' }, first.token);
+
+    expect((await call('GET', '/api/me/chat', undefined, second.token)).json.messages).toEqual([]);
+    expect((await call('GET', `/api/students/${second.id}/chat`, undefined, coach.token)).json.messages).toEqual([]);
+    expect((await call('GET', `/api/students/${first.id}/chat`, undefined, (await coachSession()).token)).status).toBe(404);
+
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    expect((await call('GET', `/api/students/${first.id}/chat`, undefined, admin)).status).toBe(403);
+    expect((await call('GET', '/api/me/chat', undefined, admin)).status).toBe(403);
+  });
+
+  it('rejects empty and oversized messages', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد پیام');
+    expect((await call('POST', '/api/me/chat', { body: '   ' }, student.token)).status).toBe(400);
+    expect((await call('POST', '/api/me/chat', { body: 'a'.repeat(1001) }, student.token)).status).toBe(400);
+    expect((await call('POST', '/api/me/chat', { body: 'a'.repeat(1000) }, student.token)).status).toBe(201);
+  });
+
+  it('removes a student\'s messages when the student is deleted', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد حذفی چت');
+    await call('POST', `/api/students/${student.id}/chat`, { body: 'پیام' }, coach.token);
+    expect((await call('DELETE', `/api/students/${student.id}`, {}, coach.token)).status).toBe(200);
+    const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE student_id = ?').get(student.id) as { n: number };
+    expect(Number(count.n)).toBe(0);
+  });
+});

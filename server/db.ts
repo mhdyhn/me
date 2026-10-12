@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { migrateChat } from './chat.ts';
 
 /**
  * SQLite storage for the server. The schema is created on open with IF NOT EXISTS so a
@@ -41,4 +42,5 @@ function migrate(db: DatabaseSync): void {
       expires_at TEXT NOT NULL
     );
   `);
+  migrateChat(db);
 }
