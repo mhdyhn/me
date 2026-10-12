@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { BodyweightEntry, NutritionDay, PreferenceRecord, WorkoutSession } from '../types';
+import { personalDbName } from './accountScope';
 
 class MeetyDatabase extends Dexie {
   sessions!: Table<WorkoutSession, string>;
@@ -8,7 +9,7 @@ class MeetyDatabase extends Dexie {
   preferences!: Table<PreferenceRecord, string>;
 
   constructor() {
-    super('meety-personal-coach');
+    super(personalDbName());
     this.version(1).stores({
       sessions: 'id, templateId, startedAt, completedAt, status',
       bodyweights: 'id, date',

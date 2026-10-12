@@ -1,5 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, UNAUTHORIZED_EVENT, api, clearToken, setToken, type PublicUser } from '../lib/api';
+import { clearAccountScope, ensureAccountScope, isOfflineBuild } from '../lib/accountScope';
+import { loadAssignedProgram } from '../lib/assignedProgram';
+import { loadStoredProgram } from '../lib/programPersistence';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
 
@@ -43,6 +46,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Each account gets its own local data and programme. A student's programme comes from the coach.
+  const userKey = user ? `${user.id}:${user.role}` : null;
+  useEffect(() => {
+    if (!user) {
+      if (isOfflineBuild) void loadStoredProgram();
+      return;
+    }
+    if (ensureAccountScope(user)) return;
+    if (user.role === 'student') void loadAssignedProgram();
+    else void loadStoredProgram();
+    // Only the account identity matters here, not the object's identity.
+  }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Any request that comes back 401 ends the session everywhere.
   useEffect(() => {
     const handle = () => {
@@ -79,6 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Signing out locally still works if the server cannot be reached.
     }
     clearToken();
+    clearAccountScope();
     setUser(null);
     setStatus('signed-out');
   }, []);

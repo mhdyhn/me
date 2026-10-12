@@ -76,3 +76,24 @@ export const localizeKnownProfileCopy = (profile: UserProfile): UserProfile => {
 export const defaultNutritionGoals: NutritionGoals = {
   proteinG: Math.round(77 * 1.95),
 };
+
+/** A blank profile for a new account: the developer's own details are never shown to anyone else. */
+export const blankProfile: UserProfile = {
+  age: 0,
+  sex: '',
+  heightCm: 0,
+  weightKg: 0,
+  primaryGoal: '',
+  secondaryGoal: '',
+  trainingExperience: '',
+  trainingDays: 0,
+  sessionMinutes: 0,
+  dailyActivity: '',
+  sleepHours: '',
+  stressLevel: 0,
+  injuries: '',
+  equipment: '',
+  workingWeightReferences: [],
+};
+
+export const blankNutritionGoals = Object.fromEntries(Object.keys(defaultNutritionGoals).map((key) => [key, 0])) as unknown as NutritionGoals;

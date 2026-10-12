@@ -15,6 +15,8 @@ export function Dashboard() {
   const greeting = hour < 12 ? 'صبح به‌خیر' : hour < 18 ? 'روز به‌خیر' : 'عصر به‌خیر';
   const nextWorkout = getNextWorkout(sessions);
   const weeklyCount = getCompletedThisWeek(sessions, now);
+  // The weekly target is the number of main days in the account's own programme (the coach's, for students).
+  const targetCount = program.filter((workout) => !workout.optional).length;
   const streak = getCurrentStreak(sessions, now);
   const recentPR = getRecentRecord(sessions);
   const latestWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
@@ -86,13 +88,13 @@ export function Dashboard() {
         </section>
 
         <section className="weekly-card panel-card">
-          <div className="card-topline"><span className="eyebrow">این هفته</span><span className="week-badge">{faNumber(weeklyCount)} / {faNumber(5)}</span></div>
+          <div className="card-topline"><span className="eyebrow">این هفته</span><span className="week-badge">{faNumber(weeklyCount)} / {faNumber(targetCount)}</span></div>
           <h3>حضور پیدا کن، بعد پیشرفت کن.</h3>
           <p className="muted">جلسه‌های اصلی انجام‌شده در این هفته.</p>
-          <div className="week-progress" role="progressbar" aria-label="تعداد جلسه‌های اصلی انجام‌شده در این هفته" aria-valuemin={0} aria-valuemax={5} aria-valuenow={Math.min(weeklyCount, 5)}>
-            {Array.from({ length: 5 }, (_, index) => <span key={index} className={index < weeklyCount ? 'is-done' : ''} />)}
+          <div className="week-progress" role="progressbar" aria-label="تعداد جلسه‌های اصلی انجام‌شده در این هفته" aria-valuemin={0} aria-valuemax={targetCount} aria-valuenow={Math.min(weeklyCount, targetCount)}>
+            {Array.from({ length: targetCount }, (_, index) => <span key={index} className={index < weeklyCount ? 'is-done' : ''} />)}
           </div>
-          <div className="week-foot"><span><Flame size={15} /> {faNumber(streak)} روز پیاپی</span><span>{faNumber(Math.min(weeklyCount, 5))} از {faNumber(5)}</span></div>
+          <div className="week-foot"><span><Flame size={15} /> {faNumber(streak)} روز پیاپی</span><span>{faNumber(Math.min(weeklyCount, targetCount))} از {faNumber(targetCount)}</span></div>
         </section>
       </div>
 

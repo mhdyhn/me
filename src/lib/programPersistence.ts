@@ -1,7 +1,8 @@
 import type { WorkoutTemplate } from '../types';
 import { db } from './db';
 import { validateProgram } from './programRules';
-import { getActiveProgram, originalProgramCopy, setActiveProgram } from './programStore';
+import { usesOwnerData } from './accountScope';
+import { getActiveProgram, isProgramReadOnly, originalProgramCopy, setActiveProgram } from './programStore';
 
 const PROGRAM_KEY = 'programTemplates';
 const BACKUP_KEY = 'programBackup';
@@ -9,12 +10,14 @@ const BACKUP_KEY = 'programBackup';
 const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
   Array.isArray(value) && value.length > 0 && value.every((day) => day && typeof day === 'object' && Array.isArray((day as WorkoutTemplate).exercises));
 
-/** Loads the user's saved programme, if any. A stored programme that fails validation is ignored. */
+/** Loads the account's own programme. The developer starts from the original programme; everyone else from an empty one. */
 export async function loadStoredProgram() {
   try {
     const record = await db.preferences.get(PROGRAM_KEY);
     const value = record?.value;
+    if (isProgramReadOnly()) return;
     if (isProgramShape(value) && validateProgram(value).length === 0) setActiveProgram(value);
+    else setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
   } catch (error) {
     console.error('Meety could not read the saved programme.', error);
   }

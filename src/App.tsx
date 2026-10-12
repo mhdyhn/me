@@ -4,6 +4,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
+import { isProgramReadOnly } from './lib/programStore';
 import { SessionProvider } from './context/SessionContext';
 import { ForRoles, RequireSignIn } from './pages/account/AccountShell';
 import { useSession } from './context/SessionContext';
@@ -29,8 +30,6 @@ const ChangePassword = lazy(() => import('./pages/account/ChangePassword').then(
 const CoachEntry = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.CoachEntry })));
 const ProgramPicker = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.ProgramPicker })));
 const ProgramBuilder = lazy(() => import('./pages/account/ProgramBuilder').then((module) => ({ default: module.ProgramBuilder })));
-const StudentProgram = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.StudentProgram })));
-const StudentMovements = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.StudentMovements })));
 const AssignedMovementGate = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.AssignedMovementGate })));
 
 function NotFound() {
@@ -46,16 +45,9 @@ function signedIn(element: ReactElement): ReactElement {
   return <RequireSignIn>{element}</RequireSignIn>;
 }
 
-/** "برنامه": a student sees the coach's program; everyone else sees their own training program. */
-function ProgramRoute() {
-  const { user } = useSession();
-  return user?.role === 'student' ? <StudentProgram /> : <Program />;
-}
-
-/** "حرکت‌ها": a student sees only the movements of the coach's program; everyone else sees the full library. */
-function ExercisesRoute() {
-  const { user } = useSession();
-  return user?.role === 'student' ? <StudentMovements /> : <ExerciseLibrary />;
+/** The programme editor is closed for students: their programme comes from the coach. */
+function ProgramEditorRoute() {
+  return isProgramReadOnly() ? <Navigate to="/program" replace /> : <ProgramEditor />;
 }
 
 /** A movement's guide: a student can open only movements in the coach's program. */
@@ -83,9 +75,9 @@ export function App() {
             <Route element={signedIn(<Layout />)}>
               <Route index element={<Dashboard />} />
               <Route path="my-program" element={<Navigate to="/program" replace />} />
-              <Route path="program" element={<ProgramRoute />} />
-              <Route path="program/edit" element={<ProgramEditor />} />
-              <Route path="exercises" element={<ExercisesRoute />} />
+              <Route path="program" element={<Program />} />
+              <Route path="program/edit" element={<ProgramEditorRoute />} />
+              <Route path="exercises" element={<ExerciseLibrary />} />
               <Route path="exercise/:exerciseId" element={<ExerciseRoute />} />
               <Route path="workout/:templateId" element={<Workout />} />
               <Route path="progress" element={<Progress />} />

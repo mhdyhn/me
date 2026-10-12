@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { defaultNutritionGoals, defaultProfile, localizeKnownProfileCopy } from '../data/profile';
+import { blankNutritionGoals, blankProfile, defaultNutritionGoals, defaultProfile, localizeKnownProfileCopy } from '../data/profile';
 import { db } from '../lib/db';
-import { loadStoredProgram } from '../lib/programPersistence';
+import { usesOwnerData } from '../lib/accountScope';
 import { getWorkoutTemplate } from '../lib/programStore';
 import { dateInputValue } from '../lib/format';
 import type { BodyweightEntry, NutritionDay, NutritionGoals, UserProfile, WorkoutSession } from '../types';
@@ -30,8 +30,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [bodyweights, setBodyweights] = useState<BodyweightEntry[]>([]);
   const [nutritionDays, setNutritionDays] = useState<NutritionDay[]>([]);
-  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
-  const [nutritionGoals, setNutritionGoals] = useState<NutritionGoals>(defaultNutritionGoals);
+  // Only the developer's own account starts with their details; everyone else starts blank.
+  const [profile, setProfile] = useState<UserProfile>(() => (usesOwnerData() ? defaultProfile : blankProfile));
+  const [nutritionGoals, setNutritionGoals] = useState<NutritionGoals>(() => (usesOwnerData() ? defaultNutritionGoals : blankNutritionGoals));
   const [loading, setLoading] = useState(true);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const startingRef = useRef<Promise<WorkoutSession | null> | null>(null);
@@ -40,7 +41,6 @@ export function GymProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     const load = async () => {
       try {
-        await loadStoredProgram();
         const [storedSessions, storedBodyweights, storedNutrition, storedProfile, storedGoals] = await Promise.all([
           db.sessions.toArray(),
           db.bodyweights.toArray(),

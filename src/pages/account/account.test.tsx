@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,6 @@ import { SessionProvider } from '../../context/SessionContext';
 import { ChangePassword } from './ChangePassword';
 import { CoachEntry } from './CoachHome';
 import { Login } from './Login';
-import { StudentProgram } from './StudentProgram';
 
 type Handler = (method: string, path: string, body: unknown) => { status: number; json: unknown };
 
@@ -29,7 +28,6 @@ function renderAt(path: string) {
           <Route path="/login" element={<Login />} />
           <Route path="/account/change-password" element={<ChangePassword />} />
           <Route path="/coach" element={<CoachEntry />} />
-          <Route path="/my-program" element={<StudentProgram />} />
         </Routes>
       </MemoryRouter>
     </SessionProvider>,
@@ -140,31 +138,3 @@ describe('coach screen', () => {
   });
 });
 
-describe('student programme screen', () => {
-  it('shows the coach programme read-only', async () => {
-    window.localStorage.setItem('meety.session-token', 'tok-student-00000000000001');
-    mockApi((method, path) => {
-      if (method === 'GET' && path === '/api/me') return { status: 200, json: { user: studentUser } };
-      if (method === 'GET' && path === '/api/me/program') {
-        return {
-          status: 200,
-          json: {
-            coachName: 'مربی یک',
-            program: {
-              title: 'برنامهٔ سه روزه',
-              updatedAt: '2026-10-13T08:00:00Z',
-              days: [{ name: 'روز اول', exercises: [{ exerciseId: 'flat-dumbbell-press', name: 'پرس سینه دمبل', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],
-            },
-          },
-        };
-      }
-      return { status: 404, json: { error: 'nope' } };
-    });
-    renderAt('/my-program');
-    expect(await screen.findByRole('heading', { name: 'برنامهٔ سه روزه' })).toBeInTheDocument();
-    expect(screen.getByText('پرس سینه دمبل')).toBeInTheDocument();
-    expect(screen.getByText(/۳ ست/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /ذخیره/ })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('روز اول')).toBeInTheDocument());
-  });
-});

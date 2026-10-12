@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { workoutTemplates as originalProgram } from '../data/workouts';
+import { usesOwnerData } from './accountScope';
 import type { WorkoutTemplate } from '../types';
 
 /**
@@ -7,7 +8,9 @@ import type { WorkoutTemplate } from '../types';
  * replaced when the user saves changes in the programme editor (persistence lives in
  * `programPersistence.ts`, so this module stays free of storage code and easy to test).
  */
-let activeProgram: WorkoutTemplate[] = originalProgram;
+/** The developer's account starts with the original programme; every other account starts empty. */
+let activeProgram: WorkoutTemplate[] = usesOwnerData() ? originalProgram : [];
+let readOnly = false;
 const listeners = new Set<() => void>();
 
 /** A fresh, editable copy of the original RAGE programme. */
@@ -15,10 +18,21 @@ export const originalProgramCopy = (): WorkoutTemplate[] => structuredClone(orig
 
 export const getActiveProgram = (): WorkoutTemplate[] => activeProgram;
 
+/** The developer's own programme is editable. Accounts start with none until they create one. */
 export function setActiveProgram(next: WorkoutTemplate[]) {
   activeProgram = next;
+  readOnly = false;
   listeners.forEach((listener) => listener());
 }
+
+/** A student's programme comes from their coach: shown, never edited. */
+export function setAssignedProgram(next: WorkoutTemplate[]) {
+  activeProgram = next;
+  readOnly = true;
+  listeners.forEach((listener) => listener());
+}
+
+export const isProgramReadOnly = (): boolean => readOnly;
 
 const subscribe = (listener: () => void) => {
   listeners.add(listener);

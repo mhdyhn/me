@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
-import { useProgram } from '../lib/programStore';
+import { isProgramReadOnly, useProgram } from '../lib/programStore';
 import { categoryLabels, normalizePersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
 import type { ExerciseDefinition } from '../types';
@@ -20,11 +20,17 @@ export function ExerciseLibrary() {
   const program = useProgram();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<(typeof filters)[number]['id']>('All');
+  // A student's library is limited to the movements in the coach's programme.
+  const assignedIds = useMemo(
+    () => (isProgramReadOnly() ? new Set(program.flatMap((day) => day.exercises.map((item) => item.exerciseId))) : null),
+    [program],
+  );
   const results = useMemo(() => exercises.filter((exercise) => {
+    if (assignedIds && !assignedIds.has(exercise.id)) return false;
     const matchesCategory = category === 'All' || exercise.category === category;
     const searchable = normalizePersianSearch([exercise.name, ...exercise.primaryMuscles, ...exercise.secondaryMuscles, ...exercise.equipment].join(' '));
     return matchesCategory && searchable.includes(normalizePersianSearch(search));
-  }), [search, category]);
+  }), [search, category, assignedIds]);
 
   return (
     <div className="page-stack">
