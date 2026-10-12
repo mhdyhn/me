@@ -4,9 +4,29 @@ import { Copy, Dumbbell, LogOut } from 'lucide-react';
 import { useSession } from '../../context/SessionContext';
 import type { Credentials, Role } from '../../lib/api';
 
-/** Where each role lands after signing in. */
+/** Where each role lands after signing in. Students see their program; coaches see their students; the admin sees coaches. */
 export function homeFor(role: Role): string {
-  return role === 'student' ? '/my-program' : '/coach';
+  return role === 'student' ? '/' : '/coach';
+}
+
+/** A screen inside the app shell (the bottom toolbar stays visible). The shell already shows the page name in the top bar. */
+export function PanelPage({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="panel-page">
+      <h2 className="panel-title">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Keeps a personal-app route for the listed roles only. Signed-out visitors (the offline build)
+ * are not affected; a signed-in user of another role is sent to their own home.
+ */
+export function ForRoles({ roles, children }: { roles: Role[]; children: ReactNode }) {
+  const { user } = useSession();
+  if (user && !roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
+  return <>{children}</>;
 }
 
 /** Full-page shell for sign-in and the coach/student screens. Separate from the personal app's layout. */
@@ -46,7 +66,7 @@ export function RequireSignIn({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Keeps a route for specific roles. Students with a temporary password go to the change-password screen first. */
+/** Requires one of the roles. Students with a temporary password go to the change-password screen first. */
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { status, user } = useSession();
   if (status === 'loading') return <p className="account-muted">در حال بارگذاری…</p>;

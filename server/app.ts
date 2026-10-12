@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
-import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, sessionCookie } from './http.ts';
+import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { findUserById, findUserByUsername, insertUser, listCoaches, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 
@@ -258,13 +258,20 @@ export function createApp(options: AppOptions) {
 
   /** Accepts the bearer header or the session cookie. Reports which one was used, because cookie requests need a CSRF check. */
   function authenticate(request: IncomingMessage): { user: StoredUser | null; token: string | null; viaCookie: boolean } {
-    const match = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(request.headers.authorization ?? '');
+    // Three channels, because preview proxies and browsers differ in what they pass through:
+    // the Authorization header, a custom header (proxies rarely strip it), and the session cookie.
+    const bearer = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(request.headers.authorization ?? '');
+    const custom = request.headers[SESSION_HEADER];
+    const customValue = typeof custom === 'string' ? custom : '';
+    const header = /^[A-Za-z0-9_-]{20,200}$/.test(customValue) ? customValue : null;
     const cookie = readCookie(request.headers.cookie, SESSION_COOKIE);
-    const candidate = match ? match[1] : cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
+    const fromCookie = cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
+    const candidate = bearer ? bearer[1] : header ?? fromCookie;
     if (!candidate) return { user: null, token: null, viaCookie: false };
     const userId = userIdForToken(db, candidate, now());
     if (userId === null) return { user: null, token: null, viaCookie: false };
-    return { user: findUserById(db, userId), token: candidate, viaCookie: !match };
+    // Only a cookie-only session is subject to the JSON-only rule for writes (CSRF protection).
+    return { user: findUserById(db, userId), token: candidate, viaCookie: !bearer && !header };
   }
 
   function dispatch(request: IncomingMessage, body: unknown): RouteResult {

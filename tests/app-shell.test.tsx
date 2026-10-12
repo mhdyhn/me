@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { db } from '../src/lib/db';
@@ -27,9 +27,12 @@ afterEach(() => {
 describe('complete application shell', () => {
   it('boots the dashboard through the production router and shared navigation', async () => {
     render(<App />);
-    expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'ناوبری اصلی' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'ناوبری موبایل' })).toBeInTheDocument();
+    expect(await screen.findByText('هنوز برنامه‌ای از مربی برای شما ثبت نشده است.')).toBeInTheDocument();
+    const mobile = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
+    expect(mobile).toBeInTheDocument();
+    // A student sees the coach's program, not the whole exercise library.
+    expect(within(mobile).getByText('برنامه من')).toBeInTheDocument();
+    expect(within(mobile).queryByText('حرکت‌ها')).not.toBeInTheDocument();
   });
 
   it('supports a direct exercise-detail URL without a prior dashboard visit', async () => {

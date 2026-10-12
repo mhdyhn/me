@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
-import { AccountShell, CredentialsCard, RequireRole } from './AccountShell';
+import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 
 /** Admin (the developer) creates coaches. Coaches are never created by anyone else. */
 export function AdminHome() {
@@ -50,7 +50,7 @@ function AdminCoaches() {
   }
 
   return (
-    <AccountShell title="مربی‌ها">
+    <PanelPage title="مربی‌ها">
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
       ) : (
@@ -80,6 +80,6 @@ function AdminCoaches() {
           ))}
         </ul>
       )}
-    </AccountShell>
+    </PanelPage>
   );
 }

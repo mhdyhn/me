@@ -43,6 +43,8 @@ export function requireText(body: Record<string, unknown>, key: string, min: num
 }
 
 export const SESSION_COOKIE = 'meety_session';
+/** Lower-case because Node exposes incoming header names in lower case. */
+export const SESSION_HEADER = 'x-meety-session';
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 /**

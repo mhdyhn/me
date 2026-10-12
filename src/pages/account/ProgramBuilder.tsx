@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, Plus, Save, Trash2 } from 'lucide-react';
 import { exercises as catalog } from '../../data/exercises';
 import { ApiError, api, type ProgramDay, type ProgramItem, type Programme, type PublicUser } from '../../lib/api';
-import { AccountShell, RequireRole } from './AccountShell';
+import { PanelPage, RequireRole } from './AccountShell';
 
 const MAX_DAYS = 7;
 const MAX_EXERCISES = 15;
@@ -163,11 +163,11 @@ function Builder() {
     }
   }
 
-  if (loading) return <AccountShell title="ساخت برنامه"><p className="account-muted">در حال بارگذاری…</p></AccountShell>;
-  if (loadError) return <AccountShell title="ساخت برنامه"><p className="form-error" role="alert">{loadError}</p></AccountShell>;
+  if (loading) return <PanelPage title="ساخت برنامه"><p className="account-muted">در حال بارگذاری…</p></PanelPage>;
+  if (loadError) return <PanelPage title="ساخت برنامه"><p className="form-error" role="alert">{loadError}</p></PanelPage>;
 
   return (
-    <AccountShell title={student ? `برنامهٔ ${student.displayName}` : 'برنامه'}>
+    <PanelPage title={student ? `برنامهٔ ${student.displayName}` : 'برنامه'}>
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> شاگردها</Link>
 
       <section className="builder-section">
@@ -285,6 +285,6 @@ function Builder() {
           <Save size={16} /> {saving ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}
         </button>
       </div>
-    </AccountShell>
+    </PanelPage>
   );
 }

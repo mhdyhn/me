@@ -68,7 +68,11 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    // Some preview proxies drop Authorization; a custom header is passed through.
+    headers['X-Meety-Session'] = token;
+  }
 
   let response: Response;
   try {

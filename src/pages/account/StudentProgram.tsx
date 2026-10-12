@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError, api, type Programme } from '../../lib/api';
-import { AccountShell, RequireRole } from './AccountShell';
+import { PanelPage, RequireRole } from './AccountShell';
 
 /** Persian digits without padding, so 3 shows as ۳ rather than ۰۳. */
 const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -24,19 +24,19 @@ function Programme() {
       .catch((caught: unknown) => setError(caught instanceof ApiError ? caught.message : 'برنامه بارگذاری نشد.'));
   }, []);
 
-  if (error) return <AccountShell title="برنامهٔ من"><p className="form-error" role="alert">{error}</p></AccountShell>;
-  if (!state) return <AccountShell title="برنامهٔ من"><p className="account-muted">در حال بارگذاری…</p></AccountShell>;
+  if (error) return <PanelPage title="برنامهٔ من"><p className="form-error" role="alert">{error}</p></PanelPage>;
+  if (!state) return <PanelPage title="برنامهٔ من"><p className="account-muted">در حال بارگذاری…</p></PanelPage>;
   if (!state.program) {
     return (
-      <AccountShell title="برنامهٔ من">
+      <PanelPage title="برنامهٔ من">
         <p className="account-muted">هنوز برنامه‌ای از مربی برای شما ثبت نشده است.</p>
-      </AccountShell>
+      </PanelPage>
     );
   }
 
   const { program, coachName } = state;
   return (
-    <AccountShell title={program.title}>
+    <PanelPage title={program.title}>
       <p className="account-muted">
         {coachName ? `تنظیم‌شده توسط ${coachName}` : 'تنظیم‌شده توسط مربی'} · آخرین به‌روزرسانی {new Date(program.updatedAt).toLocaleDateString('fa-IR')}
       </p>
@@ -56,6 +56,6 @@ function Programme() {
           </ul>
         </section>
       ))}
-    </AccountShell>
+    </PanelPage>
   );
 }

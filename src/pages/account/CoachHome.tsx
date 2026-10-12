@@ -4,7 +4,7 @@ import { KeyRound, ListChecks, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
-import { AccountShell, CredentialsCard, RequireRole } from './AccountShell';
+import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 
 export function CoachHome() {
   return (
@@ -62,7 +62,7 @@ function CoachStudents() {
   }
 
   return (
-    <AccountShell title="شاگردهای من">
+    <PanelPage title="شاگردهای من">
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
       ) : (
@@ -103,7 +103,7 @@ function CoachStudents() {
           ))}
         </ul>
       )}
-    </AccountShell>
+    </PanelPage>
   );
 }
 
@@ -112,4 +112,50 @@ export function CoachEntry() {
   const { user } = useSession();
   if (user?.role === 'admin') return <AdminHome />;
   return <CoachHome />;
+}
+
+/** The coach's "add program" step: pick a student, then build their program in the builder. */
+export function ProgramPicker() {
+  return (
+    <RequireRole roles={['coach']}>
+      <PickStudent />
+    </RequireRole>
+  );
+}
+
+function PickStudent() {
+  const [students, setStudents] = useState<PublicUser[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ students: PublicUser[] }>('GET', '/students')
+      .then((result) => setStudents(result.students))
+      .catch((caught: unknown) => setLoadError(caught instanceof ApiError ? caught.message : 'فهرست شاگردها بارگذاری نشد.'));
+  }, []);
+
+  return (
+    <PanelPage title="افزودن برنامه">
+      <p className="account-muted">شاگردی را انتخاب کنید تا برای او برنامه بسازید. برنامه از بین همهٔ حرکت‌ها انتخاب می‌شود و فقط همان حرکت‌ها برای شاگرد نمایش داده می‌شود.</p>
+      {loadError && <p className="form-error" role="alert">{loadError}</p>}
+      {students === null && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
+      {students?.length === 0 && (
+        <p className="account-muted">هنوز شاگردی ندارید. از بخش «شاگردها» یک شاگرد بسازید.</p>
+      )}
+      {students && students.length > 0 && (
+        <ul className="student-list">
+          {students.map((student) => (
+            <li key={student.id} className="student-row">
+              <div>
+                <strong>{student.displayName}</strong>
+                <span className="account-muted" dir="ltr">{student.username}</span>
+              </div>
+              <Link className="button button--primary" to={`/coach/students/${student.id}/program`}>
+                <ListChecks size={16} /> ساخت برنامه
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </PanelPage>
+  );
 }

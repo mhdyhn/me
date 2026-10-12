@@ -1057,3 +1057,30 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 
 .order-buttons { display: inline-flex; gap: 6px; }
 .order-buttons .icon-button:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ---------- Sign-in screen ---------- */
+.login-screen { position: relative; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; overflow: hidden; background: radial-gradient(120% 80% at 50% -10%, #1d2a20 0%, #0e1110 55%); }
+.login-glow { position: absolute; inset: auto -20% -30% auto; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(217, 246, 111, .16), transparent 65%); pointer-events: none; }
+.login-card { position: relative; width: min(420px, 100%); padding: 28px 24px 22px; border: 1px solid var(--line-soft); border-radius: 24px; background: rgba(21, 26, 24, .92); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); backdrop-filter: blur(8px); }
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+.login-brand strong { display: block; font-size: 20px; }
+.login-brand small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.login-card h1 { margin: 0; font-size: 28px; line-height: 1.3; }
+.login-sub { margin: 8px 0 22px; color: var(--muted); line-height: 1.8; font-size: 14px; }
+.login-form { display: grid; gap: 16px; }
+.login-field { display: grid; gap: 8px; }
+.login-field > span { font-size: 13px; color: var(--muted); }
+.login-input { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); color: var(--muted); transition: border-color .15s, box-shadow .15s; }
+.login-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217, 246, 111, .16); color: var(--accent); }
+.login-input input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; letter-spacing: .02em; }
+.login-eye { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.login-eye:hover { color: var(--text); background: var(--surface-raised); }
+.login-error { margin: 0; padding: 12px 14px; border: 1px solid rgba(242, 143, 130, .4); border-radius: 12px; background: rgba(242, 143, 130, .08); color: var(--red); font-size: 14px; line-height: 1.7; }
+.login-submit { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 52px; border: 0; border-radius: 14px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; }
+.login-submit:disabled { opacity: .6; cursor: progress; }
+.login-submit:not(:disabled):hover { filter: brightness(1.05); }
+.login-help { margin: 18px 0 0; text-align: center; color: var(--subtle); font-size: 12.5px; line-height: 1.8; }
+
+/* ---------- Panels inside the app shell (coach and admin screens) ---------- */
+.panel-page { display: grid; gap: 16px; }
+.panel-title { margin: 0; font-size: 20px; }

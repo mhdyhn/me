@@ -17,7 +17,7 @@ afterEach(() => {
 describe('sign-in gate', () => {
   it('without a session the app opens on the sign-in screen, not the personal dashboard', async () => {
     render(<App />);
-    expect(await screen.findByRole('heading', { name: 'ورود به میتی' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'خوش آمدید' })).toBeInTheDocument();
     expect(screen.queryByText('جلسهٔ بعدی')).not.toBeInTheDocument();
   });
 });

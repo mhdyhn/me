@@ -57,6 +57,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (username: string, password: string) => {
     const result = await api<{ token: string; user: PublicUser }>('POST', '/auth/login', { username, password });
     setToken(result.token);
+    // Prove the session really reached the server before entering the app. Otherwise the first
+    // screen would bounce back to sign-in with no explanation.
+    try {
+      await api<{ user: PublicUser }>('GET', '/me');
+    } catch {
+      clearToken();
+      setUser(null);
+      setStatus('signed-out');
+      throw new ApiError(401, 'ورود انجام شد، اما مرورگر نشست را نگه نداشت. صفحه را دوباره باز کنید و اگر تکرار شد، پیش‌نمایش یا تنظیمات مرورگر را بررسی کنید.');
+    }
     setUser(result.user);
     setStatus('signed-in');
     return result.user;
