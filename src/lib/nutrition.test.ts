@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FOODS, FOODS_BY_ID } from '../../shared/foods';
-import { dayTotals, itemTotals, searchFoods, todayDayIndex, mealTotals, roundTotals } from './nutrition';
+import { dayTotals, itemTotals, missingCounts, mealTotals, roundNutrient, roundTotals, searchFoods, todayDayIndex } from './nutrition';
 
 describe('nutrition calculations', () => {
   it('scales a food from 100 g to the grams in the plan', () => {
@@ -29,7 +29,30 @@ describe('nutrition calculations', () => {
   });
 
   it('gives an unknown food zero instead of breaking the total', () => {
-    expect(itemTotals({ foodId: 'not-a-food', grams: 100 })).toEqual({ kcal: 0, protein: 0, fat: 0, carbs: 0 });
+    const totals = itemTotals({ foodId: 'not-a-food', grams: 100 });
+    expect(Object.values(totals).every((value) => value === 0)).toBe(true);
+    expect(missingCounts([{ foodId: 'not-a-food', grams: 100 }]).sugar).toBe(1);
+  });
+
+  it('scales the extra nutrients too, and keeps USDA gaps out of the sum', () => {
+    const egg = FOODS_BY_ID.get('egg-whole')!;
+    const half = itemTotals({ foodId: 'egg-whole', grams: 50 });
+    expect(half.cholesterol).toBeCloseTo((egg.cholesterol ?? 0) / 2, 5);
+    expect(half.sodium).toBeCloseTo((egg.sodium ?? 0) / 2, 5);
+    // Foods without a sugar value add 0 and are counted as missing.
+    const missing = FOODS.filter((food) => food.sugar === null);
+    if (missing.length > 0) {
+      const counts = missingCounts(missing.map((food) => ({ foodId: food.id, grams: 100 })));
+      expect(counts.sugar).toBe(missing.length);
+      expect(itemTotals({ foodId: missing[0]!.id, grams: 100 }).sugar).toBe(0);
+    }
+  });
+
+  it('rounds energy and milligrams to whole numbers and grams to one decimal', () => {
+    expect(roundNutrient('kcal', 143.6)).toBe(144);
+    expect(roundNutrient('sodium', 142.4)).toBe(142);
+    expect(roundNutrient('protein', 12.66)).toBe(12.7);
+    expect(roundTotals(itemTotals({ foodId: 'egg-whole', grams: 100 })).kcal).toBe(143);
   });
 
   it('starts the Persian week on Saturday', () => {
@@ -50,5 +73,13 @@ describe('nutrition calculations', () => {
       expect(food.name.length).toBeGreaterThan(0);
       expect(Number.isFinite(food.kcal) && Number.isFinite(food.protein) && Number.isFinite(food.fat) && Number.isFinite(food.carbs)).toBe(true);
     }
+  });
+});
+
+describe('food search order', () => {
+  it('puts the typed word before words that only contain it', () => {
+    const results = searchFoods('سیب', 3).map((food) => food.name);
+    expect(results[0]).toBe('سیب (بدون پوست)');
+    expect(results.indexOf('سیب‌زمینی پخته')).toBeGreaterThan(0);
   });
 });

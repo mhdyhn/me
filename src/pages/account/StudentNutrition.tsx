@@ -54,6 +54,7 @@ function PlanView({ plan, dayIndex, onDay }: { plan: NutritionPlan; dayIndex: nu
   const day = plan.days[dayIndex];
   if (!day) return null;
   const total = dayTotals(day);
+  const dayItems = day.meals.flatMap((meal) => meal.items);
   return (
     <>
       <nav className="nutrition-days" aria-label="روزهای هفته">
@@ -69,7 +70,7 @@ function PlanView({ plan, dayIndex, onDay }: { plan: NutritionPlan; dayIndex: nu
         <div className="nutrition-day-summary__head">
           <h3>{day.name}</h3>
         </div>
-        <TotalsStrip totals={total} />
+        <TotalsStrip totals={total} items={dayItems} />
         <TargetBars totals={total} targets={plan.targets} />
       </section>
 
@@ -94,7 +95,7 @@ function PlanView({ plan, dayIndex, onDay }: { plan: NutritionPlan; dayIndex: nu
                 );
               })}
             </ul>
-            {meal.items.length > 0 && <TotalsStrip totals={mealTotals(meal)} compact />}
+            {meal.items.length > 0 && <TotalsStrip totals={mealTotals(meal)} items={meal.items} compact />}
           </article>
         ))}
       </div>

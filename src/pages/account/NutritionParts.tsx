@@ -1,24 +1,47 @@
 import { faNumber } from '../../lib/format';
-import { roundTotals, type Targets, type Totals } from '../../lib/nutrition';
+import {
+  DETAIL_NUTRIENTS,
+  MAIN_NUTRIENTS,
+  missingCounts,
+  roundNutrient,
+  type NutrientInfo,
+  type PlanItem,
+  type Targets,
+  type Totals,
+} from '../../lib/nutrition';
 
-/** The four numbers for a meal, day or item. */
-export function TotalsStrip({ totals, compact = false }: { totals: Totals; compact?: boolean }) {
-  const rounded = roundTotals(totals);
-  const cells: { label: string; value: string }[] = [
-    { label: 'کالری', value: `${faNumber(rounded.kcal)} کیلوکالری` },
-    { label: 'پروتئین', value: `${faNumber(rounded.protein)} گرم` },
-    { label: 'چربی', value: `${faNumber(rounded.fat)} گرم` },
-    { label: 'کربوهیدرات', value: `${faNumber(rounded.carbs)} گرم` },
-  ];
+function formatNutrient(info: NutrientInfo, totals: Totals, items: PlanItem[], counts: ReturnType<typeof missingCounts>) {
+  const missing = counts[info.key];
+  if (items.length > 0 && missing === items.length) return { text: '—', partial: false };
+  const value = faNumber(roundNutrient(info.key, totals[info.key]), { maximumFractionDigits: info.decimals });
+  return { text: `${value} ${info.unit}`, partial: missing > 0 };
+}
+
+/**
+ * The totals of a meal or a day. `items` are the foods they are made of, so a nutrient USDA
+ * does not publish for some of them is marked instead of being shown as 0.
+ */
+export function TotalsStrip({ totals, items, compact = false }: { totals: Totals; items: PlanItem[]; compact?: boolean }) {
+  const counts = missingCounts(items);
+  const anyPartial = [...MAIN_NUTRIENTS, ...DETAIL_NUTRIENTS].some((info) => counts[info.key] > 0 && counts[info.key] < items.length);
+  const renderCell = (info: NutrientInfo) => {
+    const { text, partial } = formatNutrient(info, totals, items, counts);
+    return (
+      <div key={info.key}>
+        <dt>{info.label}</dt>
+        <dd>{text}{partial && <sup title="بعضی مواد این مقدار را در منبع USDA ندارند">*</sup>}</dd>
+      </div>
+    );
+  };
   return (
-    <dl className={`nutrition-totals${compact ? ' nutrition-totals--compact' : ''}`}>
-      {cells.map((cell) => (
-        <div key={cell.label}>
-          <dt>{cell.label}</dt>
-          <dd>{cell.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className={`nutrition-totals-block${compact ? ' nutrition-totals-block--compact' : ''}`}>
+      <dl className={`nutrition-totals${compact ? ' nutrition-totals--compact' : ''}`}>{MAIN_NUTRIENTS.map(renderCell)}</dl>
+      <details className="nutrition-details">
+        <summary>سایر مواد مغذی</summary>
+        <dl className="nutrition-totals nutrition-totals--detail">{DETAIL_NUTRIENTS.map(renderCell)}</dl>
+      </details>
+      {anyPartial && <p className="nutrition-note">* بعضی مواد در منبع USDA این مقدار را ندارند؛ جمع فقط مواردی است که داده دارند.</p>}
+    </div>
   );
 }
 

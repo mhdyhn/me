@@ -29,12 +29,52 @@ export interface NutritionPlan {
   updatedAt: string | null;
 }
 
-export interface Totals {
-  kcal: number;
-  protein: number;
-  fat: number;
-  carbs: number;
+/** Every nutrient the app tracks. Energy is in kcal, most others in grams, minerals and cholesterol in mg. */
+export type NutrientKey =
+  | 'kcal'
+  | 'protein'
+  | 'carbs'
+  | 'fat'
+  | 'sugar'
+  | 'fiber'
+  | 'satFat'
+  | 'cholesterol'
+  | 'sodium'
+  | 'potassium'
+  | 'calcium'
+  | 'iron';
+
+export type Totals = Record<NutrientKey, number>;
+
+export interface NutrientInfo {
+  key: NutrientKey;
+  label: string;
+  unit: string;
+  /** Decimals shown. Energy and milligram values are whole numbers. */
+  decimals: 0 | 1;
 }
+
+export const MAIN_NUTRIENTS: NutrientInfo[] = [
+  { key: 'kcal', label: 'کالری', unit: 'کیلوکالری', decimals: 0 },
+  { key: 'protein', label: 'پروتئین', unit: 'گرم', decimals: 1 },
+  { key: 'carbs', label: 'کربوهیدرات', unit: 'گرم', decimals: 1 },
+  { key: 'fat', label: 'چربی', unit: 'گرم', decimals: 1 },
+];
+
+export const DETAIL_NUTRIENTS: NutrientInfo[] = [
+  { key: 'sugar', label: 'قند', unit: 'گرم', decimals: 1 },
+  { key: 'fiber', label: 'فیبر', unit: 'گرم', decimals: 1 },
+  { key: 'satFat', label: 'چربی اشباع', unit: 'گرم', decimals: 1 },
+  { key: 'sodium', label: 'سدیم', unit: 'میلی‌گرم', decimals: 0 },
+  { key: 'cholesterol', label: 'کلسترول', unit: 'میلی‌گرم', decimals: 0 },
+  { key: 'potassium', label: 'پتاسیم', unit: 'میلی‌گرم', decimals: 0 },
+  { key: 'calcium', label: 'کلسیم', unit: 'میلی‌گرم', decimals: 0 },
+  { key: 'iron', label: 'آهن', unit: 'میلی‌گرم', decimals: 1 },
+];
+
+export const ALL_NUTRIENTS: NutrientInfo[] = [...MAIN_NUTRIENTS, ...DETAIL_NUTRIENTS];
+
+const NUTRIENT_KEYS = ALL_NUTRIENTS.map((nutrient) => nutrient.key);
 
 export const MAX_GRAMS = 2000;
 export const MAX_MEALS = 8;
@@ -55,28 +95,27 @@ export const GROUP_LABELS: Record<FoodGroup, string> = {
 export { FOODS, FOODS_BY_ID };
 export type { Food, FoodGroup };
 
-const ZERO: Totals = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
+const zeroTotals = (): Totals => Object.fromEntries(NUTRIENT_KEYS.map((key) => [key, 0])) as Totals;
 
-/** Nutrients of one item: the food's values per 100 g, scaled to the grams in the plan. */
+/** Nutrients of one item: the food's values per 100 g, scaled to the grams in the plan. Missing values count as 0 here; see `missingCounts`. */
 export function itemTotals(item: PlanItem): Totals {
+  const totals = zeroTotals();
   const food = FOODS_BY_ID.get(item.foodId);
-  if (!food) return ZERO;
+  if (!food) return totals;
   const factor = item.grams / 100;
-  return {
-    kcal: food.kcal * factor,
-    protein: food.protein * factor,
-    fat: food.fat * factor,
-    carbs: food.carbs * factor,
-  };
+  for (const key of NUTRIENT_KEYS) {
+    const value = food[key];
+    if (value !== null) totals[key] = value * factor;
+  }
+  return totals;
 }
 
 export function sumTotals(list: Totals[]): Totals {
-  return list.reduce<Totals>((sum, part) => ({
-    kcal: sum.kcal + part.kcal,
-    protein: sum.protein + part.protein,
-    fat: sum.fat + part.fat,
-    carbs: sum.carbs + part.carbs,
-  }), { ...ZERO });
+  const sum = zeroTotals();
+  for (const part of list) {
+    for (const key of NUTRIENT_KEYS) sum[key] += part[key];
+  }
+  return sum;
 }
 
 export function mealTotals(meal: PlanMeal): Totals {
@@ -87,14 +126,27 @@ export function dayTotals(day: PlanDay): Totals {
   return sumTotals(day.meals.map(mealTotals));
 }
 
-/** Rounds for display: whole kcal, grams to one decimal. */
+/** For each nutrient, how many of these items USDA has no value for. A food missing from the catalogue counts as missing everything. */
+export function missingCounts(items: PlanItem[]): Record<NutrientKey, number> {
+  const counts = Object.fromEntries(NUTRIENT_KEYS.map((key) => [key, 0])) as Record<NutrientKey, number>;
+  for (const item of items) {
+    const food = FOODS_BY_ID.get(item.foodId);
+    for (const key of NUTRIENT_KEYS) {
+      if (!food || food[key] === null) counts[key] += 1;
+    }
+  }
+  return counts;
+}
+
+/** Rounds one nutrient for display: whole numbers for kcal and mg, one decimal for grams. */
+export function roundNutrient(key: NutrientKey, value: number): number {
+  const info = ALL_NUTRIENTS.find((nutrient) => nutrient.key === key);
+  if (!info || info.decimals === 0) return Math.round(value);
+  return Math.round(value * 10) / 10;
+}
+
 export function roundTotals(totals: Totals): Totals {
-  return {
-    kcal: Math.round(totals.kcal),
-    protein: Math.round(totals.protein * 10) / 10,
-    fat: Math.round(totals.fat * 10) / 10,
-    carbs: Math.round(totals.carbs * 10) / 10,
-  };
+  return Object.fromEntries(NUTRIENT_KEYS.map((key) => [key, roundNutrient(key, totals[key])])) as Totals;
 }
 
 /** Persian week starts on Saturday. Returns 0 for Saturday ... 6 for Friday. */
@@ -106,8 +158,20 @@ export function emptyTargets(): Targets {
   return { kcal: null, proteinG: null, carbsG: null, fatG: null };
 }
 
+/** Foods whose name has the typed word first, then names that start with it, then any match. */
 export function searchFoods(query: string, limit = 8): Food[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return FOODS.filter((food) => food.name.includes(q) || food.nameEn.toLowerCase().includes(q)).slice(0, limit);
+  const rank = (food: Food) => {
+    const name = food.name.toLowerCase();
+    const words = name.split(/[\s(),/]+/);
+    if (words.includes(q) || food.nameEn.toLowerCase().split(/[\s(),/]+/).includes(q)) return 0;
+    if (name.startsWith(q) || food.nameEn.toLowerCase().startsWith(q)) return 1;
+    return 2;
+  };
+  return FOODS.filter((food) => food.name.includes(q) || food.nameEn.toLowerCase().includes(q))
+    .map((food, index) => ({ food, index, rank: rank(food) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .slice(0, limit)
+    .map((entry) => entry.food);
 }

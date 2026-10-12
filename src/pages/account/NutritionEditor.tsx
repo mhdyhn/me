@@ -92,6 +92,9 @@ function NutritionEditorScreen() {
     const name = (newMealName.trim() || `وعدهٔ ${faNumber(day.meals.length + 1)}`).slice(0, MAX_MEAL_NAME);
     if (day.meals.length >= MAX_MEALS) return;
     updateDay(dayIndex, (d) => ({ ...d, meals: [...d.meals, { name, items: [] }] }));
+    // Step 2 starts at once: the new meal's content search is open.
+    setOpenSearch(day.meals.length);
+    setQuery('');
     setNewMealName('');
   }
 
@@ -173,6 +176,7 @@ function NutritionEditorScreen() {
 
   const day = plan.days[dayIndex] as PlanDay;
   const dayTotal = dayTotals(day);
+  const dayItems = day.meals.flatMap((meal) => meal.items);
 
   return (
     <PanelPage title={studentName ? `برنامهٔ غذایی ${studentName}` : 'برنامهٔ غذایی شاگرد'}>
@@ -216,7 +220,7 @@ function NutritionEditorScreen() {
           <h3>{day.name}</h3>
           <span className="account-muted">{faNumber(day.meals.length)} وعده</span>
         </div>
-        <TotalsStrip totals={dayTotal} />
+        <TotalsStrip totals={dayTotal} items={dayItems} />
         <TargetBars totals={dayTotal} targets={plan.targets} />
       </section>
 
@@ -244,19 +248,22 @@ function NutritionEditorScreen() {
       </div>
 
       {day.meals.length < MAX_MEALS && (
-        <form
-          className="nutrition-add-meal"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addMeal();
-          }}
-        >
-          <label className="field-control">
-            <span>نام وعدهٔ جدید</span>
-            <input value={newMealName} onChange={(event) => setNewMealName(event.target.value)} maxLength={MAX_MEAL_NAME} placeholder="مثلاً صبحانه" />
-          </label>
-          <button type="submit" className="button button--ghost"><Plus size={16} /> افزودن وعده</button>
-        </form>
+        <section className="nutrition-add-meal-block" aria-label="افزودن وعده">
+          <p className="nutrition-step"><span>مرحلهٔ ۱</span> نام وعدهٔ تازه را بنویسید؛ بعد محتوای آن را اضافه می‌کنید.</p>
+          <form
+            className="nutrition-add-meal"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addMeal();
+            }}
+          >
+            <label className="field-control">
+              <span>نام وعده</span>
+              <input value={newMealName} onChange={(event) => setNewMealName(event.target.value)} maxLength={MAX_MEAL_NAME} placeholder="مثلاً صبحانه" />
+            </label>
+            <button type="submit" className="button button--ghost"><Plus size={16} /> افزودن وعده</button>
+          </form>
+        </section>
       )}
 
       <div className="nutrition-save-bar">
@@ -316,7 +323,7 @@ function MealEditor({ meal, searching, query, onToggleSearch, onQuery, onRename,
       </header>
 
       {meal.items.length === 0 ? (
-        <p className="account-muted">هنوز ماده‌ای نیست.</p>
+        <p className="nutrition-step"><span>مرحلهٔ ۲</span> محتوای این وعده را اضافه کنید، مثلاً تخم‌مرغ یا نان. کالری، درشت‌مغذی‌ها و سایر مواد خودکار حساب می‌شوند.</p>
       ) : (
         <ul className="nutrition-items">
           {meal.items.map((item, itemIndex) => {
@@ -326,7 +333,7 @@ function MealEditor({ meal, searching, query, onToggleSearch, onQuery, onRename,
               <li key={`${item.foodId}-${itemIndex}`} className="nutrition-item">
                 <div className="nutrition-item__name">
                   <strong>{food?.name ?? 'ماده‌ای که دیگر در فهرست نیست'}</strong>
-                  <small>{food ? GROUP_LABELS[food.group] : ''} · {faNumber(totals.kcal)} کالری · پروتئین {faNumber(totals.protein)} · چربی {faNumber(totals.fat)} · کربوهیدرات {faNumber(totals.carbs)}</small>
+                  <small>{food ? GROUP_LABELS[food.group] : ''} · {faNumber(totals.kcal)} کالری · پروتئین {faNumber(totals.protein)} · چربی {faNumber(totals.fat)} · کربوهیدرات {faNumber(totals.carbs)}{food && food.sugar !== null ? ` · قند ${faNumber(totals.sugar)}` : ''}</small>
                 </div>
                 <label className="nutrition-item__grams">
                   <input type="number" min={0.1} max={MAX_GRAMS} step="any" value={item.grams} onChange={(event) => onGrams(itemIndex, event.target.value)} aria-label={`گرم ${food?.name ?? 'ماده'}`} />
@@ -339,11 +346,12 @@ function MealEditor({ meal, searching, query, onToggleSearch, onQuery, onRename,
         </ul>
       )}
 
-      {meal.items.length > 0 && <TotalsStrip totals={mealTotals(meal)} compact />}
+      {meal.items.length > 0 && <TotalsStrip totals={mealTotals(meal)} items={meal.items} compact />}
 
       {meal.items.length < MAX_ITEMS && (
         <button type="button" className="button button--ghost nutrition-meal__add" onClick={onToggleSearch} aria-expanded={searching}>
-          <Plus size={16} /> {searching ? 'بستن' : 'افزودن ماده'}
+          <Plus size={16} />{' '}
+          {searching ? 'بستن' : meal.items.length === 0 ? 'افزودن محتوای وعده' : 'افزودن ماده'}
         </button>
       )}
 

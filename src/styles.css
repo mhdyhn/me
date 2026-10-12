@@ -1201,3 +1201,22 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
   .nutrition-item { grid-template-columns: minmax(0, 1fr) auto; }
   .nutrition-item__grams { grid-column: 1 / -1; }
 }
+
+/* Two-step meal flow and the full nutrient breakdown */
+.nutrition-step { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.nutrition-step span { flex: none; padding: 1px 8px; border-radius: 999px; background: rgba(217,246,111,.14); color: var(--accent); font-weight: 700; font-size: 11px; }
+.nutrition-add-meal-block { display: grid; gap: 8px; }
+.nutrition-totals-block { display: grid; gap: 8px; min-width: 0; }
+.nutrition-totals--detail { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 8px; }
+.nutrition-totals--detail div { background: transparent; border: 1px solid var(--line); padding: 7px 8px; }
+.nutrition-totals--detail dd { font-size: 12px; }
+.nutrition-totals sup { color: var(--accent); font-size: 10px; margin-inline-start: 2px; }
+.nutrition-details summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--accent); padding: 4px 0; list-style: none; }
+.nutrition-details summary::-webkit-details-marker { display: none; }
+.nutrition-details summary::before { content: '＋ '; }
+.nutrition-details[open] summary::before { content: '－ '; }
+.nutrition-note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
+.nutrition-totals-block--compact .nutrition-totals--detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) {
+  .nutrition-totals--detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
