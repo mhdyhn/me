@@ -965,6 +965,21 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .exercise-figures figcaption { color: #98a49c; font-size: 11px; text-align: center; }
 .figure-note { margin: -4px 0 10px; color: #98a49c; font-size: 11px; line-height: 1.6; }
 
+/* Lyfta-style loop / animated exercise player */
+.lyfta-player { position: relative; background: #0c0f0d; border: 1px solid rgba(217,246,111,.22); border-radius: 18px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.lyfta-player__screen { position: relative; width: 100%; height: 320px; max-height: 50vh; background: radial-gradient(circle at center, #18221d 0%, #0a0d0c 100%); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.lyfta-player__img { width: 100%; height: 100%; object-fit: contain; transition: opacity .25s ease-in-out, transform .3s ease-out; }
+.lyfta-player__badge { position: absolute; top: 12px; right: 12px; padding: 5px 12px; border-radius: 999px; background: rgba(14,18,16,.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.1); color: var(--text); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; z-index: 3; }
+.lyfta-player__badge-dot { width: 8px; height: 8px; border-radius: 50%; }
+.lyfta-player__badge-dot--start { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+.lyfta-player__badge-dot--main { background: #ff5252; box-shadow: 0 0 8px #ff5252; }
+.lyfta-player__progress { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.08); z-index: 3; }
+.lyfta-player__progress-bar { height: 100%; background: var(--accent); transition: width .1s linear; }
+.lyfta-player__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; background: var(--surface-soft); border-top: 1px solid var(--line); }
+.lyfta-player__buttons { display: flex; align-items: center; gap: 6px; }
+.lyfta-player__speed-btn { padding: 4px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: all .15s; }
+.lyfta-player__speed-btn.is-active { background: rgba(217,246,111,.15); color: var(--accent); border-color: rgba(217,246,111,.3); font-weight: 700; }
+
 /* Programme editor */
 .program-editor-entry { display: flex; justify-content: flex-end; }
 .program-editor__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
