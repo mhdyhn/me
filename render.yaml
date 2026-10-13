@@ -1,6 +1,9 @@
 # Render Blueprint: one web service that serves the built app (dist/) and the API (/api).
 # Render asks for the values marked sync: false when you create the service from this file.
 #
+# NODE_ENV=production makes `npm ci` skip devDependencies (TypeScript, Vite, @types/node).
+# The build needs them, so the build command forces them with --include=dev.
+#
 # This uses the FREE plan. Free services cannot attach a disk, so the SQLite database is
 # stored inside the service and is RESET on every restart, redeploy, or idle spin-down.
 # Use it for demos only. For real accounts, switch to plan: starter and add a disk
@@ -12,7 +15,7 @@ services:
     plan: free
     region: frankfurt
     branch: arena/b53a1e35-me
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node server/index.ts
     healthCheckPath: /api/health
     envVars:
