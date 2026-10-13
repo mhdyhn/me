@@ -89,8 +89,8 @@ export function ExerciseDetail() {
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>
             {hasExerciseFigure(exercise.id) ? (
               <figure className="exercise-figures">
-                <div><img src={exerciseFigureSrc(exercise.id, 'start')} alt={`${exercise.name}: وضعیت شروع`} /><figcaption>شروع</figcaption></div>
-                <div><img src={exerciseFigureSrc(exercise.id, 'main')} alt={`${exercise.name}: وضعیت اجرا`} /><figcaption>اجرا</figcaption></div>
+                <div><img src={exerciseFigureSrc(exercise.id, 'start')} alt={`${exercise.name}: وضعیت شروع`} loading="lazy" decoding="async" /><figcaption>شروع</figcaption></div>
+                <div><img src={exerciseFigureSrc(exercise.id, 'main')} alt={`${exercise.name}: وضعیت اجرا`} loading="lazy" decoding="async" /><figcaption>اجرا</figcaption></div>
               </figure>
             ) : null}
             {exercisePhotoIds.has(exercise.id) && <p className="figure-note">تصویرهای این حرکت با هوش مصنوعی ساخته شده‌اند؛ برای بررسی فرم، کنار مربی یا آینه تمرین کن.</p>}

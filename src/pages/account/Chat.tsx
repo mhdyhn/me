@@ -87,7 +87,11 @@ function ChatThread({ path }: { path: string }) {
   useEffect(() => {
     stickToBottom.current = true;
     void load();
-    const timer = window.setInterval(() => void load(), REFRESH_MS);
+    const intervalHandler = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void load();
+    };
+    const timer = window.setInterval(intervalHandler, REFRESH_MS);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);

@@ -61,11 +61,21 @@ export function createApp(options: AppOptions) {
   const lockMs = (options.lockMinutes ?? 15) * 60 * 1000;
   const failures = new Map<string, { count: number; lockedUntil: number }>();
 
+  function cleanExpiredFailures(): void {
+    const current = now().getTime();
+    for (const [userKey, data] of failures.entries()) {
+      if (data.lockedUntil > 0 && data.lockedUntil <= current) {
+        failures.delete(userKey);
+      }
+    }
+  }
+
   // Hashed once at startup. Used when the username does not exist so a failed login takes
   // the same time either way and does not reveal which usernames are registered.
   const dummyHash = hashPassword(generatePassword(24));
 
   function assertNotLocked(username: string): void {
+    cleanExpiredFailures();
     const entry = failures.get(username);
     if (entry && entry.lockedUntil > now().getTime()) {
       throw new HttpError(429, 'تعداد تلاش‌های ناموفق زیاد بود. چند دقیقه صبر کنید و دوباره امتحان کنید.');
@@ -73,6 +83,7 @@ export function createApp(options: AppOptions) {
   }
 
   function recordFailure(username: string): void {
+    cleanExpiredFailures();
     const entry = failures.get(username) ?? { count: 0, lockedUntil: 0 };
     entry.count += 1;
     if (entry.count >= maxFailed) {
@@ -326,6 +337,17 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/diary\/([^/]+)$/,
+      auth: ['coach'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const day = validateDay(decodeURIComponent(params[1]!));
+        return { status: 200, body: { studentName: student.displayName, diary: await loadDiary(db, student.id, day) } };
+      },
+    },
+
+    {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
       auth: ['coach'],
@@ -526,11 +548,19 @@ const STATUS_PAGE = `<!doctype html>
 <p>وضعیت سرور: <a style="color:#d9f66f" href="/api/">/api/</a></p>
 </body></html>`;
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
 function sendHtml(response: ServerResponse, html: string): void {
   response.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(html),
     'Cache-Control': 'no-store',
+    ...SECURITY_HEADERS,
   });
   response.end(html);
 }
@@ -541,6 +571,7 @@ function send(response: ServerResponse, status: number, body: unknown, headers: 
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload),
     'Cache-Control': 'no-store',
+    ...SECURITY_HEADERS,
     ...headers,
   });
   response.end(payload);
