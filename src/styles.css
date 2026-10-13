@@ -1139,6 +1139,19 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .chat-send { display: inline-grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--accent); color: #0e1110; cursor: pointer; flex: none; transition: opacity .15s; }
 .chat-send:disabled { opacity: .35; cursor: not-allowed; }
 .chat-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.chat-media-actions { display: flex; align-items: center; gap: 2px; }
+.chat-media-btn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); cursor: pointer; transition: color .15s, background .15s; }
+.chat-media-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.chat-media-btn.is-recording { color: #ff5252; background: rgba(255,82,82,.15); animation: pulseRecord 1.5s infinite; }
+@keyframes pulseRecord { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.chat-recording-panel { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px; border-radius: 21px; background: rgba(255,82,82,.1); border: 1px solid rgba(255,82,82,.3); }
+.chat-recording-indicator { display: flex; align-items: center; gap: 8px; color: #ff6b6b; font-size: 13px; font-weight: 600; }
+.chat-recording-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5252; animation: blink 1s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.chat-recording-actions { display: flex; align-items: center; gap: 8px; }
+.chat-media-img { display: block; max-width: 100%; max-height: 280px; border-radius: 10px; margin-bottom: 6px; cursor: pointer; object-fit: cover; }
+.chat-media-video { display: block; max-width: 100%; max-height: 280px; border-radius: 10px; margin-bottom: 6px; }
+.chat-media-audio { display: block; max-width: 100%; height: 38px; margin-bottom: 4px; }
 @media (max-width: 720px) {
 
 }

@@ -27,6 +27,7 @@ const roleNavigation: Record<Role, NavItem[]> = {
   coach: [
     { label: 'شاگرد', to: '/coach', icon: Users, end: true },
     { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus },
+    { label: 'مدیر', to: '/coach/chat', icon: MessageCircle },
   ],
   admin: [{ label: 'مربی', to: '/coach', icon: ShieldCheck, end: true }],
 };

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, Trash2, UserPlus, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { KeyRound, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
@@ -109,6 +110,9 @@ function AdminCoaches() {
                 badges={<span className="badge"><Users size={13} /> {coach.studentCount} شاگرد</span>}
                 actions={
                   <>
+                    <Link className="button button--ghost" to={`/coach/coaches/${coach.id}/chat`}>
+                      <MessageCircle size={16} /> گفتگو
+                    </Link>
                     <button type="button" className="button button--ghost" onClick={() => void resetPassword(coach)}>
                       <KeyRound size={16} /> رمز تازه
                     </button>

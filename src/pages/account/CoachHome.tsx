@@ -78,6 +78,11 @@ function CoachStudents() {
 
   return (
     <PanelPage title="شاگردهای من">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+        <Link to="/coach/chat" className="button button--ghost">
+          <MessageCircle size={16} /> گفتگو با مدیر باشگاه
+        </Link>
+      </div>
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
       ) : (

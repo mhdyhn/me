@@ -12,6 +12,8 @@ export class HttpError extends Error {
 export const MAX_BODY_BYTES = 16 * 1024;
 /** Workout summaries are a batch of sessions, so their upload may be larger. */
 export const SESSIONS_BODY_BYTES = 256 * 1024;
+/** Chat messages can carry photos, voice notes, or short clips. */
+export const CHAT_BODY_BYTES = 6 * 1024 * 1024;
 
 /** Reads the request body as JSON. An empty body is treated as an empty object. */
 export async function readJsonBody(request: AsyncIterable<Buffer>, limit = MAX_BODY_BYTES): Promise<unknown> {

@@ -35,6 +35,8 @@ const NutritionEditor = lazy(() => import('./pages/account/NutritionEditor').the
 const StudentProgress = lazy(() => import('./pages/account/StudentProgress').then((module) => ({ default: module.StudentProgress })));
 const StudentChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.StudentChat })));
 const CoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachChat })));
+const CoachAdminChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachAdminChat })));
+const AdminCoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.AdminCoachChat })));
 const AssignedMovementGate = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.AssignedMovementGate })));
 
 function NotFound() {
@@ -80,7 +82,9 @@ export function App() {
             <Route path="account/change-password" element={<ChangePassword />} />
             {/* Chats are full screen with their own back button, so they sit outside the Layout (no bottom navigation). */}
             <Route path="chat" element={signedIn(<ForRoles roles={['student']}><StudentChat /></ForRoles>)} />
+            <Route path="coach/chat" element={signedIn(<ForRoles roles={['coach']}><CoachAdminChat /></ForRoles>)} />
             <Route path="coach/students/:studentId/chat" element={signedIn(<ForRoles roles={['coach']}><CoachChat /></ForRoles>)} />
+            <Route path="coach/coaches/:coachId/chat" element={signedIn(<ForRoles roles={['admin']}><AdminCoachChat /></ForRoles>)} />
             <Route element={signedIn(<Layout />)}>
               <Route index element={<Dashboard />} />
               <Route path="my-program" element={<Navigate to="/program" replace />} />
