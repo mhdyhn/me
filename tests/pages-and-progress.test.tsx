@@ -90,6 +90,21 @@ describe('primary routes', () => {
   });
 });
 
+describe('exercise library catalogue', () => {
+  it('renders all exercises with English subtitle and supports bilingual search', async () => {
+    const user = userEvent.setup();
+    renderPage('/exercises');
+    expect(await screen.findByText('پرس سینه با هالتر')).toBeInTheDocument();
+    expect(screen.getByText('Barbell Bench Press')).toBeInTheDocument();
+
+    // English search for 'squat'
+    const searchInput = screen.getByPlaceholderText(/جست‌وجو بر اساس نام/);
+    await user.type(searchInput, 'squat');
+    expect(await screen.findByText('Barbell Back Squat')).toBeInTheDocument();
+    expect(screen.queryByText('Barbell Bench Press')).not.toBeInTheDocument();
+  });
+});
+
 describe('bodyweight and nutrition persistence', () => {
   it('saves a weigh-in and restores it after remounting', async () => {
     const user = userEvent.setup();
