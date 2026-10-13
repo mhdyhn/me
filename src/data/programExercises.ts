@@ -321,12 +321,39 @@ const translationsById: Record<string, ExerciseTranslation> = Object.fromEntries
   programMeta.map((meta) => [meta.id, meta.t]),
 );
 
+const programEnglishNames: Record<string, string> = {
+  'flat-dumbbell-press': 'Flat Dumbbell Press',
+  'decline-dumbbell-press': 'Decline Dumbbell Press',
+  'cable-shoulder-press': 'Cable Shoulder Press',
+  'standing-barbell-press': 'Standing Overhead Barbell Press',
+  'cable-triceps-single-arm': 'Single-Arm Cable Triceps Pushdown',
+  'reverse-grip-lat-pulldown': 'Reverse-Grip Lat Pulldown',
+  'barbell-bent-over-row': 'Bent-Over Barbell Row',
+  'sumo-deadlift': 'Sumo Deadlift',
+  'ez-bar-curl': 'EZ-Bar Biceps Curl',
+  'dead-hang': 'Dead Hang',
+  'bodyweight-squat': 'Bodyweight Squat',
+  'single-leg-cable-rdl': 'Single-Leg Cable Romanian Deadlift',
+  'machine-crunch': 'Machine Crunch',
+  'hollow-hold': 'Hollow Body Hold',
+  'swedish-dip': 'Swedish Dip / Parallel Bars',
+  'smith-shoulder-press': 'Smith Machine Shoulder Press',
+  'machine-lateral-raise': 'Machine Lateral Raise',
+  'two-hand-dumbbell-overhead-triceps': 'Two-Hand Overhead Dumbbell Triceps Extension',
+  'machine-triceps-extension': 'Machine Triceps Extension',
+  'parallel-grip-pull-up': 'Neutral-Grip Pull-Up',
+  'close-grip-cable-row': 'Close-Grip Seated Cable Row',
+  'close-grip-barbell-curl': 'Close-Grip Barbell Curl',
+  'crossbody-hammer-curl': 'Crossbody Hammer Curl',
+};
+
 /** Persian copy for movements that were only in the programme, keyed by id. */
 export const programExerciseTranslations = translationsById;
 
 /** Catalogue entries for the programme-only movements, with Persian copy applied. */
 export const programExerciseDefinitions: ExerciseDefinition[] = programMeta.map((meta) => ({
   id: meta.id,
+  englishName: programEnglishNames[meta.id],
   category: meta.category,
   difficulty: meta.difficulty,
   movementPhases: [],

@@ -31,6 +31,16 @@ describe('Persian training content', () => {
     }
   });
 
+  it('provides standard English names for every exercise in the catalogue', () => {
+    expect(exercises).toHaveLength(56);
+    for (const exercise of exercises) {
+      expect(exercise.englishName).toBeDefined();
+      expect(typeof exercise.englishName).toBe('string');
+      expect(exercise.englishName!.trim().length).toBeGreaterThan(0);
+      expect(hasPersian(exercise.englishName!)).toBe(false);
+    }
+  });
+
   it('uses Persian labels for exercise categories and difficulty levels', () => {
     expect(Object.values(categoryLabels).every(hasPersian)).toBe(true);
     expect(Object.values(difficultyLabels).every(hasPersian)).toBe(true);
