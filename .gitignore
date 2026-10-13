@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# build outputs
+/dist/
+/.vite/
+
+# local environment and secrets
+.env
+.env.*
+!.env.example
+
+# editor / OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test and coverage output
+/coverage/
+/test-results/
+/playwright-report/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Reference screenshots pulled in while researching other apps (not ours to publish)
+image-search/
+
+# Capacitor: web build copied in by `npx cap sync` (regenerated, not source)
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+
+# Local API data (PostgreSQL folder used without DATABASE_URL): never commit
+/server/data/
