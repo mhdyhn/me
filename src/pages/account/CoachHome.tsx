@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Apple, KeyRound, ListChecks, MessageCircle, TrendingUp, Trash2, UserPlus } from 'lucide-react';
+import { Apple, KeyRound, ListChecks, MessageCircle, Receipt, TrendingUp, Trash2, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -78,7 +78,10 @@ function CoachStudents() {
 
   return (
     <PanelPage title="شاگردهای من">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: '12px', flexWrap: 'wrap' }}>
+        <Link to="/coach/transactions" className="button button--ghost">
+          <Receipt size={16} /> درآمدها و تراکنش‌ها
+        </Link>
         <Link to="/coach/chat" className="button button--ghost">
           <MessageCircle size={16} /> گفتگو با مدیر باشگاه
         </Link>

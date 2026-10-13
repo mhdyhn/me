@@ -17,6 +17,7 @@ export interface PublicUser {
   displayName: string;
   coachId: number | null;
   mustChangePassword: boolean;
+  iban?: string | null;
 }
 
 export interface ProgramItem {
@@ -36,7 +37,25 @@ export interface ProgramDay {
 export interface Programme {
   title: string;
   days: ProgramDay[];
+  priceTomans?: number;
   updatedAt: string;
+}
+
+export interface PaymentTransaction {
+  id: number;
+  studentId: number;
+  studentName?: string;
+  coachId: number;
+  coachName?: string;
+  amountTomans: number;
+  coachShareTomans: number;
+  adminShareTomans: number;
+  authority: string;
+  status: 'pending' | 'paid' | 'failed' | 'canceled';
+  refId: string | null;
+  cardPan: string | null;
+  createdAt: string;
+  verifiedAt: string | null;
 }
 
 export interface Credentials {

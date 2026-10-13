@@ -520,3 +520,157 @@ describe('personal meal diary', () => {
     expect(forbidden.status).toBe(404);
   });
 });
+
+describe('ZarinPal payments with multi-settlement', () => {
+  async function studentSession(coachToken: string, displayName: string) {
+    const created = await call('POST', '/api/students', { displayName }, coachToken);
+    const token = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-pay-pass-1' }, token);
+    return { token, id: created.json.user.id as number };
+  }
+
+  it('calculates 90/10 commission split accurately with odd and edge amounts', async () => {
+    const { calculateCommission } = await import('./payments.ts');
+
+    const testAmounts = [100000, 99999, 1, 33333, 777777, 50000, 0];
+    for (const amount of testAmounts) {
+      const { coachShare, adminShare } = calculateCommission(amount);
+      expect(coachShare + adminShare).toBe(amount);
+      expect(coachShare).toBe(Math.floor((amount * 90) / 100));
+      expect(adminShare).toBe(amount - coachShare);
+    }
+  });
+
+  it('validates and stores coach IBAN (Sheba)', async () => {
+    const coach = await coachSession();
+
+    // Invalid IBANs
+    expect((await call('PUT', '/api/coach/iban', { iban: '1234' }, coach.token)).status).toBe(400);
+    expect((await call('PUT', '/api/coach/iban', { iban: 'DE120000000000000000000000' }, coach.token)).status).toBe(400);
+
+    // Valid IBAN
+    const validIban = 'IR120000000000000000000001';
+    const putRes = await call('PUT', '/api/coach/iban', { iban: 'ir 1200 0000 0000 0000 0000 0001' }, coach.token);
+    expect(putRes.status).toBe(200);
+    expect(putRes.json.iban).toBe(validIban);
+
+    const getRes = await call('GET', '/api/coach/iban', undefined, coach.token);
+    expect(getRes.status).toBe(200);
+    expect(getRes.json.iban).toBe(validIban);
+  });
+
+  it('handles full purchase flow: start, verify, unlock program, and prevents duplicate callback', async () => {
+    const coach = await coachSession();
+    await call('PUT', '/api/coach/iban', { iban: 'IR980000000000000000000001' }, coach.token);
+
+    const student = await studentSession(coach.token, 'شاگرد پرداختی');
+
+    // Coach assigns paid program
+    const saveRes = await call(
+      'PUT',
+      `/api/students/${student.id}/program`,
+      {
+        title: 'برنامه تخصصی هایپرتروفی',
+        priceTomans: 200000,
+        days: [
+          {
+            name: 'روز سینه و جلو بازو',
+            exercises: [
+              { exerciseId: 'bench-press', name: 'پرس سینه هالتر', muscle: 'سینه', sets: 4, reps: '8-10', restSeconds: 90 },
+            ],
+          },
+        ],
+      },
+      coach.token
+    );
+    expect(saveRes.status).toBe(200);
+    expect(saveRes.json.program.priceTomans).toBe(200000);
+
+    // Student visits program: exercises are locked
+    const lockedView = await call('GET', '/api/me/program', undefined, student.token);
+    expect(lockedView.status).toBe(200);
+    expect(lockedView.json.isPaid).toBe(false);
+    expect(lockedView.json.program.title).toBe('برنامه تخصصی هایپرتروفی');
+    expect(lockedView.json.program.days).toHaveLength(0); // Exercises masked on server
+
+    // Student initiates payment
+    const startRes = await call('POST', '/api/pay/start', {}, student.token);
+    expect(startRes.status).toBe(201);
+    expect(startRes.json.authority).toBeDefined();
+    expect(startRes.json.paymentUrl).toBeDefined();
+    const authority = startRes.json.authority as string;
+
+    // Verify payment successfully
+    const verifyRes = await call('POST', '/api/pay/verify', { authority, status: 'OK' }, student.token);
+    expect(verifyRes.status).toBe(200);
+    expect(verifyRes.json.success).toBe(true);
+    expect(verifyRes.json.transaction.status).toBe('paid');
+    expect(verifyRes.json.transaction.refId).toBeDefined();
+    expect(verifyRes.json.transaction.coachShareTomans).toBe(180000); // 90%
+    expect(verifyRes.json.transaction.adminShareTomans).toBe(20000);  // 10%
+
+    // Duplicate callback / verify test (Idempotent)
+    const duplicateVerify = await call('POST', '/api/pay/verify', { authority, status: 'OK' }, student.token);
+    expect(duplicateVerify.status).toBe(200);
+    expect(duplicateVerify.json.success).toBe(true);
+    expect(duplicateVerify.json.transaction.status).toBe('paid');
+
+    // Student visits program now: completely unlocked
+    const unlockedView = await call('GET', '/api/me/program', undefined, student.token);
+    expect(unlockedView.status).toBe(200);
+    expect(unlockedView.json.isPaid).toBe(true);
+    expect(unlockedView.json.program.days).toHaveLength(1);
+    expect(unlockedView.json.program.days[0].exercises[0].exerciseId).toBe('bench-press');
+
+    // Trying to start payment again for already paid program returns 400
+    const secondStart = await call('POST', '/api/pay/start', {}, student.token);
+    expect(secondStart.status).toBe(400);
+
+    // Coach views transactions
+    const coachTransactions = await call('GET', '/api/coach/transactions', undefined, coach.token);
+    expect(coachTransactions.status).toBe(200);
+    expect(coachTransactions.json.transactions.length).toBeGreaterThanOrEqual(1);
+    expect(coachTransactions.json.transactions[0].authority).toBe(authority);
+    expect(coachTransactions.json.transactions[0].coachShareTomans).toBe(180000);
+
+    // Other coach does not see it
+    const otherCoach = await coachSession();
+    const otherCoachTransactions = await call('GET', '/api/coach/transactions', undefined, otherCoach.token);
+    expect(otherCoachTransactions.json.transactions).toHaveLength(0);
+
+    // Admin views all transactions
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const adminTransactions = await call('GET', '/api/admin/transactions', undefined, admin);
+    expect(adminTransactions.status).toBe(200);
+    expect(adminTransactions.json.transactions.some((t: { authority: string }) => t.authority === authority)).toBe(true);
+  });
+
+  it('marks transaction as canceled when gateway returns NOK', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد انصرافی');
+
+    await call(
+      'PUT',
+      `/api/students/${student.id}/program`,
+      {
+        title: 'برنامه انصرافی',
+        priceTomans: 50000,
+        days: [{ name: 'روز ۱', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }],
+      },
+      coach.token
+    );
+
+    const startRes = await call('POST', '/api/pay/start', {}, student.token);
+    const authority = startRes.json.authority as string;
+
+    const cancelRes = await call('POST', '/api/pay/verify', { authority, status: 'NOK' }, student.token);
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.json.success).toBe(false);
+    expect(cancelRes.json.transaction.status).toBe('canceled');
+
+    // Program remains locked
+    const view = await call('GET', '/api/me/program', undefined, student.token);
+    expect(view.json.isPaid).toBe(false);
+    expect(view.json.program.days).toHaveLength(0);
+  });
+});

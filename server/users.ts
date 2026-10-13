@@ -11,6 +11,7 @@ export interface PublicUser {
   displayName: string;
   coachId: number | null;
   mustChangePassword: boolean;
+  iban?: string | null;
 }
 
 interface UserRow {
@@ -22,6 +23,7 @@ interface UserRow {
   coach_id: number | null;
   must_change_password: number;
   password_enc: string | null;
+  iban?: string | null;
 }
 
 export interface StoredUser extends PublicUser {
@@ -40,6 +42,7 @@ function fromRow(row: UserRow): StoredUser {
     mustChangePassword: Number(row.must_change_password) === 1,
     passwordHash: row.password_hash,
     passwordEnc: row.password_enc ?? null,
+    iban: row.iban ?? null,
   };
 }
 
@@ -91,6 +94,10 @@ export async function countStudents(db: Db, coachId: number): Promise<number> {
 
 export async function updatePassword(db: Db, id: number, passwordHash: string, mustChangePassword: boolean, passwordEnc: string | null): Promise<void> {
   await db.query('UPDATE users SET password_hash = $1, must_change_password = $2, password_enc = $3 WHERE id = $4', [passwordHash, mustChangePassword ? 1 : 0, passwordEnc, id]);
+}
+
+export async function updateCoachIban(db: Db, id: number, iban: string): Promise<void> {
+  await db.query("UPDATE users SET iban = $1 WHERE id = $2 AND role = 'coach'", [iban, id]);
 }
 
 export async function listCoaches(db: Db): Promise<PublicUser[]> {

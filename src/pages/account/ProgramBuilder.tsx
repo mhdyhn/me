@@ -24,6 +24,7 @@ function Builder() {
   const id = Number(studentId);
   const [student, setStudent] = useState<PublicUser | null>(null);
   const [title, setTitle] = useState('');
+  const [priceTomans, setPriceTomans] = useState(0);
   const [days, setDays] = useState<ProgramDay[]>([]);
   const [activeDay, setActiveDay] = useState(0);
   const [muscle, setMuscle] = useState(muscleOptions[0] ?? '');
@@ -46,6 +47,7 @@ function Builder() {
         setStudent(list.students.find((candidate) => candidate.id === id) ?? null);
         if (programmeResult.program) {
           setTitle(programmeResult.program.title);
+          setPriceTomans(programmeResult.program.priceTomans ?? 0);
           setDays(programmeResult.program.days);
         }
       } catch (caught) {
@@ -154,7 +156,7 @@ function Builder() {
     setSaving(true);
     setSaveError(null);
     try {
-      await api('PUT', `/students/${id}/program`, { title: title.trim(), days });
+      await api('PUT', `/students/${id}/program`, { title: title.trim(), days, priceTomans });
       setMessage('برنامه ذخیره شد. شاگرد همین حالا آن را می‌بیند.');
     } catch (caught) {
       setSaveError(caught instanceof ApiError ? caught.message : 'برنامه ذخیره نشد. دوباره تلاش کنید.');
@@ -171,10 +173,34 @@ function Builder() {
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> شاگردها</Link>
 
       <section className="builder-section">
-        <label className="field">
-          <span>عنوان برنامه</span>
-          <input value={title} onChange={(event) => { setTitle(event.target.value); setMessage(null); }} maxLength={80} placeholder="مثلاً برنامهٔ سه روزه قدرتی" />
-        </label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <label className="field">
+            <span>عنوان برنامه</span>
+            <input value={title} onChange={(event) => { setTitle(event.target.value); setMessage(null); }} maxLength={80} placeholder="مثلاً برنامهٔ سه روزه قدرتی" />
+          </label>
+          <label className="field">
+            <span>هزینهٔ برنامه (تومان)</span>
+            <input
+              type="number"
+              min={0}
+              step={5000}
+              value={priceTomans || ''}
+              onChange={(event) => {
+                setPriceTomans(Math.max(0, parseInt(event.target.value) || 0));
+                setMessage(null);
+              }}
+              placeholder="۰ برای برنامهٔ رایگان"
+            />
+          </label>
+        </div>
+        {priceTomans > 0 && (
+          <div style={{ marginTop: 8, fontSize: 13, padding: '8px 14px', background: 'var(--surface-soft)', borderRadius: 10, border: '1px solid var(--line)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <span className="account-muted">تسهیم زرین‌پال:</span>
+            <span style={{ color: '#4ade80', fontWeight: 600 }}>سهم مربی (۹۰٪): {Math.floor(priceTomans * 0.9).toLocaleString('fa-IR')} تومان</span>
+            <span className="account-muted">|</span>
+            <span className="account-muted">سهم مدیر (۱۰٪): {(priceTomans - Math.floor(priceTomans * 0.9)).toLocaleString('fa-IR')} تومان</span>
+          </div>
+        )}
       </section>
 
       <section className="builder-section">

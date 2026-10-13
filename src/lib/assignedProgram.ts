@@ -1,6 +1,6 @@
 import { ApiError, api, type Programme, type ProgramItem } from './api';
 import type { WorkoutExercise, WorkoutTemplate } from '../types';
-import { setAssignedProgram } from './programStore';
+import { setAssignedMeta, setAssignedProgram } from './programStore';
 
 /** Reads "8-12" or "8" into a range. Anything else falls back to 8–12. */
 export function parseReps(reps: string): { minReps: number; maxReps: number } {
@@ -49,8 +49,23 @@ export function assignedToTemplates(program: Programme): WorkoutTemplate[] {
 /** Loads the programme the coach assigned to the signed-in student. Read-only for the student. */
 export async function loadAssignedProgram(): Promise<void> {
   try {
-    const result = await api<{ program: Programme | null }>('GET', '/me/program');
-    setAssignedProgram(result.program ? assignedToTemplates(result.program) : []);
+    const result = await api<{ program: Programme | null; coachName?: string | null; isPaid?: boolean }>('GET', '/me/program');
+    if (result.program) {
+      setAssignedMeta({
+        title: result.program.title,
+        priceTomans: result.program.priceTomans ?? 0,
+        coachName: result.coachName ?? null,
+        isPaid: result.isPaid !== false,
+      });
+      if (result.isPaid !== false) {
+        setAssignedProgram(assignedToTemplates(result.program));
+      } else {
+        setAssignedProgram([]);
+      }
+    } else {
+      setAssignedMeta(null);
+      setAssignedProgram([]);
+    }
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return;
     console.error('Meety could not load the coach programme.', error);

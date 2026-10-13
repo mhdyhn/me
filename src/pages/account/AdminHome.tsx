@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import { KeyRound, MessageCircle, Receipt, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
@@ -78,6 +78,11 @@ function AdminCoaches() {
 
   return (
     <PanelPage title="مربی‌ها">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+        <Link to="/coach/admin/transactions" className="button button--ghost">
+          <Receipt size={16} /> تراکنش‌ها و درآمدهای باشگاه
+        </Link>
+      </div>
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
       ) : (

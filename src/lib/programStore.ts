@@ -9,14 +9,31 @@ import type { WorkoutTemplate } from '../types';
  * `programPersistence.ts`, so this module stays free of storage code and easy to test).
  */
 /** The developer's account starts with the original programme; every other account starts empty. */
+export interface AssignedMeta {
+  title: string;
+  priceTomans: number;
+  coachName: string | null;
+  isPaid: boolean;
+}
+
 let activeProgram: WorkoutTemplate[] = usesOwnerData() ? originalProgram : [];
 let readOnly = false;
+let assignedMeta: AssignedMeta | null = null;
 const listeners = new Set<() => void>();
 
 /** A fresh, editable copy of the original RAGE programme. */
 export const originalProgramCopy = (): WorkoutTemplate[] => structuredClone(originalProgram);
 
 export const getActiveProgram = (): WorkoutTemplate[] => activeProgram;
+
+export const getAssignedMeta = (): AssignedMeta | null => assignedMeta;
+
+export function setAssignedMeta(meta: AssignedMeta | null) {
+  assignedMeta = meta;
+  listeners.forEach((listener) => listener());
+}
+
+export const useAssignedMeta = (): AssignedMeta | null => useSyncExternalStore(subscribe, getAssignedMeta, getAssignedMeta);
 
 /** The developer's own programme is editable. Accounts start with none until they create one. */
 export function setActiveProgram(next: WorkoutTemplate[]) {
