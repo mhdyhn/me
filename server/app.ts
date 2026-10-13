@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { DatabaseSync } from 'node:sqlite';
+import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
 import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
@@ -9,7 +9,7 @@ import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 
 export interface AppOptions {
-  db: DatabaseSync;
+  db: Db;
   /** Key for the encrypted copy of generated passwords. Required: there is no built-in default. */
   secretKey: SecretKey;
   /** Injected clock so tests can move time forward (session expiry, lock windows). */
@@ -37,7 +37,7 @@ interface Route {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   pattern: RegExp;
   auth: Auth;
-  handler: (ctx: Context) => RouteResult;
+  handler: (ctx: Context) => Promise<RouteResult>;
 }
 
 const PASSWORD_MIN = 8;
@@ -82,14 +82,14 @@ export function createApp(options: AppOptions) {
   }
 
   /** The admin's view of a coach. Same answer for missing and non-coach ids. */
-  function ownCoach(coachId: number): StoredUser {
-    const coach = findUserById(db, coachId);
+  async function ownCoach(coachId: number): Promise<StoredUser> {
+    const coach = await findUserById(db, coachId);
     if (!coach || coach.role !== 'coach') throw new HttpError(404, 'مربی پیدا نشد.');
     return coach;
   }
 
-  function ownStudent(coach: StoredUser, studentId: number): StoredUser {
-    const student = findUserById(db, studentId);
+  async function ownStudent(coach: StoredUser, studentId: number): Promise<StoredUser> {
+    const student = await findUserById(db, studentId);
     if (!student || student.role !== 'student' || student.coachId !== coach.id) {
       // Same answer for "missing" and "belongs to another coach", so ids cannot be probed.
       throw new HttpError(404, 'شاگرد پیدا نشد.');
@@ -102,33 +102,33 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/?$/,
       auth: 'public',
-      handler: () => ({ status: 200, body: { name: 'Meety API', ok: true } }),
+      handler: async () => ({ status: 200, body: { name: 'Meety API', ok: true } }),
     },
 
     {
       method: 'GET',
       pattern: /^\/api\/health$/,
       auth: 'public',
-      handler: () => ({ status: 200, body: { ok: true } }),
+      handler: async () => ({ status: 200, body: { ok: true } }),
     },
 
     {
       method: 'POST',
       pattern: /^\/api\/auth\/login$/,
       auth: 'public',
-      handler: ({ body }) => {
+      handler: async ({ body }) => {
         const input = requireObject(body);
         const username = requireText(input, 'username', 1, 64, 'نام کاربری');
         const password = requireText(input, 'password', 1, PASSWORD_MAX, 'رمز عبور');
         assertNotLocked(username);
-        const user = findUserByUsername(db, username);
+        const user = await findUserByUsername(db, username);
         const valid = user ? verifyPassword(password, user.passwordHash) : (verifyPassword(password, dummyHash), false);
         if (!user || !valid) {
           recordFailure(username);
           throw new HttpError(401, 'نام کاربری یا رمز عبور اشتباه است.');
         }
         failures.delete(username);
-        const token = createSession(db, user.id, now());
+        const token = await createSession(db, user.id, now());
         return { status: 200, body: { token, user: toPublic(user) }, headers: { 'Set-Cookie': sessionCookie(token) } };
       },
     },
@@ -137,8 +137,8 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/auth\/logout$/,
       auth: 'signed-in',
-      handler: ({ token }) => {
-        if (token) deleteSession(db, token);
+      handler: async ({ token }) => {
+        if (token) await deleteSession(db, token);
         return { status: 200, body: { ok: true }, headers: { 'Set-Cookie': clearSessionCookie() } };
       },
     },
@@ -147,20 +147,20 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me$/,
       auth: 'signed-in',
-      handler: ({ user }) => ({ status: 200, body: { user: toPublic(user!) } }),
+      handler: async ({ user }) => ({ status: 200, body: { user: toPublic(user!) } }),
     },
 
     {
       method: 'POST',
       pattern: /^\/api\/me\/password$/,
       auth: 'signed-in',
-      handler: ({ user, body }) => {
+      handler: async ({ user, body }) => {
         const input = requireObject(body);
         const current = requireText(input, 'currentPassword', 1, PASSWORD_MAX, 'رمز فعلی');
         const next = requireText(input, 'newPassword', PASSWORD_MIN, PASSWORD_MAX, 'رمز جدید');
         if (!verifyPassword(current, user!.passwordHash)) throw new HttpError(400, 'رمز فعلی درست نیست.');
         if (next === current) throw new HttpError(400, 'رمز جدید باید با رمز فعلی فرق داشته باشد.');
-        updatePassword(db, user!.id, hashPassword(next), false, null);
+        await updatePassword(db, user!.id, hashPassword(next), false, null);
         return { status: 200, body: { ok: true } };
       },
     },
@@ -169,19 +169,19 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/coaches$/,
       auth: ['admin'],
-      handler: () => ({ status: 200, body: { coaches: listCoachSummaries(db, secretKey) } }),
+      handler: async () => ({ status: 200, body: { coaches: await listCoachSummaries(db, secretKey) } }),
     },
 
     {
       method: 'POST',
       pattern: /^\/api\/coaches$/,
       auth: ['admin'],
-      handler: ({ body }) => {
+      handler: async ({ body }) => {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام مربی');
-        const username = generateUsername(db, 'c');
+        const username = await generateUsername(db, 'c');
         const password = generatePassword();
-        const id = insertUser(db, {
+        const id = await insertUser(db, {
           username,
           passwordHash: hashPassword(password),
           passwordEnc: encryptSecret(secretKey, password),
@@ -191,7 +191,7 @@ export function createApp(options: AppOptions) {
           mustChangePassword: true,
           now: now(),
         });
-        return { status: 201, body: { user: toPublic(findUserById(db, id)!), username, password } };
+        return { status: 201, body: { user: toPublic((await findUserById(db, id))!), username, password } };
       },
     },
 
@@ -199,14 +199,14 @@ export function createApp(options: AppOptions) {
       method: 'DELETE',
       pattern: /^\/api\/coaches\/(\d+)$/,
       auth: ['admin'],
-      handler: ({ params }) => {
-        const coach = ownCoach(Number(params[0]));
-        const students = countStudents(db, coach.id);
+      handler: async ({ params }) => {
+        const coach = await ownCoach(Number(params[0]));
+        const students = await countStudents(db, coach.id);
         if (students > 0) {
           throw new HttpError(409, `این مربی هنوز ${students} شاگرد دارد. ابتدا شاگردهایش را حذف کنید.`);
         }
-        deleteSessionsForUser(db, coach.id);
-        deleteUser(db, coach.id);
+        await deleteSessionsForUser(db, coach.id);
+        await deleteUser(db, coach.id);
         return { status: 200, body: { ok: true } };
       },
     },
@@ -215,11 +215,11 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/coaches\/(\d+)\/reset-password$/,
       auth: ['admin'],
-      handler: ({ params }) => {
-        const coach = ownCoach(Number(params[0]));
+      handler: async ({ params }) => {
+        const coach = await ownCoach(Number(params[0]));
         const password = generatePassword();
-        updatePassword(db, coach.id, hashPassword(password), true, encryptSecret(secretKey, password));
-        deleteSessionsForUser(db, coach.id);
+        await updatePassword(db, coach.id, hashPassword(password), true, encryptSecret(secretKey, password));
+        await deleteSessionsForUser(db, coach.id);
         return { status: 200, body: { username: coach.username, password } };
       },
     },
@@ -228,19 +228,19 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students$/,
       auth: ['coach'],
-      handler: ({ user }) => ({ status: 200, body: { students: listStudents(db, user!.id, secretKey) } }),
+      handler: async ({ user }) => ({ status: 200, body: { students: await listStudents(db, user!.id, secretKey) } }),
     },
 
     {
       method: 'POST',
       pattern: /^\/api\/students$/,
       auth: ['coach'],
-      handler: ({ user, body }) => {
+      handler: async ({ user, body }) => {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام شاگرد');
-        const username = generateUsername(db, 's');
+        const username = await generateUsername(db, 's');
         const password = generatePassword();
-        const id = insertUser(db, {
+        const id = await insertUser(db, {
           username,
           passwordHash: hashPassword(password),
           passwordEnc: encryptSecret(secretKey, password),
@@ -250,7 +250,7 @@ export function createApp(options: AppOptions) {
           mustChangePassword: true,
           now: now(),
         });
-        return { status: 201, body: { user: toPublic(findUserById(db, id)!), username, password } };
+        return { status: 201, body: { user: toPublic((await findUserById(db, id))!), username, password } };
       },
     },
 
@@ -258,9 +258,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach'],
-      handler: ({ user, params }) => {
-        const student = ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { program: loadProgramme(db, student.id) } };
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { program: await loadProgramme(db, student.id) } };
       },
     },
 
@@ -268,10 +268,10 @@ export function createApp(options: AppOptions) {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach'],
-      handler: ({ user, params, body }) => {
-        const student = ownStudent(user!, Number(params[0]));
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
-        return { status: 200, body: { program: saveProgramme(db, student.id, user!.id, programme, now()) } };
+        return { status: 200, body: { program: await saveProgramme(db, student.id, user!.id, programme, now()) } };
       },
     },
 
@@ -279,9 +279,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/nutrition$/,
       auth: ['student'],
-      handler: ({ user }) => {
-        const coach = findUserById(db, user!.coachId!);
-        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: loadPlan(db, user!.id) } };
+      handler: async ({ user }) => {
+        const coach = await findUserById(db, user!.coachId!);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: await loadPlan(db, user!.id) } };
       },
     },
 
@@ -290,9 +290,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/diary\/([^/]+)$/,
       auth: 'signed-in',
-      handler: ({ user, params }) => {
+      handler: async ({ user, params }) => {
         const day = validateDay(decodeURIComponent(params[0]!));
-        return { status: 200, body: { diary: loadDiary(db, user!.id, day) } };
+        return { status: 200, body: { diary: await loadDiary(db, user!.id, day) } };
       },
     },
 
@@ -300,9 +300,9 @@ export function createApp(options: AppOptions) {
       method: 'PUT',
       pattern: /^\/api\/me\/diary$/,
       auth: 'signed-in',
-      handler: ({ user, body }) => {
+      handler: async ({ user, body }) => {
         const diary = validateDiary(body);
-        return { status: 200, body: { diary: saveDiary(db, user!.id, diary.day, diary.meals, now().toISOString()) } };
+        return { status: 200, body: { diary: await saveDiary(db, user!.id, diary.day, diary.meals, now().toISOString()) } };
       },
     },
 
@@ -310,9 +310,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
       auth: ['coach'],
-      handler: ({ user, params }) => {
-        const student = ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { plan: loadPlan(db, student.id) ?? emptyPlan() } };
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { plan: await loadPlan(db, student.id) ?? emptyPlan() } };
       },
     },
 
@@ -320,10 +320,10 @@ export function createApp(options: AppOptions) {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
       auth: ['coach'],
-      handler: ({ user, params, body }) => {
-        const student = ownStudent(user!, Number(params[0]));
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
         const plan = validatePlan(body);
-        return { status: 200, body: { plan: savePlan(db, student.id, user!.id, plan, now().toISOString()) } };
+        return { status: 200, body: { plan: await savePlan(db, student.id, user!.id, plan, now().toISOString()) } };
       },
     },
 
@@ -331,9 +331,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
-      handler: ({ user }) => {
-        const coach = findUserById(db, user!.coachId!);
-        return { status: 200, body: { coachName: coach?.displayName ?? null, messages: listMessages(db, user!.coachId!, user!.id) } };
+      handler: async ({ user }) => {
+        const coach = await findUserById(db, user!.coachId!);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, messages: await listMessages(db, user!.coachId!, user!.id) } };
       },
     },
 
@@ -341,10 +341,10 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
-      handler: ({ user, body }) => {
+      handler: async ({ user, body }) => {
         const input = requireObject(body);
         const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
-        return { status: 201, body: { message: addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString()) } };
+        return { status: 201, body: { message: await addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString()) } };
       },
     },
 
@@ -352,9 +352,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/chat$/,
       auth: ['coach'],
-      handler: ({ user, params }) => {
-        const student = ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { studentName: student.displayName, messages: listMessages(db, user!.id, student.id) } };
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { studentName: student.displayName, messages: await listMessages(db, user!.id, student.id) } };
       },
     },
 
@@ -362,11 +362,11 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/students\/(\d+)\/chat$/,
       auth: ['coach'],
-      handler: ({ user, params, body }) => {
-        const student = ownStudent(user!, Number(params[0]));
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
         const input = requireObject(body);
         const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
-        return { status: 201, body: { message: addMessage(db, user!.id, student.id, user!.id, text, now().toISOString()) } };
+        return { status: 201, body: { message: await addMessage(db, user!.id, student.id, user!.id, text, now().toISOString()) } };
       },
     },
 
@@ -374,9 +374,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/program$/,
       auth: ['student'],
-      handler: ({ user }) => {
-        const coach = findUserById(db, user!.coachId!);
-        return { status: 200, body: { program: loadProgramme(db, user!.id), coachName: coach?.displayName ?? null } };
+      handler: async ({ user }) => {
+        const coach = await findUserById(db, user!.coachId!);
+        return { status: 200, body: { program: await loadProgramme(db, user!.id), coachName: coach?.displayName ?? null } };
       },
     },
 
@@ -384,10 +384,10 @@ export function createApp(options: AppOptions) {
       method: 'DELETE',
       pattern: /^\/api\/students\/(\d+)$/,
       auth: ['coach'],
-      handler: ({ user, params }) => {
-        const student = ownStudent(user!, Number(params[0]));
-        deleteSessionsForUser(db, student.id);
-        deleteUser(db, student.id);
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        await deleteSessionsForUser(db, student.id);
+        await deleteUser(db, student.id);
         return { status: 200, body: { ok: true } };
       },
     },
@@ -396,18 +396,18 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/students\/(\d+)\/reset-password$/,
       auth: ['coach'],
-      handler: ({ user, params }) => {
-        const student = ownStudent(user!, Number(params[0]));
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
         const password = generatePassword();
-        updatePassword(db, student.id, hashPassword(password), true, encryptSecret(secretKey, password));
-        deleteSessionsForUser(db, student.id);
+        await updatePassword(db, student.id, hashPassword(password), true, encryptSecret(secretKey, password));
+        await deleteSessionsForUser(db, student.id);
         return { status: 200, body: { username: student.username, password } };
       },
     },
   ];
 
   /** Accepts the bearer header or the session cookie. Reports which one was used, because cookie requests need a CSRF check. */
-  function authenticate(request: IncomingMessage): { user: StoredUser | null; token: string | null; viaCookie: boolean } {
+  async function authenticate(request: IncomingMessage): Promise<{ user: StoredUser | null; token: string | null; viaCookie: boolean }> {
     // Three channels, because preview proxies and browsers differ in what they pass through:
     // the Authorization header, a custom header (proxies rarely strip it), and the session cookie.
     const bearer = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(request.headers.authorization ?? '');
@@ -418,13 +418,13 @@ export function createApp(options: AppOptions) {
     const fromCookie = cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
     const candidate = bearer ? bearer[1] : header ?? fromCookie;
     if (!candidate) return { user: null, token: null, viaCookie: false };
-    const userId = userIdForToken(db, candidate, now());
+    const userId = await userIdForToken(db, candidate, now());
     if (userId === null) return { user: null, token: null, viaCookie: false };
     // Only a cookie-only session is subject to the JSON-only rule for writes (CSRF protection).
-    return { user: findUserById(db, userId), token: candidate, viaCookie: !bearer && !header };
+    return { user: await findUserById(db, userId), token: candidate, viaCookie: !bearer && !header };
   }
 
-  function dispatch(request: IncomingMessage, body: unknown): RouteResult {
+  async function dispatch(request: IncomingMessage, body: unknown): Promise<RouteResult> {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const method = request.method ?? 'GET';
     const pathMatches = routes.filter((route) => route.pattern.test(url.pathname));
@@ -432,7 +432,7 @@ export function createApp(options: AppOptions) {
     const route = pathMatches.find((candidate) => candidate.method === method);
     if (!route) throw new HttpError(405, 'این روش برای این مسیر مجاز نیست.');
 
-    const { user, token, viaCookie } = authenticate(request);
+    const { user, token, viaCookie } = await authenticate(request);
     // Cookie-authenticated writes must be JSON. A cross-site form cannot send that type without a preflight.
     if (viaCookie && method !== 'GET') {
       const type = String(request.headers['content-type'] ?? '');
@@ -470,7 +470,7 @@ export function createApp(options: AppOptions) {
     }
     try {
       const body = request.method === 'GET' ? {} : await readJsonBody(request);
-      const result = dispatch(request, body);
+      const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);
     } catch (error) {
       if (error instanceof HttpError) {

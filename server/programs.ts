@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { Db } from './db.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
 
 export interface ProgramItem {
@@ -63,17 +63,18 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
   return { title, days };
 }
 
-export function saveProgramme(db: DatabaseSync, studentId: number, coachId: number, programme: Omit<Programme, 'updatedAt'>, now: Date): Programme {
+export async function saveProgramme(db: Db, studentId: number, coachId: number, programme: Omit<Programme, 'updatedAt'>, now: Date): Promise<Programme> {
   const updatedAt = now.toISOString();
-  db.prepare(
-    `INSERT INTO student_programs (student_id, coach_id, body, updated_at) VALUES (?, ?, ?, ?)
+  await db.query(
+    `INSERT INTO student_programs (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)
      ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at`,
-  ).run(studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), updatedAt);
+    [studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), updatedAt],
+  );
   return { ...programme, updatedAt };
 }
 
-export function loadProgramme(db: DatabaseSync, studentId: number): Programme | null {
-  const row = db.prepare('SELECT body, updated_at FROM student_programs WHERE student_id = ?').get(studentId) as unknown as { body: string; updated_at: string } | undefined;
+export async function loadProgramme(db: Db, studentId: number): Promise<Programme | null> {
+  const row = (await db.query<{ body: string; updated_at: string }>('SELECT body, updated_at FROM student_programs WHERE student_id = $1', [studentId]))[0];
   if (!row) return null;
   const parsed = JSON.parse(row.body) as Omit<Programme, 'updatedAt'>;
   return { ...parsed, updatedAt: row.updated_at };

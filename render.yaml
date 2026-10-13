@@ -4,10 +4,9 @@
 # NODE_ENV=production makes `npm ci` skip devDependencies (TypeScript, Vite, @types/node).
 # The build needs them, so the build command forces them with --include=dev.
 #
-# This uses the FREE plan. Free services cannot attach a disk, so the SQLite database is
-# stored inside the service and is RESET on every restart, redeploy, or idle spin-down.
-# Use it for demos only. For real accounts, switch to plan: starter and add a disk
-# (see the notes in the project README) or use a VM with persistent storage.
+# This uses the FREE plan (no card needed). The data is stored in a hosted PostgreSQL database
+# (Neon, free), not in the service, so accounts and coach data survive restarts, redeploys and
+# idle spin-down. Set DATABASE_URL in the Render dashboard (Environment) to the Neon connection string.
 services:
   - type: web
     name: meety
@@ -25,6 +24,8 @@ services:
         value: production
       - key: MEETY_SECRET
         generateValue: true
+      - key: DATABASE_URL
+        sync: false
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD

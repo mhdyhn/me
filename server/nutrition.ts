@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite';
+import type { Db } from './db.ts';
 import { FOODS_BY_ID } from '../shared/foods.ts';
 import { HttpError } from './http.ts';
 
@@ -37,8 +37,8 @@ export interface NutritionPlan {
   updatedAt: string | null;
 }
 
-export function migrateNutrition(db: DatabaseSync): void {
-  db.exec(`
+export async function migrateNutrition(db: Db): Promise<void> {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS nutrition_plans (
       student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       coach_id INTEGER NOT NULL REFERENCES users(id),
@@ -63,19 +63,18 @@ export function emptyPlan(): NutritionPlan {
   };
 }
 
-export function loadPlan(db: DatabaseSync, studentId: number): NutritionPlan | null {
-  const row = db.prepare('SELECT body, updated_at FROM nutrition_plans WHERE student_id = ?').get(studentId) as
-    | { body: string; updated_at: string }
-    | undefined;
+export async function loadPlan(db: Db, studentId: number): Promise<NutritionPlan | null> {
+  const row = (await db.query<{ body: string; updated_at: string }>('SELECT body, updated_at FROM nutrition_plans WHERE student_id = $1', [studentId]))[0];
   if (!row) return null;
   return { ...(JSON.parse(row.body) as Omit<NutritionPlan, 'updatedAt'>), updatedAt: row.updated_at };
 }
 
-export function savePlan(db: DatabaseSync, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string): NutritionPlan {
-  db.prepare(
-    `INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at) VALUES (?, ?, ?, ?)
+export async function savePlan(db: Db, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string): Promise<NutritionPlan> {
+  await db.query(
+    `INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)
      ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at`,
-  ).run(studentId, coachId, JSON.stringify(plan), at);
+    [studentId, coachId, JSON.stringify(plan), at],
+  );
   return { ...plan, updatedAt: at };
 }
 
@@ -149,19 +148,18 @@ export function emptyDiary(day: string): Diary {
   return { day, meals: [], updatedAt: null };
 }
 
-export function loadDiary(db: DatabaseSync, userId: number, day: string): Diary {
-  const row = db.prepare('SELECT body, updated_at FROM nutrition_diary WHERE user_id = ? AND day = ?').get(userId, day) as
-    | { body: string; updated_at: string }
-    | undefined;
+export async function loadDiary(db: Db, userId: number, day: string): Promise<Diary> {
+  const row = (await db.query<{ body: string; updated_at: string }>('SELECT body, updated_at FROM nutrition_diary WHERE user_id = $1 AND day = $2', [userId, day]))[0];
   if (!row) return emptyDiary(day);
   return { day, meals: JSON.parse(row.body) as PlanMeal[], updatedAt: row.updated_at };
 }
 
-export function saveDiary(db: DatabaseSync, userId: number, day: string, meals: PlanMeal[], at: string): Diary {
-  db.prepare(
-    `INSERT INTO nutrition_diary (user_id, day, body, updated_at) VALUES (?, ?, ?, ?)
+export async function saveDiary(db: Db, userId: number, day: string, meals: PlanMeal[], at: string): Promise<Diary> {
+  await db.query(
+    `INSERT INTO nutrition_diary (user_id, day, body, updated_at) VALUES ($1, $2, $3, $4)
      ON CONFLICT(user_id, day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at`,
-  ).run(userId, day, JSON.stringify(meals), at);
+    [userId, day, JSON.stringify(meals), at],
+  );
   return { day, meals, updatedAt: at };
 }
 

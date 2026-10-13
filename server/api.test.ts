@@ -5,20 +5,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
-import { openDatabase } from './db.ts';
-import type { DatabaseSync } from 'node:sqlite';
+import { openDatabase, type Db } from './db.ts';
 
 type Json = Record<string, any>;
 
-let db: DatabaseSync;
+let db: Db;
 let server: Server;
 let base: string;
 let clock: Date;
 
 beforeEach(async () => {
-  db = openDatabase(':memory:');
+  db = await openDatabase('memory');
   clock = new Date('2026-10-13T08:00:00Z');
-  ensureAdmin(db, 'owner', 'owner-pass-123', clock);
+  await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
   server = createServer(createApp({ db, now: () => clock, secretKey: keyFromSecret('test-secret-for-the-suite') }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -26,7 +25,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  db.close();
+  await db.close();
 });
 
 async function call(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: Json }> {
@@ -309,7 +308,7 @@ describe('text chat between a coach and a student', () => {
     const student = await studentSession(coach.token, 'شاگرد حذفی چت');
     await call('POST', `/api/students/${student.id}/chat`, { body: 'پیام' }, coach.token);
     expect((await call('DELETE', `/api/students/${student.id}`, {}, coach.token)).status).toBe(200);
-    const count = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE student_id = ?').get(student.id) as { n: number };
+    const count = (await db.query<{ n: string }>('SELECT COUNT(*) AS n FROM messages WHERE student_id = $1', [student.id]))[0]!;
     expect(Number(count.n)).toBe(0);
   });
 });
@@ -341,7 +340,7 @@ describe('generated passwords on the cards', () => {
   it('stores generated passwords only as a hash and an encrypted copy', async () => {
     const coach = await coachSession();
     const created = await call('POST', '/api/students', { displayName: 'شاگرد مخفی' }, coach.token);
-    const raw = db.prepare('SELECT password_hash, password_enc FROM users WHERE id = ?').get(created.json.user.id) as { password_hash: string; password_enc: string };
+    const raw = (await db.query<{ password_hash: string; password_enc: string }>('SELECT password_hash, password_enc FROM users WHERE id = $1', [created.json.user.id]))[0]!;
     expect(raw.password_hash).not.toContain(created.json.password);
     expect(raw.password_enc).not.toContain(created.json.password);
   });
@@ -418,7 +417,7 @@ describe('nutrition plans', () => {
     const created = await call('POST', '/api/students', { displayName: 'شاگرد حذف تغذیه' }, coach.token);
     await call('PUT', `/api/students/${created.json.user.id}/nutrition`, { days: emptyWeek() }, coach.token);
     await call('DELETE', `/api/students/${created.json.user.id}`, {}, coach.token);
-    const count = db.prepare('SELECT COUNT(*) AS n FROM nutrition_plans WHERE student_id = ?').get(created.json.user.id) as { n: number };
+    const count = (await db.query<{ n: string }>('SELECT COUNT(*) AS n FROM nutrition_plans WHERE student_id = $1', [created.json.user.id]))[0]!;
     expect(Number(count.n)).toBe(0);
   });
 });

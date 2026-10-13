@@ -1,23 +1,22 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
-import { openDatabase } from './db.ts';
+import { openDatabase, type Db } from './db.ts';
 
 type Json = Record<string, any>;
 
-let db: DatabaseSync;
+let db: Db;
 let server: Server;
 let base: string;
 const clock = new Date('2026-10-13T08:00:00Z');
 
 beforeEach(async () => {
-  db = openDatabase(':memory:');
-  ensureAdmin(db, 'owner', 'owner-pass-123', clock);
+  db = await openDatabase('memory');
+  await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
   server = createServer(createApp({ db, now: () => clock, secretKey: keyFromSecret('test-secret-for-the-suite') }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -25,7 +24,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  db.close();
+  await db.close();
 });
 
 async function call(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: Json }> {

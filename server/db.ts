@@ -1,24 +1,65 @@
-import { DatabaseSync } from 'node:sqlite';
+import pg from 'pg';
+import { PGlite } from '@electric-sql/pglite';
 import { migrateChat } from './chat.ts';
 import { migrateNutrition } from './nutrition.ts';
 
 /**
- * SQLite storage for the server. The schema is created on open with IF NOT EXISTS so a
- * fresh file and an existing one both work. Later phases add tables here, never edit
+ * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
+ * DATABASE_URL. Tests use an in-process PostgreSQL ('memory'). Local development without a
+ * DATABASE_URL keeps its data in a folder on disk. The schema is created with IF NOT EXISTS
+ * so a new and an existing database both work. Later phases add tables here, never edit
  * the ones already shipped.
  */
-export function openDatabase(path: string): DatabaseSync {
-  const db = new DatabaseSync(path);
-  db.exec('PRAGMA foreign_keys = ON;');
-  if (path !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
-  migrate(db);
+export type Row = Record<string, any>;
+
+export interface Db {
+  query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<T[]>;
+  exec(sql: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Opens the database. `target` is a postgres:// URL, 'memory', or a folder path for local use. */
+export async function openDatabase(target: string): Promise<Db> {
+  const db = target.startsWith('postgres') ? fromPool(target) : fromPGlite(target === 'memory' ? new PGlite() : new PGlite(target));
+  await migrate(db);
   return db;
 }
 
-function migrate(db: DatabaseSync): void {
-  db.exec(`
+function fromPool(url: string): Db {
+  const pool = new pg.Pool({ connectionString: url, max: 5 });
+  return {
+    async query<T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T[]> {
+      const result = await pool.query(sql, params as unknown[]);
+      return result.rows as T[];
+    },
+    async exec(sql: string): Promise<void> {
+      await pool.query(sql);
+    },
+    async close(): Promise<void> {
+      await pool.end();
+    },
+  };
+}
+
+function fromPGlite(pg: PGlite): Db {
+  return {
+    async query<T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T[]> {
+      const result = await pg.query(sql, params as unknown[]);
+      return result.rows as T[];
+    },
+    async exec(sql: string): Promise<void> {
+      await pg.exec(sql);
+    },
+    async close(): Promise<void> {
+      await pg.close();
+    },
+  };
+}
+
+async function migrate(db: Db): Promise<void> {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin', 'coach', 'student')),
@@ -26,6 +67,7 @@ function migrate(db: DatabaseSync): void {
       coach_id INTEGER REFERENCES users(id),
       must_change_password INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
+      password_enc TEXT,
       CHECK ((role = 'student') = (coach_id IS NOT NULL))
     );
 
@@ -43,10 +85,7 @@ function migrate(db: DatabaseSync): void {
       expires_at TEXT NOT NULL
     );
   `);
-  migrateChat(db);
-  migrateNutrition(db);
-  const columns = db.prepare('PRAGMA table_info(users)').all() as unknown as { name: string }[];
-  if (!columns.some((column) => column.name === 'password_enc')) {
-    db.exec('ALTER TABLE users ADD COLUMN password_enc TEXT;');
-  }
+  await migrateChat(db);
+  await migrateNutrition(db);
+  await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT;');
 }

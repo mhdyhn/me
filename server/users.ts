@@ -1,5 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite';
 import { decryptSecret, type SecretKey } from './secrets.ts';
+import type { Db } from './db.ts';
 
 export type Role = 'admin' | 'coach' | 'student';
 
@@ -44,29 +44,28 @@ function fromRow(row: UserRow): StoredUser {
 }
 
 export function toPublic(user: StoredUser): PublicUser {
-  const { passwordHash: _hash, ...publicUser } = user;
+  // Neither the password hash nor the encrypted copy of the generated password leaves the server.
+  const { passwordHash: _hash, passwordEnc: _enc, ...publicUser } = user;
   return publicUser;
 }
 
-export function findUserById(db: DatabaseSync, id: number): StoredUser | null {
-  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as unknown as UserRow | undefined;
+export async function findUserById(db: Db, id: number): Promise<StoredUser | null> {
+  const row = (await db.query<UserRow>('SELECT * FROM users WHERE id = $1', [id]))[0];
   return row ? fromRow(row) : null;
 }
 
-export function findUserByUsername(db: DatabaseSync, username: string): StoredUser | null {
-  const row = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as unknown as UserRow | undefined;
+export async function findUserByUsername(db: Db, username: string): Promise<StoredUser | null> {
+  const row = (await db.query<UserRow>('SELECT * FROM users WHERE username = $1', [username]))[0];
   return row ? fromRow(row) : null;
 }
 
-export function insertUser(
-  db: DatabaseSync,
+export async function insertUser(
+  db: Db,
   input: { username: string; passwordHash: string; passwordEnc?: string | null; role: Role; displayName: string; coachId: number | null; mustChangePassword: boolean; now: Date },
-): number {
-  const result = db
-    .prepare(
-      'INSERT INTO users (username, password_hash, role, display_name, coach_id, must_change_password, created_at, password_enc) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    )
-    .run(
+): Promise<number> {
+  const rows = await db.query<{ id: number }>(
+    'INSERT INTO users (username, password_hash, role, display_name, coach_id, must_change_password, created_at, password_enc) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+    [
       input.username,
       input.passwordHash,
       input.role,
@@ -75,26 +74,27 @@ export function insertUser(
       input.mustChangePassword ? 1 : 0,
       input.now.toISOString(),
       input.passwordEnc ?? null,
-    );
-  return Number(result.lastInsertRowid);
+    ],
+  );
+  return Number(rows[0]!.id);
 }
 
 /** Removes an account. Its sessions and any programme are removed by the foreign-key cascade. */
-export function deleteUser(db: DatabaseSync, id: number): void {
-  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+export async function deleteUser(db: Db, id: number): Promise<void> {
+  await db.query('DELETE FROM users WHERE id = $1', [id]);
 }
 
-export function countStudents(db: DatabaseSync, coachId: number): number {
-  const row = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'student' AND coach_id = ?").get(coachId) as { n: number };
+export async function countStudents(db: Db, coachId: number): Promise<number> {
+  const row = (await db.query<{ n: string | number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'student' AND coach_id = $1", [coachId]))[0]!;
   return Number(row.n);
 }
 
-export function updatePassword(db: DatabaseSync, id: number, passwordHash: string, mustChangePassword: boolean, passwordEnc: string | null): void {
-  db.prepare('UPDATE users SET password_hash = ?, must_change_password = ?, password_enc = ? WHERE id = ?').run(passwordHash, mustChangePassword ? 1 : 0, passwordEnc, id);
+export async function updatePassword(db: Db, id: number, passwordHash: string, mustChangePassword: boolean, passwordEnc: string | null): Promise<void> {
+  await db.query('UPDATE users SET password_hash = $1, must_change_password = $2, password_enc = $3 WHERE id = $4', [passwordHash, mustChangePassword ? 1 : 0, passwordEnc, id]);
 }
 
-export function listCoaches(db: DatabaseSync): PublicUser[] {
-  const rows = db.prepare("SELECT * FROM users WHERE role = 'coach' ORDER BY id").all() as unknown as UserRow[];
+export async function listCoaches(db: Db): Promise<PublicUser[]> {
+  const rows = await db.query<UserRow>("SELECT * FROM users WHERE role = 'coach' ORDER BY id");
   return rows.map((row) => toPublic(fromRow(row)));
 }
 
@@ -105,21 +105,19 @@ export interface CoachSummary extends PublicUser {
   password: string | null;
 }
 
-export function listCoachSummaries(db: DatabaseSync, key: SecretKey): CoachSummary[] {
-  const rows = db
-    .prepare(
-      `SELECT u.*, (SELECT COUNT(*) FROM users s WHERE s.role = 'student' AND s.coach_id = u.id) AS student_count
-       FROM users u WHERE u.role = 'coach' ORDER BY u.id`,
-    )
-    .all() as unknown as (UserRow & { student_count: number })[];
+export async function listCoachSummaries(db: Db, key: SecretKey): Promise<CoachSummary[]> {
+  const rows = await db.query<UserRow & { student_count: string | number }>(
+    `SELECT u.*, (SELECT COUNT(*) FROM users s WHERE s.role = 'student' AND s.coach_id = u.id) AS student_count
+     FROM users u WHERE u.role = 'coach' ORDER BY u.id`,
+  );
   return rows.map((row) => {
     const user = fromRow(row);
     return { ...toPublic(user), studentCount: Number(row.student_count), password: decryptSecret(key, user.passwordEnc) };
   });
 }
 
-export function listStudents(db: DatabaseSync, coachId: number, key: SecretKey): (PublicUser & { password: string | null })[] {
-  const rows = db.prepare("SELECT * FROM users WHERE role = 'student' AND coach_id = ? ORDER BY id").all(coachId) as unknown as UserRow[];
+export async function listStudents(db: Db, coachId: number, key: SecretKey): Promise<(PublicUser & { password: string | null })[]> {
+  const rows = await db.query<UserRow>("SELECT * FROM users WHERE role = 'student' AND coach_id = $1 ORDER BY id", [coachId]);
   return rows.map((row) => {
     const user = fromRow(row);
     return { ...toPublic(user), password: decryptSecret(key, user.passwordEnc) };
