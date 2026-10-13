@@ -1,13 +1,15 @@
 # Render Blueprint: one web service that serves the built app (dist/) and the API (/api).
 # Render asks for the values marked sync: false when you create the service from this file.
 #
-# The SQLite database lives on a persistent disk. Disks need a paid instance type (starter).
-# Without a disk, accounts and data are lost on every restart or redeploy.
+# This uses the FREE plan. Free services cannot attach a disk, so the SQLite database is
+# stored inside the service and is RESET on every restart, redeploy, or idle spin-down.
+# Use it for demos only. For real accounts, switch to plan: starter and add a disk
+# (see the notes in the project README) or use a VM with persistent storage.
 services:
   - type: web
     name: meety
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     branch: arena/b53a1e35-me
     buildCommand: npm ci && npm run build
@@ -18,15 +20,9 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      - key: DATA_FILE
-        value: /var/data/meety.sqlite
       - key: MEETY_SECRET
         generateValue: true
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
-    disk:
-      name: meety-data
-      mountPath: /var/data
-      sizeGB: 1
