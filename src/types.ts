@@ -34,6 +34,7 @@ export interface MovementPhase {
 export interface ExerciseDefinition {
   id: string;
   name: string;
+  englishName?: string;
   category: 'Push' | 'Pull' | 'Legs' | 'Core';
   primaryMuscles: string[];
   secondaryMuscles: string[];

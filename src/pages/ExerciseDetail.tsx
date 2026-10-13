@@ -107,6 +107,7 @@ export function ExerciseDetail() {
         <div className="exercise-hero__copy">
           <div className="tag-row"><span className={`category-tag category-tag--${exercise.category.toLowerCase()}`}>{categoryLabels[exercise.category]}</span><span className="difficulty-tag">{difficultyLabels[exercise.difficulty]}</span></div>
           <h2>{exercise.name}</h2>
+          {exercise.englishName && <span className="account-muted" dir="ltr" style={{ display: 'block', fontSize: 13, marginTop: -2, marginBottom: 4 }}>{exercise.englishName}</span>}
           <p>{exercise.primaryMuscles.join(' · ')}{exercise.secondaryMuscles.length ? `  /  ${exercise.secondaryMuscles.join(' · ')}` : ''}</p>
           <div className="exercise-hero__chips">{exercise.equipment.map((item) => <span key={item}>{item}</span>)}</div>
           {placements.length > 0 && <div className="exercise-program-placement"><span className="eyebrow">در برنامهٔ تو</span>{placements.map(({ workout }) => <span key={workout.id} className="placement-pill">{workout.name}</span>)}</div>}
