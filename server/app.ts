@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
-import { HttpError, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
+import { HttpError, SESSIONS_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
+import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 
 export interface AppOptions {
   db: Db;
@@ -380,6 +381,28 @@ export function createApp(options: AppOptions) {
       },
     },
 
+    // The student's phone sends its workout summaries (a batch, newest first). Only the summary is kept on the server.
+    {
+      method: 'PUT',
+      pattern: /^\/api\/me\/sessions$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const summaries = validateSummaries(body);
+        const saved = await saveSummaries(db, user!.id, summaries);
+        return { status: 200, body: { ok: true, saved } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/sessions$/,
+      auth: ['coach'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        return { status: 200, body: { studentName: student.displayName, sessions: await listSummaries(db, student.id) } };
+      },
+    },
+
     {
       method: 'DELETE',
       pattern: /^\/api\/students\/(\d+)$/,
@@ -469,7 +492,9 @@ export function createApp(options: AppOptions) {
       return;
     }
     try {
-      const body = request.method === 'GET' ? {} : await readJsonBody(request);
+      const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+      const limit = path === '/api/me/sessions' ? SESSIONS_BODY_BYTES : undefined;
+      const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);
     } catch (error) {

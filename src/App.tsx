@@ -6,6 +6,7 @@ import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { isProgramReadOnly } from './lib/programStore';
 import { SessionProvider } from './context/SessionContext';
+import { SessionSync } from './components/SessionSync';
 import { ForRoles, RequireSignIn } from './pages/account/AccountShell';
 import { useSession } from './context/SessionContext';
 import type { ReactElement } from 'react';
@@ -31,6 +32,7 @@ const CoachEntry = lazy(() => import('./pages/account/CoachHome').then((module) 
 const ProgramPicker = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.ProgramPicker })));
 const ProgramBuilder = lazy(() => import('./pages/account/ProgramBuilder').then((module) => ({ default: module.ProgramBuilder })));
 const NutritionEditor = lazy(() => import('./pages/account/NutritionEditor').then((module) => ({ default: module.NutritionEditor })));
+const StudentProgress = lazy(() => import('./pages/account/StudentProgress').then((module) => ({ default: module.StudentProgress })));
 const StudentChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.StudentChat })));
 const CoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachChat })));
 const AssignedMovementGate = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.AssignedMovementGate })));
@@ -70,6 +72,7 @@ export function App() {
     <ErrorBoundary>
       <GymProvider>
         <SessionProvider>
+        <SessionSync />
         <BrowserRouter>
           <Suspense fallback={<RouteLoading />}>
           <Routes>
@@ -93,6 +96,7 @@ export function App() {
               <Route path="coach/programs/new" element={<ForRoles roles={['coach']}><ProgramPicker /></ForRoles>} />
               <Route path="coach/students/:studentId/program" element={<ForRoles roles={['coach']}><ProgramBuilder /></ForRoles>} />
               <Route path="coach/students/:studentId/nutrition" element={<ForRoles roles={['coach']}><NutritionEditor /></ForRoles>} />
+              <Route path="coach/students/:studentId/progress" element={<ForRoles roles={['coach']}><StudentProgress /></ForRoles>} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>

@@ -10,14 +10,16 @@ export class HttpError extends Error {
 }
 
 export const MAX_BODY_BYTES = 16 * 1024;
+/** Workout summaries are a batch of sessions, so their upload may be larger. */
+export const SESSIONS_BODY_BYTES = 256 * 1024;
 
 /** Reads the request body as JSON. An empty body is treated as an empty object. */
-export async function readJsonBody(request: AsyncIterable<Buffer>): Promise<unknown> {
+export async function readJsonBody(request: AsyncIterable<Buffer>, limit = MAX_BODY_BYTES): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'درخواست بیش از حد بزرگ است.');
+    if (size > limit) throw new HttpError(413, 'درخواست بیش از حد بزرگ است.');
     chunks.push(chunk);
   }
   const text = Buffer.concat(chunks).toString('utf8');

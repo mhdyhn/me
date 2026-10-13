@@ -1243,3 +1243,16 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .chat-back-button { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; }
 .chat-back-button:hover { background: var(--surface); }
 .chat-composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+
+/* Coach's view of a student's workouts */
+.progress-sessions { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.progress-session { padding: 14px; border-radius: 14px; border: 1px solid var(--line, rgba(255,255,255,.08)); background: rgba(255,255,255,.03); }
+.progress-session__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.progress-session p { margin: 6px 0 0; }
+.progress-status { padding: 3px 10px; border-radius: 999px; font-size: 11px; white-space: nowrap; background: rgba(255,255,255,.08); }
+.progress-status--completed { color: #d9f66f; background: rgba(217, 246, 111, .12); }
+.progress-status--abandoned { color: #ffad9f; background: rgba(242, 143, 130, .1); }
+.progress-note { font-size: 12px; line-height: 1.9; }
+.progress-exercise { margin-top: 10px; }
+.progress-exercise h4 { margin: 0 0 4px; font-size: 13px; }
+.progress-sets { margin: 0; padding: 0 16px 0 0; font-size: 12px; line-height: 2; }

@@ -2,6 +2,7 @@ import pg from 'pg';
 import { PGlite } from '@electric-sql/pglite';
 import { migrateChat } from './chat.ts';
 import { migrateNutrition } from './nutrition.ts';
+import { migrateSessions } from './sessions.ts';
 
 /**
  * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
@@ -87,5 +88,6 @@ async function migrate(db: Db): Promise<void> {
   `);
   await migrateChat(db);
   await migrateNutrition(db);
+  await migrateSessions(db);
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT;');
 }

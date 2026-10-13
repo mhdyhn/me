@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Apple, KeyRound, ListChecks, MessageCircle, Trash2, UserPlus } from 'lucide-react';
+import { Apple, KeyRound, ListChecks, MessageCircle, TrendingUp, Trash2, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -114,6 +114,9 @@ function CoachStudents() {
                     </Link>
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/nutrition`}>
                       <Apple size={16} /> تغذیه
+                    </Link>
+                    <Link className="button button--ghost" to={`/coach/students/${student.id}/progress`}>
+                      <TrendingUp size={16} /> پیشرفت
                     </Link>
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
                       <MessageCircle size={16} /> گفتگو
