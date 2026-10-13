@@ -6,7 +6,7 @@ import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
-import { emptyPlan, loadPlan, savePlan, validatePlan } from './nutrition.ts';
+import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 
 export interface AppOptions {
   db: DatabaseSync;
@@ -282,6 +282,27 @@ export function createApp(options: AppOptions) {
       handler: ({ user }) => {
         const coach = findUserById(db, user!.coachId!);
         return { status: 200, body: { coachName: coach?.displayName ?? null, plan: loadPlan(db, user!.id) } };
+      },
+    },
+
+    // Personal meal diary: any signed-in user, only their own days.
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/diary\/([^/]+)$/,
+      auth: 'signed-in',
+      handler: ({ user, params }) => {
+        const day = validateDay(decodeURIComponent(params[0]!));
+        return { status: 200, body: { diary: loadDiary(db, user!.id, day) } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/me\/diary$/,
+      auth: 'signed-in',
+      handler: ({ user, body }) => {
+        const diary = validateDiary(body);
+        return { status: 200, body: { diary: saveDiary(db, user!.id, diary.day, diary.meals, now().toISOString()) } };
       },
     },
 

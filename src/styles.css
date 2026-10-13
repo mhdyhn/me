@@ -1178,7 +1178,7 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .nutrition-meal__name:hover, .nutrition-meal__name:focus { border-color: var(--line); background: var(--surface-soft); outline: none; }
 .nutrition-meal__add { justify-self: start; }
 .nutrition-items { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.nutrition-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface-soft); }
+.nutrition-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface-soft); }
 .nutrition-item__name { display: grid; gap: 2px; min-width: 0; }
 .nutrition-item__name strong { font-size: 13px; overflow-wrap: anywhere; }
 .nutrition-item__name small { color: var(--muted); font-size: 11px; line-height: 1.5; }
@@ -1198,8 +1198,12 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 @media (max-width: 720px) {
   /* Keep the save bar above the fixed bottom navigation on phones. */
   .nutrition-save-bar { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  /* Phones: name and delete on the first line, amount and unit on the second. */
   .nutrition-item { grid-template-columns: minmax(0, 1fr) auto; }
-  .nutrition-item__grams { grid-column: 1 / -1; }
+  .nutrition-item > .nutrition-item__name { grid-column: 1; grid-row: 1; }
+  .nutrition-item > .icon-button { grid-column: 2; grid-row: 1; }
+  .nutrition-item > .nutrition-item__grams { grid-column: 1; grid-row: 2; }
+  .nutrition-item > .nutrition-unit-toggle { grid-column: 2; grid-row: 2; justify-self: start; }
 }
 
 /* Two-step meal flow and the full nutrient breakdown */
@@ -1219,4 +1223,17 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .nutrition-totals-block--compact .nutrition-totals--detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 560px) {
   .nutrition-totals--detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Unit switch for foods counted by piece (an egg, a slice of bread) */
+.nutrition-unit-toggle { min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.nutrition-unit-toggle:hover { border-color: rgba(217,246,111,.45); }
+
+/* Personal meal diary */
+.meal-diary { display: grid; gap: 14px; align-content: start; }
+.meal-diary__day { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.meal-diary__day input[type="date"] { min-height: 40px; padding: 0 10px; border: 1px solid #303a34; border-radius: 12px; background: #111614; color: var(--text); }
+.nutrition-page .nutrition-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 980px) {
+  .nutrition-page .nutrition-grid { grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.6fr); align-items: start; }
 }

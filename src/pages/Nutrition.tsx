@@ -4,32 +4,33 @@ import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { StudentNutritionPlan } from './account/StudentNutrition';
-import { faNumber, formatDate } from '../lib/format';
-import { getLocalDateKey } from '../lib/format';
+import { MealDiary } from './account/MealDiary';
+import { faNumber, getLocalDateKey } from '../lib/format';
+import type { Targets } from '../lib/nutrition';
 
 const numeric = (value: string) => value.trim() ? Number(value) : undefined;
 
 export function Nutrition() {
   const { user } = useSession();
   const { nutritionGoals, nutritionDays, profile, bodyweights, saveNutritionGoals, saveNutritionDay } = useGym();
+  const today = getLocalDateKey();
+  const todayEntry = nutritionDays.find((day) => day.date === today);
   const currentWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
   const proteinLow = Math.round(currentWeight * 1.6);
   const proteinHigh = Math.round(currentWeight * 2.2);
-  const today = getLocalDateKey();
-  const todayEntry = nutritionDays.find((day) => day.date === today);
   const [targetCalories, setTargetCalories] = useState(nutritionGoals.dailyCalories?.toString() ?? '');
   const [targetProtein, setTargetProtein] = useState(String(nutritionGoals.proteinG));
   const [targetCarbs, setTargetCarbs] = useState(nutritionGoals.carbsG?.toString() ?? '');
   const [targetFats, setTargetFats] = useState(nutritionGoals.fatsG?.toString() ?? '');
-  const [intakeCalories, setIntakeCalories] = useState('');
-  const [intakeProtein, setIntakeProtein] = useState('');
-  const [intakeCarbs, setIntakeCarbs] = useState('');
-  const [intakeFats, setIntakeFats] = useState('');
-  const [foodNotes, setFoodNotes] = useState('');
   const [goalSaved, setGoalSaved] = useState(false);
-  const [daySaved, setDaySaved] = useState(false);
   const [goalError, setGoalError] = useState('');
-  const [dayError, setDayError] = useState('');
+  const [foodNotes, setFoodNotes] = useState(todayEntry?.notes ?? '');
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteError, setNoteError] = useState('');
+
+  useEffect(() => {
+    setFoodNotes(todayEntry?.notes ?? '');
+  }, [todayEntry?.id]);
 
   useEffect(() => {
     setTargetCalories(nutritionGoals.dailyCalories?.toString() ?? '');
@@ -38,15 +39,16 @@ export function Nutrition() {
     setTargetFats(nutritionGoals.fatsG?.toString() ?? '');
   }, [nutritionGoals]);
 
-  useEffect(() => {
-    setIntakeCalories(todayEntry?.calories?.toString() ?? '');
-    setIntakeProtein(todayEntry?.proteinG?.toString() ?? '');
-    setIntakeCarbs(todayEntry?.carbsG?.toString() ?? '');
-    setIntakeFats(todayEntry?.fatsG?.toString() ?? '');
-    setFoodNotes(todayEntry?.notes ?? '');
-  }, [todayEntry?.id]);
-
-  const lastSevenDays = useMemo(() => nutritionDays.slice(0, 7), [nutritionDays]);
+  // The personal goals are the targets the meal diary is compared with.
+  const diaryTargets = useMemo<Targets>(
+    () => ({
+      kcal: nutritionGoals.dailyCalories ?? null,
+      proteinG: nutritionGoals.proteinG || null,
+      carbsG: nutritionGoals.carbsG ?? null,
+      fatG: nutritionGoals.fatsG ?? null,
+    }),
+    [nutritionGoals],
+  );
 
   const submitGoals = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,16 +64,12 @@ export function Nutrition() {
     setGoalError(''); setGoalSaved(true); window.setTimeout(() => setGoalSaved(false), 1800);
   };
 
-  const submitDay = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitNote = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const calories = numeric(intakeCalories);
-    const protein = numeric(intakeProtein);
-    const carbs = numeric(intakeCarbs);
-    const fats = numeric(intakeFats);
-    const allValues = [calories, protein, carbs, fats].filter((value) => value !== undefined);
-    if (allValues.some((value) => !Number.isFinite(value) || value < 0)) { setDayError('مقادیر مصرف روزانه باید صفر یا بیشتر باشند.'); return; }
-    await saveNutritionDay({ date: today, calories, proteinG: protein, carbsG: carbs, fatsG: fats, notes: foodNotes.trim() });
-    setDayError(''); setDaySaved(true); window.setTimeout(() => setDaySaved(false), 1800);
+    if (foodNotes.length > 1000) { setNoteError('یادداشت باید کمتر از ۱۰۰۰ نویسه باشد.'); return; }
+    // Keep the day's other values; only the note changes.
+    await saveNutritionDay({ ...(todayEntry ?? {}), date: today, notes: foodNotes.trim() });
+    setNoteError(''); setNoteSaved(true); window.setTimeout(() => setNoteSaved(false), 1800);
   };
 
   const currentWeightText = faNumber(currentWeight, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -79,7 +77,7 @@ export function Nutrition() {
   return (
     <div className="page-stack nutrition-page">
       {user?.role === 'student' && <StudentNutritionPlan />}
-      <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="یک هدف آغازین معقول انتخاب کن، موارد مهم را ثبت کن و بر اساس روند واقعی وزن و تمرینت تنظیمش کن." />
+      <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="وعده‌های روزانه‌ات را ثبت کن؛ کالری و درشت‌مغذی‌ها خودکار حساب می‌شوند و با هدف‌هایت مقایسه می‌شوند." />
       <div className="nutrition-context panel-card">
         <span className="nutrition-context__icon"><Leaf size={19} /></span>
         <div><span className="eyebrow">نقطهٔ شروع · نه نسخهٔ قطعی</span><p>با وزن <strong>{currentWeightText} کیلوگرم</strong>، بازهٔ عمومی پروتئین حدود <strong>{faNumber(proteinLow)} تا {faNumber(proteinHigh)} گرم در روز</strong> (تقریباً ۱٫۶ تا ۲٫۲ گرم به‌ازای هر کیلوگرم) است. هدف قابل تنظیم است؛ این برنامه نیاز دقیق کالری تو را نمی‌داند.</p></div>
@@ -100,19 +98,16 @@ export function Nutrition() {
           <div className="nutrition-disclaimer"><Info size={15} /><span>این برآوردها فقط برای پیگیری هستند و توصیهٔ پزشکی محسوب نمی‌شوند. در صورت نیاز، بر اساس روند، اشتها و نظر متخصص تنظیمشان کن.</span></div>
         </section>
 
-        <section className="panel-card nutrition-log-card">
-          <div className="card-topline"><div><span className="eyebrow">ثبت خوراک روزانه</span><h2>مصرف امروز.</h2></div><span className="today-pill">امروز</span></div>
-          <form className="form-stack" onSubmit={(event) => void submitDay(event)}>
-            <div className="macro-inputs macro-inputs--four"><label className="field-control"><span>کالری</span><input type="number" min="0" step="10" inputMode="numeric" value={intakeCalories} onChange={(event) => setIntakeCalories(event.target.value)} placeholder="—" /></label><label className="field-control"><span>پروتئین <small>گرم</small></span><input type="number" min="0" step="1" value={intakeProtein} onChange={(event) => setIntakeProtein(event.target.value)} placeholder="—" /></label><label className="field-control"><span>کربوهیدرات <small>گرم</small></span><input type="number" min="0" step="1" value={intakeCarbs} onChange={(event) => setIntakeCarbs(event.target.value)} placeholder="—" /></label><label className="field-control"><span>چربی <small>گرم</small></span><input type="number" min="0" step="1" value={intakeFats} onChange={(event) => setIntakeFats(event.target.value)} placeholder="—" /></label></div>
-            <label className="field-control"><span>یادداشت خوراک <small>اختیاری</small></span><textarea rows={5} value={foodNotes} onChange={(event) => setFoodNotes(event.target.value)} placeholder="وعده‌ها، اشتها یا نکته‌ای برای یادآوری…" /></label>
-            {dayError && <p className="form-error" role="alert">{dayError}</p>}
-            <button className="button button--secondary button--full" type="submit">{daySaved ? <><Check size={16} /> ثبت امروز ذخیره شد</> : <><Save size={16} /> ذخیرهٔ ثبت امروز</>}</button>
-          </form>
-        </section>
+        <MealDiary targets={diaryTargets} />
       </div>
 
-      <section className="panel-card recent-nutrition-card"><div className="section-heading"><div><span className="eyebrow">یادداشت‌های اخیر</span><h2>سوابق ثبت خوراک</h2></div><span className="small-count">{faNumber(lastSevenDays.length)} روز</span></div>
-        {lastSevenDays.length ? <div className="nutrition-history-list">{lastSevenDays.map((day) => <div className="nutrition-history-row" key={day.id}><span className="nutrition-history-date">{formatDate(`${day.date}T00:00:00`, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span className="nutrition-history-summary">{day.proteinG !== undefined ? `${faNumber(day.proteinG)} گرم پروتئین` : 'درشت‌مغذی ثبت نشده'}{day.calories !== undefined ? ` · ${faNumber(day.calories)} کیلوکالری` : ''}</span><span className="nutrition-history-note">{day.notes || '—'}</span></div>)}</div> : <p className="muted small-text">بعد از ثبت اولین یادداشت روزانه، سوابق اخیر اینجا نمایش داده می‌شوند.</p>}
+      <section className="panel-card nutrition-note-card">
+        <div className="card-topline"><div><span className="eyebrow">یادداشت امروز</span><h2>خوراک و حال امروز.</h2></div><span className="today-pill">امروز</span></div>
+        <form className="form-stack" onSubmit={(event) => void submitNote(event)}>
+          <label className="field-control"><span>یادداشت خوراک <small>اختیاری</small></span><textarea rows={3} value={foodNotes} onChange={(event) => setFoodNotes(event.target.value)} placeholder="اشتها، احساس بعد از غذا یا نکته‌ای برای یادآوری…" /></label>
+          {noteError && <p className="form-error" role="alert">{noteError}</p>}
+          <button className="button button--secondary button--full" type="submit">{noteSaved ? <><Check size={16} /> یادداشت امروز ذخیره شد</> : <><Save size={16} /> ذخیرهٔ ثبت امروز</>}</button>
+        </form>
       </section>
     </div>
   );

@@ -422,3 +422,43 @@ describe('nutrition plans', () => {
     expect(Number(count.n)).toBe(0);
   });
 });
+
+describe('personal meal diary', () => {
+  const meal = (name: string, items: { foodId: string; grams: number }[]) => ({ name, items });
+
+  it('lets anyone signed in keep their own day, and nobody else sees it', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد دفتر' }, coach.token);
+    const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-diary-pass-1' }, studentToken);
+
+    const coachSave = await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [meal('ناهار', [{ foodId: 'chicken-breast', grams: 200 }])] }, coach.token);
+    expect(coachSave.status).toBe(200);
+    expect(coachSave.json.diary.meals[0].items[0].grams).toBe(200);
+
+    const studentSave = await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [meal('صبحانه', [{ foodId: 'egg-whole', grams: 50 }])] }, studentToken);
+    expect(studentSave.status).toBe(200);
+
+    const coachRead = await call('GET', '/api/me/diary/2026-10-13', undefined, coach.token);
+    expect(coachRead.json.diary.meals.map((m: { name: string }) => m.name)).toEqual(['ناهار']);
+    const studentRead = await call('GET', '/api/me/diary/2026-10-13', undefined, studentToken);
+    expect(studentRead.json.diary.meals.map((m: { name: string }) => m.name)).toEqual(['صبحانه']);
+    expect((await call('GET', '/api/me/diary/2026-10-14', undefined, studentToken)).json.diary).toEqual({ day: '2026-10-14', meals: [], updatedAt: null });
+  });
+
+  it('checks the date and the foods the same way as the plan', async () => {
+    const coach = await coachSession();
+    for (const day of ['2026-02-30', '13-10-2026', 'امروز']) {
+      expect((await call('PUT', '/api/me/diary', { day, meals: [] }, coach.token)).status).toBe(400);
+      expect((await call('GET', `/api/me/diary/${encodeURIComponent(day)}`, undefined, coach.token)).status).toBe(400);
+    }
+    expect((await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [meal('x', [{ foodId: 'not-a-food', grams: 10 }])] }, coach.token)).status).toBe(400);
+    expect((await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [meal('x', [{ foodId: 'egg-whole', grams: 2001 }])] }, coach.token)).status).toBe(400);
+    expect((await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: Array.from({ length: 9 }, (_, i) => meal(`w${i}`, [])) }, coach.token)).status).toBe(400);
+  });
+
+  it('needs a signed-in user', async () => {
+    expect((await call('GET', '/api/me/diary/2026-10-13')).status).toBe(401);
+    expect((await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [] })).status).toBe(401);
+  });
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FOODS, FOODS_BY_ID } from '../../shared/foods';
-import { dayTotals, itemTotals, missingCounts, mealTotals, roundNutrient, roundTotals, searchFoods, todayDayIndex } from './nutrition';
+import { countToGrams, dayTotals, gramsToCount, itemTotals, missingCounts, mealTotals, roundNutrient, roundTotals, searchFoods, todayDayIndex } from './nutrition';
 
 describe('nutrition calculations', () => {
   it('scales a food from 100 g to the grams in the plan', () => {
@@ -81,5 +81,23 @@ describe('food search order', () => {
     const results = searchFoods('سیب', 3).map((food) => food.name);
     expect(results[0]).toBe('سیب (بدون پوست)');
     expect(results.indexOf('سیب‌زمینی پخته')).toBeGreaterThan(0);
+  });
+});
+
+describe('counting foods by piece', () => {
+  it('eggs are counted as pieces of 50 g (USDA large egg)', () => {
+    const egg = FOODS_BY_ID.get('egg-whole')!;
+    expect(egg.piece).toEqual({ label: 'عدد', grams: 50 });
+    expect(gramsToCount(100, egg.piece!)).toBe(2);
+    expect(countToGrams(2, egg.piece!)).toBe(100);
+    expect(countToGrams(1.5, egg.piece!)).toBe(75);
+  });
+
+  it('foods without a piece unit stay in grams', () => {
+    expect(FOODS_BY_ID.get('chicken-breast')!.piece).toBeNull();
+  });
+
+  it('turns a bad count into 0, which the save check rejects', () => {
+    expect(countToGrams(Number.NaN, { label: 'عدد', grams: 50 })).toBe(0);
   });
 });

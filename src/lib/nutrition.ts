@@ -175,3 +175,26 @@ export function searchFoods(query: string, limit = 8): Food[] {
     .slice(0, limit)
     .map((entry) => entry.food);
 }
+
+export interface PieceUnit {
+  label: string;
+  grams: number;
+}
+
+/** Grams shown as a count of pieces, to two decimals (for example 100 g of egg is 2 eggs). */
+export function gramsToCount(grams: number, piece: PieceUnit): number {
+  return Math.round((grams / piece.grams) * 100) / 100;
+}
+
+/** A count of pieces stored as grams, to one decimal. Anything not a positive number becomes 0 and is rejected on save. */
+export function countToGrams(count: number, piece: PieceUnit): number {
+  if (!Number.isFinite(count)) return 0;
+  return Math.round(count * piece.grams * 10) / 10;
+}
+
+/** A personal diary day, as the server returns it. */
+export interface Diary {
+  day: string;
+  meals: PlanMeal[];
+  updatedAt: string | null;
+}

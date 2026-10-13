@@ -156,6 +156,47 @@ EXTRA_NUTRIENTS = {
 }
 EXTRA_FIELDS = ["sugar", "fiber", "satFat", "cholesterol", "sodium", "calcium", "iron", "potassium"]
 
+# Foods people count rather than weigh: slug -> (SR28 WEIGHT.txt measure, label shown in the app).
+# The grams come from the same USDA measure, so 1 egg (large) = 50 g.
+PIECE_RULES = {
+    "egg-whole": ("large", "عدد"),
+    "bread-white": ("slice", "تکه"),
+    "bread-whole-wheat": ("slice", "تکه"),
+    "corn-tortilla": ("tortilla", "عدد"),
+    "banana": ('medium (7" to 7-7/8" long)', "عدد"),
+    "apple": ('medium (3" dia)', "عدد"),
+    "orange": ('fruit (2-5/8" dia)', "عدد"),
+    "tangerine": ('medium (2-1/2" dia)', "عدد"),
+    "kiwi": ('fruit (2" dia)', "عدد"),
+    "pear": ("medium", "عدد"),
+    "peach": ('medium (2-2/3" dia)', "عدد"),
+    "plum": ('fruit (2-1/8" dia)', "عدد"),
+    "tomato": ('medium whole (2-3/5" dia)', "عدد"),
+    "dates": ("date, pitted", "عدد"),
+    "cheddar": ("slice (1 oz)", "تکه"),
+}
+
+
+def read_weights(directory: Path) -> dict:
+    """NDB number -> {measure description: grams} from WEIGHT.txt."""
+    weights: dict = defaultdict(dict)
+    with (directory / "WEIGHT.txt").open(encoding="latin-1") as handle:
+        for line in handle:
+            row = [field.strip("~") for field in line.rstrip("\r\n").split("^")]
+            weights[row[0]].setdefault(row[3], float(row[4]))
+    return weights
+
+
+def piece_for(slug: str, ndb: str, weights: dict):
+    rule = PIECE_RULES.get(slug)
+    if rule is None:
+        return None
+    measure, label = rule
+    grams = weights.get(ndb, {}).get(measure)
+    if grams is None:
+        sys.exit(f"{slug}: WEIGHT.txt has no measure {measure!r}")
+    return label, grams
+
 
 def read_sr28(directory: Path) -> tuple[dict, dict]:
     """Return (long description -> NDB number, NDB number -> {field: value})."""
@@ -175,10 +216,14 @@ def read_sr28(directory: Path) -> tuple[dict, dict]:
     return by_name, values
 
 
-def extras_for(name: str, by_name: dict, values: dict, slug: str) -> dict:
+def ndb_for(name: str, by_name: dict, slug: str) -> str:
     ndb = by_name.get(SR28_NAME_OVERRIDES.get(name, name))
     if ndb is None:
         sys.exit(f"{slug}: no SR28 entry for {name!r}")
+    return ndb
+
+
+def extras_for(ndb: str, values: dict) -> dict:
     found = values.get(ndb, {})
     return {field: found.get(field) for field in EXTRA_FIELDS}
 
@@ -192,6 +237,7 @@ def main() -> None:
         sys.exit("usage: generate-nutrition-foods.py <USDA foods.en.json> <SR28 directory>")
     usda = {item["id"]: item for item in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))}
     by_name, values = read_sr28(Path(sys.argv[2]))
+    weights = read_weights(Path(sys.argv[2]))
     lines = [
         "/**",
         " * Foods a coach can put in a student's nutrition plan. Values are per 100 g.",
@@ -219,6 +265,7 @@ def main() -> None:
         "  calcium: number | null;",
         "  iron: number | null;",
         "  potassium: number | null;",
+        "  piece: { label: string; grams: number } | null;",
         "}",
         "",
         "export const FOODS: Food[] = [",
@@ -230,13 +277,16 @@ def main() -> None:
         for key in ("calories", "protein", "fat", "carb"):
             if item.get(key) is None:
                 sys.exit(f"USDA id {usda_id} ({slug}) has no {key}")
-        extra = extras_for(item["name"], by_name, values, slug)
+        ndb = ndb_for(item["name"], by_name, slug)
+        extra = extras_for(ndb, values)
+        piece = piece_for(slug, ndb, weights)
+        piece_text = "null" if piece is None else "{ label: " + json.dumps(piece[0], ensure_ascii=False) + ", grams: " + fmt(piece[1]) + " }"
         extra_text = ", ".join(f"{field}: {fmt(extra[field])}" for field in ["fiber", "sugar", "satFat", "cholesterol", "sodium", "calcium", "iron", "potassium"])
         lines.append(
             "  { "
             f"id: {json.dumps(slug)}, name: {json.dumps(name, ensure_ascii=False)}, nameEn: {json.dumps(item['name'], ensure_ascii=False)}, "
             f"group: {json.dumps(group)}, usdaId: {usda_id}, kcal: {round(item['calories'])}, protein: {round(item['protein'], 1)}, "
-            f"fat: {round(item['fat'], 1)}, carbs: {round(item['carb'], 1)}, {extra_text} }},"
+            f"fat: {round(item['fat'], 1)}, carbs: {round(item['carb'], 1)}, {extra_text}, piece: {piece_text} }},"
         )
     lines += ["];", "", "export const FOODS_BY_ID = new Map(FOODS.map((food) => [food.id, food]));", ""]
     out = Path(__file__).resolve().parent.parent / "shared" / "foods.ts"
