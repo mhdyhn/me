@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { exercisePhotoIds, exerciseFigureIds } from './exerciseFigures';
+import { exercisePhotoIds } from './exerciseFigures';
 
 describe('exercise photos', () => {
   it('has a start and a main photo on disk for every listed photo movement', () => {
