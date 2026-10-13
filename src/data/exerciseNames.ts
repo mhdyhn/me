@@ -1,4 +1,5 @@
 import { programExerciseTranslations } from './programExercises';
+import { lyftaExerciseTranslations } from './lyftaCatalogueExercises';
 
 /**
  * Movement names only. The card on the dashboard and the progression advice just
@@ -43,8 +44,11 @@ export const exerciseNames: Record<string, string> = {
   'hanging-leg-raise': 'بالاآوردن زانو یا پا در حالت آویزان',
 };
 
-// Programme-only movements share their Persian name with the full catalogue.
+// Programme-only and Lyfta-catalogue movements share their Persian name with the full catalogue.
 for (const [id, translation] of Object.entries(programExerciseTranslations)) {
+  exerciseNames[id] = translation.name;
+}
+for (const [id, translation] of Object.entries(lyftaExerciseTranslations)) {
   exerciseNames[id] = translation.name;
 }
 

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
+import { lyftaMetaExercises } from '../data/lyftaCatalogueExercises';
 import { useProgram } from '../lib/programStore';
 import { normalizePersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
@@ -99,6 +100,11 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'hanging-leg-raise': 'Core',
   'hollow-hold': 'Core',
 };
+
+// Map additional standard Lyfta catalogue movements into their Lyfta categories
+for (const meta of lyftaMetaExercises) {
+  exerciseLyftaCategory[meta.id] = meta.lyftaCategory;
+}
 
 const filters: { id: LyftaCategory; label: string }[] = [
   { id: 'All', label: lyftaCategoryLabels.All },
