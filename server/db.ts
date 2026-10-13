@@ -28,6 +28,11 @@ export async function openDatabase(target: string): Promise<Db> {
 
 function fromPool(url: string): Db {
   const pool = new pg.Pool({ connectionString: url, max: 5 });
+  // The hosted database closes idle connections (free tier pauses after inactivity). Without this listener
+  // Node treats the error as fatal and the whole server stops. The pool opens a new connection on the next request.
+  pool.on('error', (error) => {
+    console.error('Database connection dropped; a new one opens on the next request.', error.message);
+  });
   return {
     async query<T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T[]> {
       const result = await pool.query(sql, params as unknown[]);

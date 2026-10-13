@@ -22,7 +22,7 @@ if (!databaseUrl && process.env.NODE_ENV === 'production') {
 }
 mkdirSync(dataDir, { recursive: true });
 
-const db = await openDatabase(databaseUrl || resolve(dataDir, 'pgdata'));
+const db = await openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
 const adminState = await ensureAdmin(db, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
 if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
 
@@ -39,6 +39,19 @@ const server = createServer((request, response) => {
 server.listen(port, host, () => {
   console.log(`Meety API listening on http://${host}:${port}`);
 });
+
+/** The hosted database may take a few seconds to wake up, so the first connection is retried before giving up. */
+async function openWithRetry(target: string) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await openDatabase(target);
+    } catch (error) {
+      if (attempt >= 10) throw error;
+      console.error(`Database not ready (attempt ${attempt}); retrying in 3 seconds.`, (error as Error).message);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+}
 
 function shutdown(): void {
   server.close(() => {
