@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
-import { isProgramReadOnly, useProgram } from '../lib/programStore';
+import { useProgram } from '../lib/programStore';
 import { categoryLabels, normalizePersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
 import type { ExerciseDefinition } from '../types';
@@ -20,27 +20,52 @@ export function ExerciseLibrary() {
   const program = useProgram();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<(typeof filters)[number]['id']>('All');
-  // A student's library is limited to the movements in the coach's programme.
+  const [onlyAssigned, setOnlyAssigned] = useState(false);
+
   const assignedIds = useMemo(
-    () => (isProgramReadOnly() ? new Set(program.flatMap((day) => day.exercises.map((item) => item.exerciseId))) : null),
+    () => new Set(program.flatMap((day) => day.exercises.map((item) => item.exerciseId))),
     [program],
   );
+
   const results = useMemo(() => exercises.filter((exercise) => {
-    if (assignedIds && !assignedIds.has(exercise.id)) return false;
+    if (onlyAssigned && !assignedIds.has(exercise.id)) return false;
     const matchesCategory = category === 'All' || exercise.category === category;
-    const searchable = normalizePersianSearch([exercise.name, ...exercise.primaryMuscles, ...exercise.secondaryMuscles, ...exercise.equipment].join(' '));
+    const searchable = normalizePersianSearch([
+      exercise.name,
+      exercise.englishName ?? '',
+      ...exercise.primaryMuscles,
+      ...exercise.secondaryMuscles,
+      ...exercise.equipment,
+    ].join(' '));
     return matchesCategory && searchable.includes(normalizePersianSearch(search));
-  }), [search, category, assignedIds]);
+  }), [search, category, onlyAssigned, assignedIds]);
 
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="آموزش حرکت‌ها" title="حرکت را درست یاد بگیر." description="راهنمای آماده‌سازی، مراحل روشن و نکته‌های اجرای صحیح برای همهٔ حرکت‌های برنامه." />
       <div className="library-toolbar">
-        <label className="search-field"><Search size={18} /><span className="sr-only">جست‌وجوی حرکت‌ها</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="جست‌وجو بر اساس حرکت، عضله یا وسیله" /></label>
+        <label className="search-field">
+          <Search size={18} />
+          <span className="sr-only">جست‌وجوی حرکت‌ها</span>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="جست‌وجو بر اساس نام فارسی، انگلیسی (Bench, Squat...)، عضله یا وسیله"
+          />
+        </label>
         <span className="library-result-count"><SlidersHorizontal size={15} /> {faNumber(results.length)} حرکت</span>
       </div>
       <div className="filter-tabs" role="group" aria-label="فیلتر حرکت‌ها بر اساس گروه عضلانی">
-        {filters.map(({ id, label }) => <button key={id} className={`filter-tab${category === id ? ' is-active' : ''}`} aria-pressed={category === id} onClick={() => setCategory(id)}>{label}</button>)}
+        {filters.map(({ id, label }) => <button key={id} className={`filter-tab${category === id && !onlyAssigned ? ' is-active' : ''}`} aria-pressed={category === id && !onlyAssigned} onClick={() => { setCategory(id); setOnlyAssigned(false); }}>{label}</button>)}
+        {assignedIds.size > 0 && (
+          <button
+            className={`filter-tab${onlyAssigned ? ' is-active' : ''}`}
+            aria-pressed={onlyAssigned}
+            onClick={() => setOnlyAssigned(!onlyAssigned)}
+          >
+            برنامهٔ من ({faNumber(assignedIds.size)})
+          </button>
+        )}
       </div>
       {results.length ? (
         <div className="exercise-grid">
@@ -56,8 +81,16 @@ export function ExerciseLibrary() {
                 </div>
                 <div className="exercise-card__body">
                   <h3>{exercise.name}</h3>
+                  {exercise.englishName && (
+                    <span className="account-muted" dir="ltr" style={{ display: 'block', fontSize: 11, marginTop: -2, marginBottom: 2 }}>
+                      {exercise.englishName}
+                    </span>
+                  )}
                   <p>{exercise.primaryMuscles.join(' · ')}{exercise.secondaryMuscles.length ? ` · ${exercise.secondaryMuscles[0]}` : ''}</p>
-                  <div className="exercise-card__footer"><span>{exercise.equipment[0]}</span>{prescription && <span>{faNumber(prescription.sets)} × {faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)}</span>}</div>
+                  <div className="exercise-card__footer">
+                    <span>{exercise.equipment[0]}</span>
+                    {prescription && <span>{faNumber(prescription.sets)} × {faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)}</span>}
+                  </div>
                 </div>
               </Link>
             );
