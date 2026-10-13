@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
-import { HttpError, SESSIONS_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
+import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
-import { MESSAGE_MAX, addMessage, listMessages } from './chat.ts';
+import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -48,6 +48,19 @@ const NAME_MAX = 60;
 
 /** Routes a student may still call before changing a generated password. */
 const ALWAYS_ALLOWED = new Set(['/api/me', '/api/me/password', '/api/auth/logout']);
+
+function parseMessageInput(body: unknown): { text: string; mediaType: string | null; mediaData: string | null } {
+  const input = requireObject(body);
+  const mediaType = typeof input.mediaType === 'string' && ['image', 'voice', 'video', 'text'].includes(input.mediaType) ? input.mediaType : null;
+  const mediaData = typeof input.mediaData === 'string' && input.mediaData.length > 0 ? input.mediaData : null;
+  if (typeof input.body === 'string' && input.body.trim().length > MESSAGE_MAX) {
+    throw new HttpError(400, `پیام باید حداکثر ${MESSAGE_MAX} نویسه باشد.`);
+  }
+  const rawBody = typeof input.body === 'string' ? input.body.trim() : '';
+  const text = rawBody || (mediaType === 'voice' ? 'پیام صوتی' : mediaType === 'image' ? 'تصویر' : mediaType === 'video' ? 'ویدیو' : '');
+  if (!text && !mediaData) throw new HttpError(400, 'متن یا فایل پیام را وارد کنید.');
+  return { text, mediaType, mediaData };
+}
 
 /**
  * Creates the request handler. Coaches create students; students only read their own data.
@@ -373,9 +386,8 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
       handler: async ({ user, body }) => {
-        const input = requireObject(body);
-        const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
-        return { status: 201, body: { message: await addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString()) } };
+        const { text, mediaType, mediaData } = parseMessageInput(body);
+        return { status: 201, body: { message: await addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
       },
     },
 
@@ -395,9 +407,49 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        const input = requireObject(body);
-        const text = requireText(input, 'body', 1, MESSAGE_MAX, 'پیام');
-        return { status: 201, body: { message: await addMessage(db, user!.id, student.id, user!.id, text, now().toISOString()) } };
+        const { text, mediaType, mediaData } = parseMessageInput(body);
+        return { status: 201, body: { message: await addMessage(db, user!.id, student.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
+      },
+    },
+
+    // Chat between a coach and the admin
+    {
+      method: 'GET',
+      pattern: /^\/api\/coach\/chat$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        return { status: 200, body: { adminName: 'مدیر باشگاه', messages: await listAdminCoachMessages(db, user!.id) } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/coach\/chat$/,
+      auth: ['coach'],
+      handler: async ({ user, body }) => {
+        const { text, mediaType, mediaData } = parseMessageInput(body);
+        return { status: 201, body: { message: await addAdminCoachMessage(db, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coaches\/(\d+)\/chat$/,
+      auth: ['admin'],
+      handler: async ({ params }) => {
+        const coach = await ownCoach(Number(params[0]));
+        return { status: 200, body: { coachName: coach.displayName, messages: await listAdminCoachMessages(db, coach.id) } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/coaches\/(\d+)\/chat$/,
+      auth: ['admin'],
+      handler: async ({ user, params, body }) => {
+        const coach = await ownCoach(Number(params[0]));
+        const { text, mediaType, mediaData } = parseMessageInput(body);
+        return { status: 201, body: { message: await addAdminCoachMessage(db, coach.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
       },
     },
 
@@ -524,7 +576,7 @@ export function createApp(options: AppOptions) {
     }
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-      const limit = path === '/api/me/sessions' ? SESSIONS_BODY_BYTES : undefined;
+      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' ? SESSIONS_BODY_BYTES : undefined;
       const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);

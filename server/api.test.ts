@@ -303,6 +303,45 @@ describe('text chat between a coach and a student', () => {
     expect((await call('POST', '/api/me/chat', { body: 'a'.repeat(1000) }, student.token)).status).toBe(201);
   });
 
+  it('supports voice and image media messages in chat', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد مدیا');
+    const voiceMsg = await call('POST', '/api/me/chat', { mediaType: 'voice', mediaData: 'data:audio/webm;base64,GkXfo59ChoEBQveBAULygQ8USA==' }, student.token);
+    expect(voiceMsg.status).toBe(201);
+    expect(voiceMsg.json.message.mediaType).toBe('voice');
+
+    const imageMsg = await call('POST', `/api/students/${student.id}/chat`, { body: 'تصویر فرم', mediaType: 'image', mediaData: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' }, coach.token);
+    expect(imageMsg.status).toBe(201);
+    expect(imageMsg.json.message.mediaType).toBe('image');
+    expect(imageMsg.json.message.body).toBe('تصویر فرم');
+
+    const list = await call('GET', '/api/me/chat', undefined, student.token);
+    expect(list.json.messages).toHaveLength(2);
+    expect(list.json.messages[0].mediaType).toBe('voice');
+    expect(list.json.messages[1].mediaType).toBe('image');
+  });
+
+  it('supports direct chat between admin and coach', async () => {
+    const coach = await coachSession();
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+
+    const fromCoach = await call('POST', '/api/coach/chat', { body: 'سلام مدیریت محترم' }, coach.token);
+    expect(fromCoach.status).toBe(201);
+
+    const fromAdmin = await call('POST', `/api/coaches/${coach.id}/chat`, { body: 'سلام، مشکلی در سالن هست؟' }, admin);
+    expect(fromAdmin.status).toBe(201);
+
+    const coachView = await call('GET', '/api/coach/chat', undefined, coach.token);
+    expect(coachView.status).toBe(200);
+    expect(coachView.json.adminName).toBe('مدیر باشگاه');
+    expect(coachView.json.messages.map((m: { body: string }) => m.body)).toEqual(['سلام مدیریت محترم', 'سلام، مشکلی در سالن هست؟']);
+
+    const adminView = await call('GET', `/api/coaches/${coach.id}/chat`, undefined, admin);
+    expect(adminView.status).toBe(200);
+    expect(adminView.json.coachName).toBe('مربی یک');
+    expect(adminView.json.messages).toHaveLength(2);
+  });
+
   it('removes a student\'s messages when the student is deleted', async () => {
     const coach = await coachSession();
     const student = await studentSession(coach.token, 'شاگرد حذفی چت');

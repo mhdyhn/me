@@ -13,7 +13,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    branch: arena/b53a1e35-me
+    branch: main
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node server/index.ts
     healthCheckPath: /api/health
