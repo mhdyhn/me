@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowUp, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, MessageCircle } from 'lucide-react';
 import { ApiError, api } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { RequireRole } from './AccountShell';
@@ -140,6 +140,9 @@ function ChatThread({ path }: { path: string }) {
   return (
     <section className="chat-screen" aria-label="گفتگو">
       <header className="chat-header">
+        <Link className="chat-back-button" to={user?.role === 'coach' ? '/coach' : '/'} aria-label="بازگشت به برنامه">
+          <ArrowRight size={20} />
+        </Link>
         <span className="chat-avatar" aria-hidden="true">{partner ? partner.trim().charAt(0) : <MessageCircle size={18} />}</span>
         <div>
           <strong>{partner ?? 'گفتگو'}</strong>
