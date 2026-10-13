@@ -18,6 +18,7 @@ export interface ProgramDay {
 export interface Programme {
   title: string;
   days: ProgramDay[];
+  priceTomans?: number;
   updatedAt: string;
 }
 
@@ -30,6 +31,8 @@ const REPS = /^\d{1,2}(-\d{1,2})?$/;
 export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> {
   const body = requireObject(input);
   const title = requireText(body, 'title', 2, 80, 'عنوان برنامه');
+  const rawPrice = body.priceTomans;
+  const priceTomans = typeof rawPrice === 'number' && Number.isInteger(rawPrice) && rawPrice >= 0 ? rawPrice : 0;
   if (!Array.isArray(body.days) || body.days.length < 1 || body.days.length > MAX_DAYS) {
     throw new HttpError(400, `برنامه باید بین ۱ تا ${MAX_DAYS} روز داشته باشد.`);
   }
@@ -60,22 +63,26 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
     });
     return { name, exercises };
   });
-  return { title, days };
+  return { title, days, priceTomans };
 }
 
 export async function saveProgramme(db: Db, studentId: number, coachId: number, programme: Omit<Programme, 'updatedAt'>, now: Date): Promise<Programme> {
   const updatedAt = now.toISOString();
+  const priceTomans = programme.priceTomans ?? 0;
   await db.query(
-    `INSERT INTO student_programs (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)
-     ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at`,
-    [studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), updatedAt],
+    `INSERT INTO student_programs (student_id, coach_id, body, price_tomans, updated_at) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, price_tomans = excluded.price_tomans, updated_at = excluded.updated_at`,
+    [studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), priceTomans, updatedAt],
   );
-  return { ...programme, updatedAt };
+  return { ...programme, priceTomans, updatedAt };
 }
 
 export async function loadProgramme(db: Db, studentId: number): Promise<Programme | null> {
-  const row = (await db.query<{ body: string; updated_at: string }>('SELECT body, updated_at FROM student_programs WHERE student_id = $1', [studentId]))[0];
+  const row = (await db.query<{ body: string; price_tomans: number | null; updated_at: string }>(
+    'SELECT body, price_tomans, updated_at FROM student_programs WHERE student_id = $1',
+    [studentId]
+  ))[0];
   if (!row) return null;
   const parsed = JSON.parse(row.body) as Omit<Programme, 'updatedAt'>;
-  return { ...parsed, updatedAt: row.updated_at };
+  return { ...parsed, priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at };
 }

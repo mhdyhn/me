@@ -2,9 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
+import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -24,6 +25,8 @@ interface Context {
   token: string | null;
   body: unknown;
   params: string[];
+  url: URL;
+  request: IncomingMessage;
 }
 
 interface RouteResult {
@@ -459,7 +462,132 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user }) => {
         const coach = await findUserById(db, user!.coachId!);
-        return { status: 200, body: { program: await loadProgramme(db, user!.id), coachName: coach?.displayName ?? null } };
+        const prog = await loadProgramme(db, user!.id);
+        if (!prog) {
+          return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
+        }
+        const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id));
+        if (!isPaid) {
+          return {
+            status: 200,
+            body: {
+              program: {
+                title: prog.title,
+                days: [],
+                priceTomans: prog.priceTomans,
+                updatedAt: prog.updatedAt,
+              },
+              coachName: coach?.displayName ?? null,
+              isPaid: false,
+            },
+          };
+        }
+        return {
+          status: 200,
+          body: {
+            program: prog,
+            coachName: coach?.displayName ?? null,
+            isPaid: true,
+          },
+        };
+      },
+    },
+
+    // Payment endpoints
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/start$/,
+      auth: ['student'],
+      handler: async ({ user, request, url }) => {
+        const proto = request.headers['x-forwarded-proto'] || 'http';
+        const host = request.headers['x-forwarded-host'] || request.headers.host || url.host;
+        const origin = request.headers.origin || `${proto}://${host}`;
+        const result = await createPaymentRequest(db, user!.id, origin, now());
+        return { status: 201, body: result };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/verify$/,
+      auth: 'signed-in',
+      handler: async ({ body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسه ارجاع پرداخت');
+        const status = typeof input.status === 'string' ? input.status : 'OK';
+        const result = await verifyPayment(db, authority, status, now());
+        return { status: 200, body: result };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/pay\/callback$/,
+      auth: 'public',
+      handler: async ({ url }) => {
+        const authority = url.searchParams.get('Authority') || '';
+        const status = url.searchParams.get('Status') || '';
+        if (!authority) throw new HttpError(400, 'شناسه پرداخت یافت نشد.');
+        const result = await verifyPayment(db, authority, status, now());
+        const outcome = result.success ? 'paid' : 'failed';
+        return {
+          status: 302,
+          body: { redirect: `/payment/result?authority=${encodeURIComponent(authority)}&status=${outcome}` },
+          headers: { Location: `/payment/result?authority=${encodeURIComponent(authority)}&status=${outcome}` },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/pay\/transaction\/([^/]+)$/,
+      auth: 'signed-in',
+      handler: async ({ params }) => {
+        const authority = decodeURIComponent(params[0]!);
+        const transaction = await getTransactionByAuthority(db, authority);
+        if (!transaction) throw new HttpError(404, 'تراکنش یافت نشد.');
+        return { status: 200, body: { transaction } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coach\/transactions$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        return { status: 200, body: { transactions: await listCoachTransactions(db, user!.id) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/transactions$/,
+      auth: ['admin'],
+      handler: async () => {
+        return { status: 200, body: { transactions: await listAllTransactions(db) } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/coach\/iban$/,
+      auth: ['coach'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const rawIban = requireText(input, 'iban', 10, 40, 'شماره شبا');
+        const iban = normalizeIban(rawIban);
+        await updateCoachIban(db, user!.id, iban);
+        return { status: 200, body: { ok: true, iban } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coach\/iban$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        const current = await findUserById(db, user!.id);
+        return { status: 200, body: { iban: current?.iban ?? null } };
       },
     },
 
@@ -551,7 +679,7 @@ export function createApp(options: AppOptions) {
       }
     }
     const params = route.pattern.exec(url.pathname)?.slice(1) ?? [];
-    return route.handler({ user, token, body, params });
+    return route.handler({ user, token, body, params, url, request });
   }
 
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
