@@ -49,14 +49,13 @@ export async function createSession(db: Db, userId: number, now: Date): Promise<
   return token;
 }
 
-export async function userIdForToken(db: Db, token: string, now: Date): Promise<number | null> {
-  const row = (await db.query<{ user_id: number; expires_at: string }>('SELECT user_id, expires_at FROM sessions WHERE token_hash = $1', [hashToken(token)]))[0];
-  if (!row) return null;
-  if (String(row.expires_at) <= now.toISOString()) {
-    await deleteSession(db, token);
-    return null;
-  }
-  return Number(row.user_id);
+/** The signed-in user for a session token, in one query (the app makes this call on every request). */
+export async function userForToken(db: Db, token: string, now: Date): Promise<{ userId: number } | null> {
+  const row = (await db.query<{ user_id: number }>(
+    'SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > $2',
+    [hashToken(token), now.toISOString()],
+  ))[0];
+  return row ? { userId: Number(row.user_id) } : null;
 }
 
 export async function deleteSession(db: Db, token: string): Promise<void> {
