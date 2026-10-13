@@ -35,11 +35,35 @@ function fromPool(url: string): Db {
   });
   return {
     async query<T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T[]> {
-      const result = await pool.query(sql, params as unknown[]);
-      return result.rows as T[];
+      try {
+        const result = await pool.query(sql, params as unknown[]);
+        return result.rows as T[];
+      } catch (error: any) {
+        const msg = String(error?.message ?? '');
+        const code = String(error?.code ?? '');
+        const isTransient = code === '57P01' || code === 'ECONNRESET' || msg.includes('Connection terminated') || msg.includes('connection closed');
+        if (isTransient) {
+          console.warn('Retrying query after transient connection drop:', msg);
+          const result = await pool.query(sql, params as unknown[]);
+          return result.rows as T[];
+        }
+        throw error;
+      }
     },
     async exec(sql: string): Promise<void> {
-      await pool.query(sql);
+      try {
+        await pool.query(sql);
+      } catch (error: any) {
+        const msg = String(error?.message ?? '');
+        const code = String(error?.code ?? '');
+        const isTransient = code === '57P01' || code === 'ECONNRESET' || msg.includes('Connection terminated') || msg.includes('connection closed');
+        if (isTransient) {
+          console.warn('Retrying exec after transient connection drop:', msg);
+          await pool.query(sql);
+          return;
+        }
+        throw error;
+      }
     },
     async close(): Promise<void> {
       await pool.end();
@@ -90,6 +114,10 @@ async function migrate(db: Db): Promise<void> {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_users_coach_id ON users(coach_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
   `);
   await migrateChat(db);
   await migrateNutrition(db);

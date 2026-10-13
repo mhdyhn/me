@@ -28,12 +28,12 @@ afterEach(async () => {
   await db.close();
 });
 
-async function call(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: Json }> {
+async function call(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: Json; headers: Headers }> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  return { status: response.status, json: (await response.json()) as Json };
+  return { status: response.status, json: (await response.json()) as Json, headers: response.headers };
 }
 
 async function login(username: string, password: string) {
@@ -459,5 +459,25 @@ describe('personal meal diary', () => {
   it('needs a signed-in user', async () => {
     expect((await call('GET', '/api/me/diary/2026-10-13')).status).toBe(401);
     expect((await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [] })).status).toBe(401);
+  });
+
+  it('allows a coach to view their student diary but protects other students and has security headers', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد دفتر ۲' }, coach.token);
+    const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-diary-pass-2' }, studentToken);
+
+    await call('PUT', '/api/me/diary', { day: '2026-10-13', meals: [meal('صبحانه', [{ foodId: 'egg-whole', grams: 100 }])] }, studentToken);
+
+    const coachView = await call('GET', `/api/students/${created.json.user.id}/diary/2026-10-13`, undefined, coach.token);
+    expect(coachView.status).toBe(200);
+    expect(coachView.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(coachView.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(coachView.json.studentName).toBe('شاگرد دفتر ۲');
+    expect(coachView.json.diary.meals[0].name).toBe('صبحانه');
+
+    const otherCoach = await coachSession();
+    const forbidden = await call('GET', `/api/students/${created.json.user.id}/diary/2026-10-13`, undefined, otherCoach.token);
+    expect(forbidden.status).toBe(404);
   });
 });

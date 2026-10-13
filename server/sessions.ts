@@ -110,15 +110,22 @@ export function validateSummaries(body: unknown): WorkoutSummary[] {
   return list.map(validateSummary);
 }
 
-/** Saves summaries for one student. A session already on the server is replaced with the newer copy. */
+/** Saves summaries for one student. A session already on the server is replaced with the newer copy. Uses a single batch insert for speed. */
 export async function saveSummaries(db: Db, studentId: number, summaries: WorkoutSummary[]): Promise<number> {
-  for (const summary of summaries) {
-    await db.query(
-      `INSERT INTO workout_sessions (student_id, session_id, started_at, body) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (student_id, session_id) DO UPDATE SET started_at = excluded.started_at, body = excluded.body`,
-      [studentId, summary.id, summary.startedAt, JSON.stringify(summary)],
-    );
+  if (summaries.length === 0) return 0;
+  const values: unknown[] = [];
+  const rows: string[] = [];
+  for (let i = 0; i < summaries.length; i += 1) {
+    const summary = summaries[i]!;
+    const offset = i * 4;
+    rows.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
+    values.push(studentId, summary.id, summary.startedAt, JSON.stringify(summary));
   }
+  await db.query(
+    `INSERT INTO workout_sessions (student_id, session_id, started_at, body) VALUES ${rows.join(', ')}
+     ON CONFLICT (student_id, session_id) DO UPDATE SET started_at = excluded.started_at, body = excluded.body`,
+    values,
+  );
   return summaries.length;
 }
 

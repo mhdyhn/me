@@ -55,12 +55,13 @@ const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
  * from being sent on cross-site requests.
  */
 export function sessionCookie(token: string): string {
-  const secure = process.env.COOKIE_SECURE === '1' ? '; Secure' : '';
+  const secure = process.env.COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production' ? '; Secure' : '';
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MAX_AGE_SECONDS}${secure}`;
 }
 
 export function clearSessionCookie(): string {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+  const secure = process.env.COOKIE_SECURE === '1' || process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
 export function readCookie(header: string | undefined, name: string): string | null {

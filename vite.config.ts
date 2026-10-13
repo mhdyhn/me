@@ -31,7 +31,20 @@ export default defineConfig(({ mode }) => {
               },
               workbox: {
                 navigateFallback: '/index.html',
-                globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+                globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+                runtimeCaching: [
+                  {
+                    urlPattern: /\/exercise-photos\/.*\.(?:jpg|jpeg|png)$/,
+                    handler: 'StaleWhileRevalidate',
+                    options: {
+                      cacheName: 'exercise-photos-cache',
+                      expiration: {
+                        maxEntries: 100,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                      },
+                    },
+                  },
+                ],
               },
               devOptions: { enabled: false },
             }),

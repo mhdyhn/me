@@ -32,7 +32,7 @@ const staticDir = resolveStaticDir(process.env.STATIC_DIR ?? 'dist');
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
   if (staticDir && request.method === 'GET' && !pathname.startsWith('/api')) {
-    if (serveStatic(staticDir, pathname, response)) return;
+    if (serveStatic(staticDir, pathname, response, request)) return;
   }
   void api(request, response);
 });
@@ -54,6 +54,12 @@ async function openWithRetry(target: string) {
 }
 
 function shutdown(): void {
+  const forceTimer = setTimeout(() => {
+    console.warn('Forcing exit after timeout.');
+    process.exit(1);
+  }, 5000);
+  forceTimer.unref();
+
   server.close(() => {
     void db.close().finally(() => process.exit(0));
   });
@@ -84,6 +90,7 @@ const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
 };
@@ -103,7 +110,7 @@ function isFile(path: string): boolean {
 }
 
 /** Serves a built file. Unknown paths get index.html so the client-side router can take over. */
-function serveStatic(root: string, pathname: string, response: import('node:http').ServerResponse): boolean {
+function serveStatic(root: string, pathname: string, response: import('node:http').ServerResponse, request?: import('node:http').IncomingMessage): boolean {
   let decoded: string;
   try {
     decoded = decodeURIComponent(pathname);
@@ -115,12 +122,31 @@ function serveStatic(root: string, pathname: string, response: import('node:http
   let file = candidate;
   if (!isFile(file)) file = join(root, 'index.html');
   if (!isFile(file)) return false;
+  const stat = statSync(file);
   const immutable = file.startsWith(join(root, 'assets') + sep);
+  const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+
+  const ifNoneMatch = request?.headers['if-none-match'];
+  if (ifNoneMatch === etag) {
+    response.writeHead(304, {
+      'ETag': etag,
+      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    });
+    response.end();
+    return true;
+  }
+
   response.writeHead(200, {
     'Content-Type': MIME_TYPES[extname(file)] ?? 'application/octet-stream',
-    'Content-Length': statSync(file).size,
+    'Content-Length': stat.size,
+    'ETag': etag,
     'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   });
   createReadStream(file).pipe(response);
   return true;
