@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
-import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userIdForToken, verifyPassword } from './auth.ts';
+import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updatePassword, type Role, type StoredUser } from './users.ts';
 import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
@@ -110,7 +110,15 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/health$/,
       auth: 'public',
-      handler: async () => ({ status: 200, body: { ok: true } }),
+      // Also touches the database, so the free database stays awake between visits (the monitor pings this every few minutes).
+      handler: async () => {
+        try {
+          await db.query('SELECT 1');
+          return { status: 200, body: { ok: true, database: true } };
+        } catch {
+          return { status: 503, body: { ok: false, database: false } };
+        }
+      },
     },
 
     {
@@ -441,10 +449,10 @@ export function createApp(options: AppOptions) {
     const fromCookie = cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
     const candidate = bearer ? bearer[1] : header ?? fromCookie;
     if (!candidate) return { user: null, token: null, viaCookie: false };
-    const userId = await userIdForToken(db, candidate, now());
-    if (userId === null) return { user: null, token: null, viaCookie: false };
+    const session = await userForToken(db, candidate, now());
+    if (!session) return { user: null, token: null, viaCookie: false };
     // Only a cookie-only session is subject to the JSON-only rule for writes (CSRF protection).
-    return { user: await findUserById(db, userId), token: candidate, viaCookie: !bearer && !header };
+    return { user: await findUserById(db, session.userId), token: candidate, viaCookie: !bearer && !header };
   }
 
   async function dispatch(request: IncomingMessage, body: unknown): Promise<RouteResult> {
@@ -477,7 +485,8 @@ export function createApp(options: AppOptions) {
     const origin = String(request.headers.origin ?? '');
     if (origin && APP_ORIGINS.has(origin)) {
       response.setHeader('Access-Control-Allow-Origin', origin);
-      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      // X-Meety-Session is the fallback session header the app sends; the browser blocks it unless listed here.
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Meety-Session');
       response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       response.setHeader('Access-Control-Max-Age', '600');
       response.setHeader('Vary', 'Origin');
