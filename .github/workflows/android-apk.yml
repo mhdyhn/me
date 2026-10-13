@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - arena/b53a1e35-me
+      - main
     tags:
       - 'v*'
 
