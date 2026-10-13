@@ -3,6 +3,9 @@
  * same origin, and the dev server or the production host forwards them to the API.
  */
 const TOKEN_KEY = 'meety.session-token';
+
+/** Empty on the website (same origin). The Android build sets it to the live server address. */
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 export const UNAUTHORIZED_EVENT = 'meety:unauthorized';
 
 export type Role = 'admin' | 'coach' | 'student';
@@ -76,7 +79,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
 
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) });
+    response = await fetch(`${API_BASE}/api${path}`, { method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
     throw new ApiError(0, 'اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.');
   }

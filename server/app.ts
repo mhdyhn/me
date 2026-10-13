@@ -450,6 +450,19 @@ export function createApp(options: AppOptions) {
   }
 
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    // The Android app runs from its own origin and calls this API from there.
+    const origin = String(request.headers.origin ?? '');
+    if (origin && APP_ORIGINS.has(origin)) {
+      response.setHeader('Access-Control-Allow-Origin', origin);
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      response.setHeader('Access-Control-Max-Age', '600');
+      response.setHeader('Vary', 'Origin');
+    }
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204).end();
+      return;
+    }
     // A human opening the API address gets a readable page, not a blank JSON view.
     if (request.method === 'GET' && new URL(request.url ?? '/', 'http://localhost').pathname === '/') {
       sendHtml(response, STATUS_PAGE);
@@ -498,3 +511,6 @@ function send(response: ServerResponse, status: number, body: unknown, headers: 
   });
   response.end(payload);
 }
+
+/** Origins of the native app shells that may call the API. Capacitor on Android uses https://localhost. */
+const APP_ORIGINS = new Set(['https://localhost', 'capacitor://localhost', 'http://localhost']);

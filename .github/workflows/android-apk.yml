@@ -31,6 +31,8 @@ jobs:
         run: npm ci
 
       - name: Build the web app and copy it into the Android project
+        env:
+          VITE_API_BASE: https://meety-985n.onrender.com
         run: |
           npm run build
           npx cap sync android

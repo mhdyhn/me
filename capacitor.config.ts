@@ -12,12 +12,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   // Same dark colour as the splash screen and the app, so there is no white flash while the site loads.
   backgroundColor: '#101312',
-  // The APK opens the live site so sign-in and the coach/student features reach the server.
-  // The bundled copy in dist/ is still included as a fallback.
-  server: {
-    url: 'https://meety-985n.onrender.com',
-    cleartext: false,
-  },
+  // The app is bundled inside the APK, so the screens open at once. Only data calls go to the server (VITE_API_BASE).
 };
 
 export default config;
