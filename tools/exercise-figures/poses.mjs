@@ -431,6 +431,29 @@ const smithShoulderPress = {
   },
 };
 
+const smithSquat = {
+  start: {
+    root: [240, 124],
+    torso: 90,
+    thigh: 270,
+    shin: 270,
+    foot: 0,
+    uarm: 250,
+    farm: 80,
+    equip: [{ t: 'post', x: 235, y: 30, h: 260 }, { t: 'barSide', at: 'grip' }],
+  },
+  main: {
+    root: [200, 173],
+    torso: 60,
+    thigh: 330,
+    shin: 250,
+    foot: 0,
+    uarm: 250,
+    farm: 80,
+    equip: [{ t: 'post', x: 235, y: 30, h: 260 }, { t: 'barSide', at: 'grip' }],
+  },
+};
+
 const machineCrunch = {
   start: {
     root: [210, 215],
@@ -565,6 +588,7 @@ export const POSES = {
   'hollow-hold': hollowHold,
   'swedish-dip': swedishDip,
   'smith-shoulder-press': smithShoulderPress,
+  'smith-squat': smithSquat,
   'machine-lateral-raise': machineLateralRaise,
   'two-hand-dumbbell-overhead-triceps': twoHandDumbbellOverheadTriceps,
   'machine-triceps-extension': machineTricepsExtension,

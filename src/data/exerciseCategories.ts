@@ -74,9 +74,10 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'two-hand-dumbbell-overhead-triceps': 'Triceps',
   'machine-triceps-extension': 'Triceps',
 
-  // Legs (11)
+  // Legs (12)
   'barbell-squat': 'Legs',
   'bodyweight-squat': 'Legs',
+  'smith-squat': 'Legs',
   'bulgarian-split-squat': 'Legs',
   'leg-press': 'Legs',
   'romanian-deadlift': 'Legs',
@@ -163,6 +164,22 @@ export const exerciseSearchAliases: Record<string, string[]> = {
   'barbell-bench-press': ['پرس سینه', 'پرس بنچ', 'نیمکت'],
   'incline-dumbbell-press': ['بالاسینه', 'بالا سینه', 'شیبدار'],
   'barbell-squat': ['اسکات', 'اسکوات پا', 'اسکات پا'],
+  'smith-squat': [
+    'اسکوات اسمیت',
+    'اسکات اسمیت',
+    'اسکوات با اسمیت',
+    'اسکات با اسمیت',
+    'اسمیت اسکوات',
+    'اسمیت اسکات',
+    'اسکوات دستگاه اسمیت',
+    'اسکات دستگاه اسمیت',
+    'اسمیت پا',
+  ],
+  'smith-shoulder-press': [
+    'پرس سرشانه اسمیت',
+    'سرشانه اسمیت',
+    'اسمیت سرشانه',
+  ],
   'romanian-deadlift': ['ددلیفت', 'ار دی ال', 'RDL'],
   'cable-crunch': ['کرانچ', 'شکم سیم کش'],
   'plank': ['پلانک', 'پلنک'],
