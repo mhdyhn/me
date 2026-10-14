@@ -328,6 +328,19 @@ const programMeta: ProgramMeta[] = [
       safetyCues: ['تنه را صاف و ثابت نگه دار و از چرخش تنه خودداری کن.', 'تمرکز روی کشش در بالا و انقباض زیربغل در پایین باشد.'],
     },
   },
+  {
+    id: 'smith-squat', category: 'Legs', difficulty: 'Beginner',
+    t: {
+      name: 'اسکوات با دستگاه اسمیت', primaryMuscles: ['چهارسر ران', 'عضلات سرینی'], secondaryMuscles: ['همسترینگ', 'عضلات مرکزی'], equipment: ['دستگاه اسمیت'],
+      setup: 'میلهٔ دستگاه اسمیت را در ارتفاعی کمی پایین‌تر از شانه قرار بده و ضامن‌های ایمنی را در عمق مناسب تنظیم کن.',
+      startPosition: 'زیر میله بایست و آن را روی عضلهٔ کول (بخش بالایی پشت) بگذار. پاها را حدود عرض شانه باز کرده و اندکی جلوتر از خط مستقیم میله قرار بده. با چرخاندن مچ‌ها ضامن میله را آزاد کن.',
+      execution: ['با خم کردن هم‌زمان زانوها و لگن و فرستادن باسن به عقب و پایین، کنترل‌شده بنشین.', 'تا جایی پایین برو که ران‌ها تقریباً موازی زمین شوند و کف پاها کاملاً روی زمین باشد.', 'با فشار یکنواخت از کف پا و درگیری عضلات ران و باسن، به وضعیت شروع برگرد.'],
+      finishPosition: 'ایستاده با قفل نکردن ضربه‌ای زانوها و حفظ انقباض عضلات ران.',
+      breathing: 'پیش از پایین رفتن نفس عمیق بگیر (دم) و پس از عبور از سخت‌ترین بخش بالا آمدن بازدم کن.', tempo: '۲ تا ۳ ثانیه پایین رفتن، ۱ ثانیه مکث، ۱ تا ۲ ثانیه بالا آمدن.',
+      commonMistakes: ['قرار دادن پاها دقیقاً زیر میله که باعث فشار بیش از حد به زانوها می‌شود', 'بلند شدن پاشنهٔ پا از زمین هنگام نشستن', 'قوس دادن یا گرد کردن بیش از حد ستون فقرات'],
+      safetyCues: ['پیش از شروع تمرین حتماً ضامن‌های ایمنی دستگاه را بررسی و تنظیم کن.', 'پاها را حدود چند سانتی‌متر جلوتر از میله بگذار تا فشار مستقیماً روی عضلات چهارسر و باسن باشد.'],
+    },
+  },
 ];
 
 const translationsById: Record<string, ExerciseTranslation> = Object.fromEntries(
@@ -359,6 +372,7 @@ const programEnglishNames: Record<string, string> = {
   'close-grip-barbell-curl': 'Close-Grip Barbell Curl',
   'crossbody-hammer-curl': 'Crossbody Hammer Curl',
   'single-arm-lat-pulldown': 'Single-Arm Lat Pulldown',
+  'smith-squat': 'Smith Machine Squat',
 };
 
 /** Persian copy for movements that were only in the programme, keyed by id. */

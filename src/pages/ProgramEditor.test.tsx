@@ -108,4 +108,20 @@ describe('program editor with categorized movement picker', () => {
     expect(screen.getByText('قفسه بالاسینه سیم‌کش')).toBeInTheDocument();
     expect(screen.getByText('Low-to-High Incline Cable Fly')).toBeInTheDocument();
   });
+
+  it('finds "اسکوات با دستگاه اسمیت" when searching for "اسکوات اسمیت" or "Smith Machine Squat"', async () => {
+    renderEditor('/program/edit?mode=blank');
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'اسکوات اسمیت');
+
+    expect(screen.getByText('اسکوات با دستگاه اسمیت')).toBeInTheDocument();
+    expect(screen.getByText('Smith Machine Squat')).toBeInTheDocument();
+
+    const addBtn = screen.getByRole('button', { name: /افزودن به این روز/ });
+    await user.click(addBtn);
+
+    expect(screen.getByDisplayValue('اسکوات با دستگاه اسمیت')).toBeInTheDocument();
+  });
 });
