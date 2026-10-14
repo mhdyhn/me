@@ -334,6 +334,21 @@ const reverseGripLatPulldown = {
   },
 };
 
+const singleArmLatPulldown = {
+  start: {
+    ...pulldownBase,
+    uarm: 85,
+    farm: 90,
+    equip: [...SEAT, { ...PULLEY }, { t: 'barSide', at: 'grip' }],
+  },
+  main: {
+    ...pulldownBase,
+    uarm: 255,
+    farm: 35,
+    equip: [...SEAT, { ...PULLEY }, { t: 'barSide', at: 'grip' }],
+  },
+};
+
 const closeGripCableRow = {
   start: {
     root: [190, 215],
@@ -540,6 +555,7 @@ export const POSES = {
   'reverse-fly': reverseFly,
   'hanging-leg-raise': hangingLegRaise,
   'reverse-grip-lat-pulldown': reverseGripLatPulldown,
+  'single-arm-lat-pulldown': singleArmLatPulldown,
   'barbell-bent-over-row': bentOverRow,
   'sumo-deadlift': sumoDeadlift,
   'ez-bar-curl': ezBarCurl,

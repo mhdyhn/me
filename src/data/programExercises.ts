@@ -315,6 +315,19 @@ const programMeta: ProgramMeta[] = [
       safetyCues: ['کمر را ثابت نگه دار.', 'وزن را متناسب انتخاب کن.'],
     },
   },
+  {
+    id: 'single-arm-lat-pulldown', category: 'Pull', difficulty: 'Beginner',
+    t: {
+      name: 'زیر بغل سیم‌کش تک‌دست', primaryMuscles: ['زیربغل'], secondaryMuscles: ['جلو بازو', 'بخش میانی پشت', 'پشت سرشانه'], equipment: ['دستگاه سیم‌کش از بالا', 'دستگیره تکی'],
+      setup: 'دستگیرهٔ تکی (D-Handle) را به قرقرهٔ بالایی سیم‌کش وصل کن. ارتفاع صندلی و پد ران را طوری تنظیم کن که هنگام نشستن ران‌ها محکم قفل شوند.',
+      startPosition: 'رو به دستگاه بنشین، با یک دست دستگیره را بگیر، دست کاملاً کشیده رو به بالا در امتداد کابل و کتف رها باشد. دست آزاد را روی ران یا بدنهٔ دستگاه تکیه بده.',
+      execution: ['با پایین کشیدن کتف و هدایت آرنج به سمت پهلو و لگن، دستگیره را پایین بکش.', 'در انتهای دامنه، آرنج را نزدیک دنده‌ها نگه دار و عضلهٔ زیربغل را یک ثانیه منقبض کن.', 'به‌آرامی و با کنترل اجازه بده کابل دست را به نقطهٔ شروع بازگرداند تا کشش کامل زیربغل احساس شود.'],
+      finishPosition: 'دست کاملاً صاف و کشیده رو به بالا با کشش کامل در عضلهٔ زیربغل.',
+      breathing: 'هنگام پایین کشیدن دستگیره بازدم کن و هنگام برگشت به بالا نفس بگیر.', tempo: '۲ ثانیه کشیدن، ۱ ثانیه انقباض در پایین، ۲ تا ۳ ثانیه برگشت.',
+      commonMistakes: ['چرخاندن بیش‌ازحد تنه و تقلب با وزن بدن', 'کشیدن با قدرت ساعد و جلوبازو به جای هدایت آرنج', 'رها کردن ناگهانی وزنه در مسیر بازگشت'],
+      safetyCues: ['تنه را صاف و ثابت نگه دار و از چرخش تنه خودداری کن.', 'تمرکز روی کشش در بالا و انقباض زیربغل در پایین باشد.'],
+    },
+  },
 ];
 
 const translationsById: Record<string, ExerciseTranslation> = Object.fromEntries(
@@ -345,6 +358,7 @@ const programEnglishNames: Record<string, string> = {
   'close-grip-cable-row': 'Close-Grip Seated Cable Row',
   'close-grip-barbell-curl': 'Close-Grip Barbell Curl',
   'crossbody-hammer-curl': 'Crossbody Hammer Curl',
+  'single-arm-lat-pulldown': 'Single-Arm Lat Pulldown',
 };
 
 /** Persian copy for movements that were only in the programme, keyed by id. */
