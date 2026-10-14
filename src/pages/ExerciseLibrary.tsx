@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
 import { lyftaMetaExercises } from '../data/lyftaCatalogueExercises';
+import { hasExerciseFigure, exerciseFigureSrc } from '../data/exerciseFigures';
 import { useProgram } from '../lib/programStore';
 import { normalizePersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
@@ -176,9 +177,18 @@ export function ExerciseLibrary() {
             return (
               <Link to={`/exercise/${exercise.id}`} className="exercise-card" key={exercise.id}>
                 <div className={`exercise-card__visual exercise-card__visual--${exercise.category.toLowerCase()}`}>
+                  {hasExerciseFigure(exercise.id) && (
+                    <img
+                      src={exerciseFigureSrc(exercise.id, 'start')}
+                      alt=""
+                      className="exercise-card__thumb"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  )}
                   <span className="exercise-card__number">{faDigits(String(index + 1).padStart(2, '0'))}</span>
                   <span className="exercise-card__category">{lyftaCategoryLabels[lyftaCategory]}</span>
-                  <div className="exercise-card__visual-mark"><span /><span /><span /></div>
+                  {!hasExerciseFigure(exercise.id) && <div className="exercise-card__visual-mark"><span /><span /><span /></div>}
                   <ArrowUpRight size={17} className="exercise-card__arrow" />
                 </div>
                 <div className="exercise-card__body">
