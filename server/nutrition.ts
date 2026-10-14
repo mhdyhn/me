@@ -45,6 +45,7 @@ export async function migrateNutrition(db: Db): Promise<void> {
       body TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_nutrition_plans_coach_id ON nutrition_plans(coach_id);
     CREATE TABLE IF NOT EXISTS nutrition_diary (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       day TEXT NOT NULL,

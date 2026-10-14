@@ -65,7 +65,15 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rolldownOptions: {
-        output: offlineSingleFile ? { inlineDynamicImports: true } : {},
+        output: offlineSingleFile
+          ? { inlineDynamicImports: true }
+          : {
+              manualChunks(id: string) {
+                if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
+                  return 'vendor-react';
+                }
+              },
+            },
       },
     },
   };
