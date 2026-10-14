@@ -3,7 +3,7 @@ import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
-import { loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
+import { deleteProgramme, loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
@@ -118,7 +118,7 @@ export function createApp(options: AppOptions) {
 
   async function ownStudent(coach: StoredUser, studentId: number): Promise<StoredUser> {
     const student = await findUserById(db, studentId);
-    if (!student || student.role !== 'student' || student.coachId !== coach.id) {
+    if (!student || student.role !== 'student' || (coach.role !== 'admin' && student.coachId !== coach.id)) {
       // Same answer for "missing" and "belongs to another coach", so ids cannot be probed.
       throw new HttpError(404, 'شاگرد پیدا نشد.');
     }
@@ -293,7 +293,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/program$/,
-      auth: ['coach'],
+      auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         return { status: 200, body: { program: await loadProgramme(db, student.id) } };
@@ -303,11 +303,22 @@ export function createApp(options: AppOptions) {
     {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/program$/,
-      auth: ['coach'],
+      auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
         return { status: 200, body: { program: await saveProgramme(db, student.id, user!.id, programme, now()) } };
+      },
+    },
+
+    {
+      method: 'DELETE',
+      pattern: /^\/api\/students\/(\d+)\/program$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        await deleteProgramme(db, student.id);
+        return { status: 200, body: { ok: true } };
       },
     },
 
