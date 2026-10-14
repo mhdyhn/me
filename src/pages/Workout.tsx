@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
+import { exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
 import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
 import { faDigits, faNumber, formatDate, formatDuration, kg } from '../lib/format';
@@ -27,6 +28,7 @@ export function Workout() {
   const [notesDraft, setNotesDraft] = useState('');
   const [now, setNow] = useState(Date.now());
   const [formError, setFormError] = useState('');
+  const [previewFrame, setPreviewFrame] = useState<FigureState>('start');
 
   useEffect(() => {
     if (!template || loading) return;
@@ -210,6 +212,37 @@ export function Workout() {
       <div className="workout-layout">
         <main className="workout-current-column">
           <div className="current-exercise-heading"><div><span className="eyebrow">حرکت {faDigits(String(currentExerciseIndex + 1).padStart(2, '0'))} از {faDigits(String(activeTemplate.exercises.length).padStart(2, '0'))}</span><h1>{currentWorkoutExercise.name}</h1>{exercise && <p>{exercise.primaryMuscles.join(' · ')} <span>·</span> {exercise.equipment[0]}</p>}</div>{exercise ? <Link className="text-link" to={`/exercise/${exercise.id}`}>راهنمای اجرا <ChevronRight size={15} /></Link> : <span className="muted">راهنمای تصویری برای این حرکت هنوز اضافه نشده است.</span>}</div>
+
+          {exercise && hasExerciseFigure(exercise.id) && (
+            <div className="workout-form-card">
+              <div className="workout-form-card__visual">
+                <img
+                  src={exerciseFigureSrc(exercise.id, previewFrame)}
+                  alt={exercise.name}
+                  className="workout-form-card__img"
+                  loading="eager"
+                  decoding="async"
+                />
+                <button
+                  type="button"
+                  className="workout-form-card__toggle"
+                  onClick={() => setPreviewFrame((f) => (f === 'start' ? 'main' : 'start'))}
+                  title="تغییر وضعیت"
+                >
+                  {previewFrame === 'start' ? '۱: شروع' : '۲: اجرا'}
+                </button>
+              </div>
+              <div className="workout-form-card__info">
+                <span className="eyebrow">فرم و ایمنی کلیدی</span>
+                <p>{exercise.safetyCues[0] ?? exercise.setup}</p>
+                <div className="workout-form-card__tempo">
+                  <span>تمپو: {exercise.tempo}</span>
+                  <span>·</span>
+                  <span>تنفس: {exercise.breathing}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="current-set-card panel-card">
             <div className="set-card-top"><div><span className="eyebrow">ست فعلی</span><div className="set-counter"><strong>{faDigits(String(setNumber).padStart(2, '0'))}</strong><span>/ {faDigits(String(prescription.sets).padStart(2, '0'))}</span></div></div><div className="target-chips"><span>{faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)} تکرار</span><span>{faDigits(prescription.targetRirLabel)} تکرار در ذخیره</span></div></div>
