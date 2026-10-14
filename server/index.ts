@@ -134,6 +134,9 @@ function serveStatic(root: string, pathname: string, response: import('node:http
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-XSS-Protection': '1; mode=block',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      'Permissions-Policy': 'geolocation=(), microphone=(self), camera=(self)',
     });
     response.end();
     return true;
@@ -147,6 +150,9 @@ function serveStatic(root: string, pathname: string, response: import('node:http
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'X-XSS-Protection': '1; mode=block',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Permissions-Policy': 'geolocation=(), microphone=(self), camera=(self)',
   });
   createReadStream(file).pipe(response);
   return true;
