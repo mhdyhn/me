@@ -141,7 +141,7 @@ export function AiHub() {
         >
           <HeartPulse size={16} />
           <span>ریکاوری و فیزیولوژی</span>
-          <span className="ai-tab-badge">Whoop / Oura</span>
+          <span className="ai-tab-badge">Whoop</span>
         </button>
 
         <button
@@ -165,7 +165,7 @@ export function AiHub() {
         >
           <ShieldAlert size={16} />
           <span>مفاصل و آسیب‌ها</span>
-          <span className="ai-tab-badge">Hinge Health</span>
+          <span className="ai-tab-badge">Hinge</span>
         </button>
 
         <button
