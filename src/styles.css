@@ -741,9 +741,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .section-heading h2 { font-size: 19px; }
   .section-description { margin-top: 6px; font-size: 10px; }
   .desktop-only { display: none; }
-  .mobile-nav { position: fixed; z-index: 30; inset: auto 0 0; display: grid; grid-template-columns: repeat(var(--nav-count, 5), minmax(0, 1fr)); gap: 1px; padding: 7px 4px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(166,183,172,.15); background: rgba(15,19,17,.96); backdrop-filter: blur(20px); }
-  .mobile-nav__item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 48px; border-radius: 10px; color: #77837b; font-size: 8px; font-weight: 600; text-align: center; line-height: 1.35; }
-  .mobile-nav__item.is-active { color: var(--accent); background: rgba(217,246,111,.06); }
+  .mobile-nav { position: fixed; z-index: 30; inset: auto 0 0; display: flex; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; gap: 4px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(166,183,172,.15); background: rgba(15,19,17,.96); backdrop-filter: blur(20px); }
+  .mobile-nav::-webkit-scrollbar { display: none; }
+  .mobile-nav__item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 50px; min-width: 60px; flex: 1 0 auto; padding: 4px 6px; border-radius: 12px; color: #8fa094; font-size: 11px; font-weight: 600; text-align: center; line-height: 1.25; white-space: nowrap; text-decoration: none; transition: all .15s ease; }
+  .mobile-nav__item.is-active { color: var(--accent); background: rgba(217,246,111,.1); font-weight: 700; }
   .welcome-row { align-items: flex-start; margin-bottom: 0; }
   .welcome-row h2 { margin: 5px 0 4px; font-size: 28px; }
   .welcome-row > div > p:last-child { max-width: 320px; font-size: 10px; line-height: 1.55; }
@@ -1344,14 +1345,15 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 /* ==========================================================================
    AI Health & Performance Hub (Whoop, Oura, Fitbod, Hinge, Noom)
    ========================================================================== */
-.ai-hub-page { display: grid; gap: 20px; }
-.ai-tabs-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 6px; }
-.ai-tab-button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; text-align: right; transition: all .18s ease; }
-.ai-tab-button:hover { background: var(--surface-soft); border-color: rgba(217, 246, 111, .3); }
-.ai-tab-button.is-active { border-color: var(--accent); background: rgba(217, 246, 111, .06); box-shadow: 0 0 16px rgba(217, 246, 111, .1); }
-.ai-tab-button span { font-weight: 700; font-size: 14px; }
-.ai-tab-badge { font-size: 11px; color: var(--muted); }
-.ai-tab-button.is-active .ai-tab-badge { color: var(--accent); }
+.ai-hub-page { display: grid; gap: 18px; }
+.ai-tabs-bar { display: flex; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; gap: 6px; padding: 5px; background: var(--surface-soft); border: 1px solid var(--line-soft); border-radius: 14px; margin-bottom: 4px; }
+.ai-tabs-bar::-webkit-scrollbar { display: none; }
+.ai-tab-button { display: inline-flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; transition: all .18s ease; flex: 1 1 auto; }
+.ai-tab-button:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
+.ai-tab-button.is-active { background: var(--surface); color: var(--text); border-color: var(--line); box-shadow: 0 2px 10px rgba(0, 0, 0, .3); }
+.ai-tab-button span { font-weight: 700; font-size: 13px; }
+.ai-tab-badge { font-size: 10px; color: var(--muted); padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .06); }
+.ai-tab-button.is-active .ai-tab-badge { background: rgba(217, 246, 111, .15); color: var(--accent); }
 
 .ai-hero-card { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: 0 12px 30px rgba(0, 0, 0, .25); }
 .ai-hero-card__main { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
@@ -1466,5 +1468,16 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .admin-stat-label { font-size: 11px; color: var(--muted); }
 .admin-stat-ai { border-right: 1px solid var(--line-soft); padding-right: 18px; }
 .admin-overview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Workout Finish Button & Progress Confirmation */
+.workout-finish-top-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(217, 246, 111, .15); border: 1px solid rgba(217, 246, 111, .35); color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease; margin-inline-start: auto; }
+.workout-finish-top-btn:hover { background: rgba(217, 246, 111, .25); border-color: var(--accent); }
+
+/* Latest Completed Session Banner on Progress Page */
+.latest-completed-banner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding: 16px 20px; border-radius: var(--radius); background: linear-gradient(135deg, rgba(217, 246, 111, .06), rgba(255, 255, 255, .02)); border: 1px solid rgba(217, 246, 111, .3); box-shadow: 0 8px 24px rgba(0, 0, 0, .2); }
+.latest-completed-info { display: grid; gap: 4px; }
+.latest-completed-info h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--text); }
+.latest-completed-stat { text-align: left; display: grid; gap: 2px; }
+.latest-completed-stat strong { font-size: 18px; color: var(--accent); }
 
 

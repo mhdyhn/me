@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { workoutTemplates } from '../data/workouts';
 import { exerciseById, exercises } from '../data/exercises';
-import { getCompletedThisWeek, getProgressionAdvice, getRecentRecord, getSessionTotals } from './analytics';
+import { getCompletedThisWeek, getNextWorkout, getProgressionAdvice, getRecentRecord, getSessionTotals } from './analytics';
 import type { WorkoutSession } from '../types';
 
 const sampleSession: WorkoutSession = {
@@ -25,6 +25,35 @@ describe('training data integrity', () => {
 
   it('calculates session totals from logged sets only', () => {
     expect(getSessionTotals(sampleSession)).toMatchObject({ exerciseCount: 1, setCount: 2, repCount: 15, volumeKg: 300 });
+  });
+
+  it('rotates to next sequential workout day when session is completed', () => {
+    // When no completed sessions exist, next workout is day-1
+    expect(getNextWorkout([])?.id).toBe('day-1');
+
+    // When day-1 is completed, next workout is day-2
+    expect(getNextWorkout([sampleSession])?.id).toBe('day-2');
+
+    // When day-2 is completed, next workout is day-3
+    const day2Completed: WorkoutSession = {
+      ...sampleSession,
+      id: 'session-2',
+      templateId: 'day-2',
+      startedAt: '2026-10-08T08:00:00.000Z',
+      completedAt: '2026-10-08T09:00:00.000Z',
+    };
+    expect(getNextWorkout([sampleSession, day2Completed])?.id).toBe('day-3');
+
+    // Active (uncompleted) sessions do not advance the sequence prematurely
+    const activeSession: WorkoutSession = {
+      ...sampleSession,
+      id: 'session-3',
+      templateId: 'day-3',
+      status: 'active',
+      startedAt: '2026-10-09T08:00:00.000Z',
+      completedAt: undefined,
+    };
+    expect(getNextWorkout([sampleSession, day2Completed, activeSession])?.id).toBe('day-3');
   });
 
   it('counts completed sessions in the local Monday-to-Sunday week', () => {

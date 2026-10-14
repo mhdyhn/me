@@ -131,7 +131,7 @@ export function AiHub() {
       </section>
 
       {/* Primary Tab Navigation */}
-      <div className="ai-tabs-bar" role="tablist">
+      <div className="ai-tabs-bar" role="tablist" aria-label="بخش‌های هوش سلامتی">
         <button
           type="button"
           role="tab"
@@ -139,9 +139,9 @@ export function AiHub() {
           className={`ai-tab-button ${activeTab === 'recovery' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('recovery')}
         >
-          <HeartPulse size={18} />
+          <HeartPulse size={16} />
           <span>ریکاوری و فیزیولوژی</span>
-          <small className="ai-tab-badge">Whoop / Oura</small>
+          <span className="ai-tab-badge">Whoop / Oura</span>
         </button>
 
         <button
@@ -151,9 +151,9 @@ export function AiHub() {
           className={`ai-tab-button ${activeTab === 'muscles' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('muscles')}
         >
-          <Activity size={18} />
+          <Activity size={16} />
           <span>نقشه عضلات</span>
-          <small className="ai-tab-badge">Fitbod Engine</small>
+          <span className="ai-tab-badge">Fitbod</span>
         </button>
 
         <button
@@ -163,9 +163,9 @@ export function AiHub() {
           className={`ai-tab-button ${activeTab === 'hinge' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('hinge')}
         >
-          <ShieldAlert size={18} />
+          <ShieldAlert size={16} />
           <span>مفاصل و آسیب‌ها</span>
-          <small className="ai-tab-badge">Hinge Health</small>
+          <span className="ai-tab-badge">Hinge Health</span>
         </button>
 
         <button
@@ -175,9 +175,9 @@ export function AiHub() {
           className={`ai-tab-button ${activeTab === 'noom' ? 'is-active' : ''}`}
           onClick={() => setActiveTab('noom')}
         >
-          <Utensils size={18} />
+          <Utensils size={16} />
           <span>تغذیه رفتاری</span>
-          <small className="ai-tab-badge">Noom Style</small>
+          <span className="ai-tab-badge">Noom</span>
         </button>
       </div>
 

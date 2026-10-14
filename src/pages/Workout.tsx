@@ -131,14 +131,16 @@ export function Workout() {
 
   const goToNextStep = async () => {
     if (!session || !activeTemplate || !prescription) return;
-    if (isFinalSet) {
+    const nextSet = session.currentSetIndex + 1;
+    const sameExerciseHasMore = nextSet < prescription.sets;
+    const isLastExercise = currentExerciseIndex >= activeTemplate.exercises.length - 1;
+
+    if (isFinalSet || (isLastExercise && !sameExerciseHasMore)) {
       const completed: WorkoutSession = { ...session, status: 'completed', completedAt: new Date().toISOString(), restTimer: undefined, notes: notesDraft };
       setSummary(completed);
       await saveSession(completed);
       return;
     }
-    const nextSet = session.currentSetIndex + 1;
-    const sameExerciseHasMore = nextSet < prescription.sets;
     const updated: WorkoutSession = {
       ...session,
       currentExerciseIndex: sameExerciseHasMore ? session.currentExerciseIndex : session.currentExerciseIndex + 1,
@@ -148,6 +150,28 @@ export function Workout() {
     };
     await saveSession(updated);
     setNow(Date.now());
+  };
+
+  const handleFinishWorkout = async () => {
+    if (!session) return;
+    const hasAnySets = session.exercises.some((e) => e.sets.length > 0);
+    if (!hasAnySets) {
+      if (window.confirm('هنوز هیچ ستی در این جلسه ثبت نکرده‌اید. مایلید بدون ثبت تمرین خارج شوید؟')) {
+        navigate('/');
+      }
+      return;
+    }
+    const confirmed = window.confirm('آیا تمرین امروز شما به پایان رسیده است؟ جلسه به‌عنوان «کامل‌شده» ذخیره می‌شود و در نمودار پیشرفت اعمال خواهد شد.');
+    if (!confirmed) return;
+    const completed: WorkoutSession = {
+      ...session,
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      restTimer: undefined,
+      notes: notesDraft,
+    };
+    setSummary(completed);
+    await saveSession(completed);
   };
 
   const handleLogSet = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -206,7 +230,16 @@ export function Workout() {
 
   return (
     <div className="workout-mode">
-      <div className="workout-topline"><Link to="/program" className="back-link"><ArrowLeft size={15} /> برنامه</Link><span className="workout-mode-label"><span className="live-dot" /> حالت تمرین</span><span className="workout-topline__name">{activeTemplate.name}</span></div>
+      <div className="workout-topline">
+        <Link to="/program" className="back-link"><ArrowLeft size={15} /> برنامه</Link>
+        <span className="workout-mode-label"><span className="live-dot" /> حالت تمرین</span>
+        <span className="workout-topline__name">{activeTemplate.name}</span>
+        {loggedSetCount > 0 && (
+          <button type="button" className="workout-finish-top-btn" onClick={() => void handleFinishWorkout()}>
+            <Check size={14} /> پایان و ثبت جلسه
+          </button>
+        )}
+      </div>
       <div className="workout-progress-line"><div><span>پیشرفت جلسه</span><strong>{faNumber(loggedSetCount)} <small>/ {faNumber(plannedSetCount)} ست</small></strong></div><span className="progress-track"><span style={{ width: `${progressPercent}%` }} /></span><small>{faNumber(completedExercises)} / {faNumber(activeTemplate.exercises.length)} حرکت</small></div>
 
       <div className="workout-layout">
@@ -280,6 +313,16 @@ export function Workout() {
         </main>
 
         <aside className="workout-sidebar">
+          {loggedSetCount > 0 && (
+            <button
+              type="button"
+              className="button button--primary button--full"
+              style={{ marginBottom: '12px' }}
+              onClick={() => void handleFinishWorkout()}
+            >
+              <CheckCircle2 size={16} /> اتمام جلسه و ثبت پیشرفت
+            </button>
+          )}
           <section className="panel-card workout-queue-card"><div className="card-topline"><span className="eyebrow">ترتیب حرکت‌های امروز</span><span className="queue-count">{faNumber(activeTemplate.exercises.length)} حرکت</span></div><div className="workout-queue">{activeTemplate.exercises.map((item, index) => {
             const queueSession = session.exercises[index];
             const isCurrent = index === currentExerciseIndex;
