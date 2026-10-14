@@ -18,7 +18,7 @@ export const exerciseNames: Record<string, string> = {
   'cable-triceps-pushdown': 'پشت بازو سیم‌کش با میله',
   'overhead-cable-triceps-extension': 'پشت بازو سیم‌کش بالای سر',
   'lat-pulldown': 'زیر بغل سیم‌کش از بالا',
-  'neutral-grip-lat-pulldown': 'زیر بغل سیم‌کش با دستگیرهٔ موازی',
+  'neutral-grip-lat-pulldown': 'زیر بغل سیم‌کش دست خنثی (دستگیرهٔ موازی)',
   'seated-cable-row': 'قایقی سیم‌کش نشسته',
   'one-arm-dumbbell-row': 'قایقی تک‌دست با دمبل',
   'face-pull': 'کشیدن طناب به سمت صورت',

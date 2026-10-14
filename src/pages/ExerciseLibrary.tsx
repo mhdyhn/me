@@ -9,9 +9,10 @@ import {
   lyftaCategoryLabels,
   exerciseLyftaCategory,
   lyftaCategoryFilters as filters,
+  exerciseSearchText,
 } from '../data/exerciseCategories';
 import { useProgram } from '../lib/programStore';
-import { normalizePersianSearch } from '../lib/labels';
+import { matchesPersianSearch } from '../lib/labels';
 import { faDigits, faNumber } from '../lib/format';
 
 export {
@@ -34,14 +35,10 @@ export function ExerciseLibrary() {
   const results = useMemo(() => exercises.filter((exercise) => {
     if (onlyAssigned && !assignedIds.has(exercise.id)) return false;
     const matchesCategory = category === 'All' || exerciseLyftaCategory[exercise.id] === category;
-    const searchable = normalizePersianSearch([
-      exercise.name,
-      exercise.englishName ?? '',
-      ...exercise.primaryMuscles,
-      ...exercise.secondaryMuscles,
-      ...exercise.equipment,
-    ].join(' '));
-    return matchesCategory && searchable.includes(normalizePersianSearch(search));
+    if (!matchesCategory) return false;
+    if (!search.trim()) return true;
+    const searchable = exerciseSearchText(exercise);
+    return matchesPersianSearch(searchable, search.trim());
   }), [search, category, onlyAssigned, assignedIds]);
 
   return (

@@ -58,16 +58,27 @@ describe('program editor with categorized movement picker', () => {
     expect(screen.getByDisplayValue('پرس سینه با هالتر')).toBeInTheDocument();
   });
 
-  it('allows adding a custom movement by name', async () => {
+  it('starts with 0 exercises in blank mode and does not pre-populate any movements', () => {
+    renderEditor('/program/edit?mode=blank');
+
+    // Must show empty day note and no pre-populated exercises
+    expect(screen.getByText(/این روز هنوز حرکتی ندارد/)).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('پرس سینه با هالتر')).not.toBeInTheDocument();
+  });
+
+  it('finds "زیر بغل سیم‌کش دست خنثی" when searching for "دست خنثی" or "زیر بغل سیم‌کش دست خنثی"', async () => {
     renderEditor('/program/edit?mode=blank');
     const user = userEvent.setup();
 
-    const customInput = screen.getByPlaceholderText(/بارفیکس دست باز مچ برعکس/);
-    await user.type(customInput, 'شنا پرشی با دست زدن');
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'دست خنثی');
 
-    const addCustomBtn = screen.getByRole('button', { name: /افزودن حرکت سفارشی/ });
-    await user.click(addCustomBtn);
+    // Should find the movement and allow adding it
+    expect(screen.getByText('زیر بغل سیم‌کش دست خنثی (دستگیرهٔ موازی)')).toBeInTheDocument();
 
-    expect(screen.getByDisplayValue('شنا پرشی با دست زدن')).toBeInTheDocument();
+    const addBtn = screen.getByRole('button', { name: /افزودن به این روز/ });
+    await user.click(addBtn);
+
+    expect(screen.getByDisplayValue('زیر بغل سیم‌کش دست خنثی (دستگیرهٔ موازی)')).toBeInTheDocument();
   });
 });

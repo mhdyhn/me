@@ -319,31 +319,22 @@ export const presetTemplates: PresetTemplate[] = [
     title: 'برنامهٔ جدید از صفر (خالی)',
     tagline: 'طراحی کاملاً شخصی‌سازی‌شده مطابق سلیقهٔ شما',
     badge: 'سفارشی',
-    description: 'یک برنامه با روزهای اولیه برای افزودن حرکت‌های انتخابی شما از کتابخانه ۱۷۸ حرکتی.',
+    description: 'یک برنامه با روزهای اولیه و کاملاً خالی، بدون هیچ حرکت پیش‌فرضی برای افزودن آزادانهٔ حرکت‌های دلخواه شما.',
     daysCount: 1,
-    exercisesCount: 1,
+    exercisesCount: 0,
     buildWorkoutTemplates: () => [
       {
         id: `custom-day-${Date.now().toString(36)}`,
         name: 'روز ۱: شروع برنامه',
         dayLabel: 'روز ۰۱',
-        focus: 'سینه و دست‌ها',
-        durationMinutes: 45,
+        focus: 'عضلات هدف',
+        durationMinutes: 0,
         description: 'روز اول برنامهٔ تمرینی شخصی شما.',
-        exercises: [ex('barbell-bench-press', 3, 8, 10, 90, 'پرس سینه با هالتر')],
+        exercises: [],
       },
     ],
     buildProgramDays: () => [
-      toProgramDay('روز ۱', [
-        {
-          exerciseId: 'barbell-bench-press',
-          name: 'پرس سینه با هالتر',
-          muscle: 'سینه',
-          sets: 3,
-          reps: '8-10',
-          restSeconds: 90,
-        },
-      ]),
+      toProgramDay('روز ۱', []),
     ],
   },
 ];

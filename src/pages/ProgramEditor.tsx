@@ -9,8 +9,9 @@ import {
   lyftaCategoryLabels,
   exerciseLyftaCategory,
   lyftaCategoryFilters,
+  exerciseSearchText,
 } from '../data/exerciseCategories';
-import { normalizePersianSearch } from '../lib/labels';
+import { matchesPersianSearch } from '../lib/labels';
 import { finalizeProgram, newDay, newExercise, newId, validateProgram } from '../lib/programRules';
 import { resetProgram, saveProgram } from '../lib/programPersistence';
 import { originalProgramCopy, useProgram } from '../lib/programStore';
@@ -328,18 +329,13 @@ function CategorizedExercisePicker({ onAdd }: { onAdd: (exercise: WorkoutExercis
   const [customName, setCustomName] = useState('');
 
   const matches = useMemo(() => {
-    const needle = normalizePersianSearch(query.trim());
+    const q = query.trim();
     return exercises.filter((exercise) => {
       const matchesCategory = category === 'All' || exerciseLyftaCategory[exercise.id] === category;
       if (!matchesCategory) return false;
-      if (!needle) return true;
-      const searchable = normalizePersianSearch([
-        exercise.name,
-        exercise.englishName ?? '',
-        ...exercise.primaryMuscles,
-        ...exercise.equipment,
-      ].join(' '));
-      return searchable.includes(needle);
+      if (!q) return true;
+      const searchable = exerciseSearchText(exercise);
+      return matchesPersianSearch(searchable, q);
     }).slice(0, 50);
   }, [category, query]);
 
