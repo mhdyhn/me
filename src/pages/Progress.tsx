@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Activity, ArrowRight, CalendarDays, ChevronDown, Plus, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Activity, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, Plus, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
@@ -13,13 +13,41 @@ import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib
 export function Progress() {
   const { sessions, bodyweights, profile, addBodyweight } = useGym();
   useProgram();
-  const [selectedExercise, setSelectedExercise] = useState('barbell-bench-press');
+
+  const completedSessions = useMemo(() => {
+    return sessions
+      .filter((session) => session.status === 'completed')
+      .sort((a, b) => {
+        const timeB = new Date(b.completedAt || b.startedAt).getTime();
+        const timeA = new Date(a.completedAt || a.startedAt).getTime();
+        return timeB - timeA;
+      });
+  }, [sessions]);
+
+  const defaultExerciseId = useMemo(() => {
+    for (const session of completedSessions) {
+      for (const ex of session.exercises) {
+        if (ex.sets.length > 0) return ex.exerciseId;
+      }
+    }
+    return 'barbell-bench-press';
+  }, [completedSessions]);
+
+  const [selectedExercise, setSelectedExercise] = useState(defaultExerciseId);
   const [selectedMetric, setSelectedMetric] = useState<'weight' | 'reps' | 'volume'>('weight');
   const [weightInput, setWeightInput] = useState('');
   const [weightDate, setWeightDate] = useState(dateInputValue());
   const [weightNote, setWeightNote] = useState('');
   const [formError, setFormError] = useState('');
-  const completedSessions = sessions.filter((session) => session.status === 'completed').sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+
+  useEffect(() => {
+    if (selectedExercise === 'barbell-bench-press' && defaultExerciseId !== 'barbell-bench-press') {
+      const benchHasSets = sessions.some((s) => s.exercises.some((e) => e.exerciseId === 'barbell-bench-press' && e.sets.length > 0));
+      if (!benchHasSets) {
+        setSelectedExercise(defaultExerciseId);
+      }
+    }
+  }, [defaultExerciseId, selectedExercise, sessions]);
   const performances = getExercisePerformances(sessions, selectedExercise);
   const chartPoints = [...performances].reverse().map((performance) => ({
     label: formatDate(performance.session.startedAt, { month: 'short', day: 'numeric' }),
@@ -65,6 +93,25 @@ export function Progress() {
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="دادهٔ واقعی · پیشرفت پیوسته" title="پیشرفت، نه حدس و گمان." description="روندها از جلسه‌ها و وزن‌کشی‌های ثبت‌شده ساخته می‌شوند. هیچ عددی به‌عنوان رکورد شخصی حدس زده نمی‌شود." />
+
+      {completedSessions[0] && (
+        <section className="latest-completed-banner">
+          <div className="latest-completed-info">
+            <span className="badge badge--success">
+              <CheckCircle2 size={13} /> آخرین جلسهٔ کامل‌شده
+            </span>
+            <h3>{getWorkoutTemplate(completedSessions[0].templateId)?.name ?? completedSessions[0].name}</h3>
+            <p className="muted text-xs">
+              {formatDate(completedSessions[0].completedAt || completedSessions[0].startedAt, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} · {faNumber(getSessionTotals(completedSessions[0]).setCount)} ست کاری ثبت شد
+            </p>
+          </div>
+          <div className="latest-completed-stat">
+            <span className="eyebrow">حجم ثبت‌شده</span>
+            <strong>{faNumber(Math.round(getSessionTotals(completedSessions[0]).volumeKg))} <small>کیلوگرم·تکرار</small></strong>
+          </div>
+        </section>
+      )}
+
       <div className="progress-summary-cards">
         <div className="progress-summary-card panel-card"><span className="summary-card-icon"><CalendarDays size={17} /></span><span className="eyebrow">جلسه‌های ثبت‌شده</span><strong>{faNumber(completedSessions.length)}</strong><small>جلسهٔ کامل‌شده</small></div>
         <div className="progress-summary-card panel-card"><span className="summary-card-icon"><Weight size={17} /></span><span className="eyebrow">وزن فعلی بدن</span><strong>{kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : 'وزن پایهٔ پروفایل · هنوز ثبت نشده'}</small></div>

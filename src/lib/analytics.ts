@@ -206,11 +206,19 @@ export const getWeekComparison = (weeks: WeekTotals[]): WeekComparison | null =>
 
 export const getNextWorkout = (sessions: WorkoutSession[]) => {
   const primary = getPrimaryWorkoutTemplates();
-  const lastPrimary = sessions
+  if (!primary.length) return null;
+  const completedPrimary = sessions
     .filter((session) => session.status === 'completed' && primary.some((item) => item.id === session.templateId))
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+    .sort((a, b) => {
+      const timeB = new Date(b.completedAt || b.startedAt).getTime();
+      const timeA = new Date(a.completedAt || a.startedAt).getTime();
+      return timeB - timeA;
+    });
+
+  const lastPrimary = completedPrimary[0];
   if (!lastPrimary) return primary[0];
   const lastIndex = primary.findIndex((item) => item.id === lastPrimary.templateId);
+  if (lastIndex === -1) return primary[0];
   return primary[(lastIndex + 1) % primary.length] ?? primary[0];
 };
 
