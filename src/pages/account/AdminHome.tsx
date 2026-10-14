@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, MessageCircle, Receipt, Trash2, UserPlus, Users } from 'lucide-react';
+import { KeyRound, MessageCircle, Receipt, Sparkles, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
+import { faNumber } from '../../lib/format';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
 
@@ -76,13 +77,39 @@ function AdminCoaches() {
     }
   }
 
+  const totalStudents = coaches?.reduce((sum, c) => sum + (c.studentCount || 0), 0) ?? 0;
+
   return (
-    <PanelPage title="مربی‌ها">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-        <Link to="/coach/admin/transactions" className="button button--ghost">
-          <Receipt size={16} /> تراکنش‌ها و درآمدهای باشگاه
-        </Link>
+    <PanelPage title="مدیریت مربی‌ها و باشگاه">
+      {/* Club Overview & AI Activity Banner */}
+      <div className="admin-overview-card">
+        <div className="admin-overview-stats">
+          <div className="admin-stat-item">
+            <span className="admin-stat-num">{faNumber(coaches?.length ?? 0)}</span>
+            <span className="admin-stat-label">مربیان فعال</span>
+          </div>
+          <div className="admin-stat-item">
+            <span className="admin-stat-num">{faNumber(totalStudents)}</span>
+            <span className="admin-stat-label">کل شاگردان باشگاه</span>
+          </div>
+          <div className="admin-stat-item admin-stat-ai">
+            <span className="badge badge--success">
+              <Sparkles size={12} /> اکوسیستم AI هوشمند
+            </span>
+            <span className="admin-stat-label">Whoop · Fitbod · Noom · Hinge فعال</span>
+          </div>
+        </div>
+
+        <div className="admin-overview-actions">
+          <Link to="/ai-hub" className="button button--small button--secondary">
+            <Sparkles size={14} /> داشبورد هوش سلامتی
+          </Link>
+          <Link to="/coach/admin/transactions" className="button button--small button--ghost">
+            <Receipt size={14} /> تراکنش‌ها و درآمدها
+          </Link>
+        </div>
       </div>
+
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
       ) : (
