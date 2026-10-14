@@ -1340,3 +1340,113 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .editor-picker-item__sub { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
 .editor-picker-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .06); color: var(--subtle); border: 1px solid var(--line-soft); }
 .editor-custom-add { display: flex; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--line-soft); flex-wrap: wrap; align-items: flex-end; }
+
+/* ==========================================================================
+   AI Health & Performance Hub (Whoop, Oura, Fitbod, Hinge, Noom)
+   ========================================================================== */
+.ai-hub-page { display: grid; gap: 20px; }
+.ai-tabs-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 6px; }
+.ai-tab-button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; text-align: right; transition: all .18s ease; }
+.ai-tab-button:hover { background: var(--surface-soft); border-color: rgba(217, 246, 111, .3); }
+.ai-tab-button.is-active { border-color: var(--accent); background: rgba(217, 246, 111, .06); box-shadow: 0 0 16px rgba(217, 246, 111, .1); }
+.ai-tab-button span { font-weight: 700; font-size: 14px; }
+.ai-tab-badge { font-size: 11px; color: var(--muted); }
+.ai-tab-button.is-active .ai-tab-badge { color: var(--accent); }
+
+.ai-hero-card { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: 0 12px 30px rgba(0, 0, 0, .25); }
+.ai-hero-card__main { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+.ai-gauge-container { display: grid; place-items: center; flex: none; width: 150px; height: 150px; }
+.ai-gauge-circle { width: 140px; height: 140px; border-radius: 50%; display: grid; place-items: center; transition: background .3s; }
+.ai-gauge-inner { width: 112px; height: 112px; border-radius: 50%; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--line-soft); }
+.ai-gauge-value { font-size: 28px; font-weight: 900; line-height: 1; }
+.ai-gauge-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.ai-hero-details { flex: 1; min-width: 260px; display: grid; gap: 10px; }
+.ai-hero-details h3 { margin: 0; font-size: 18px; font-weight: 800; color: var(--text); }
+.ai-tag-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ai-recommendation-box { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: rgba(217, 246, 111, .06); border: 1px solid rgba(217, 246, 111, .2); color: var(--text); font-size: 13px; line-height: 1.8; margin: 0; }
+.ai-sparkle-icon { flex: none; color: var(--accent); margin-top: 2px; }
+
+.ai-mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 4px; }
+.ai-mini-stat { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-soft); border: 1px solid var(--line-soft); }
+.ai-mini-stat strong { display: block; font-size: 13px; color: var(--text); }
+.ai-mini-stat small { display: block; font-size: 11px; color: var(--muted); }
+
+.ai-sync-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.ai-sync-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.ai-manual-form { display: grid; gap: 12px; padding: 16px; border-radius: 12px; background: var(--surface-soft); border: 1px dashed var(--line); margin-top: 6px; }
+.ai-manual-form h4 { margin: 0; font-size: 14px; }
+.ai-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+
+.ai-info-panel { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; border-radius: var(--radius); background: rgba(59, 130, 246, .08); border: 1px solid rgba(59, 130, 246, .2); font-size: 13px; line-height: 1.8; color: var(--text); }
+.ai-info-panel p { margin: 4px 0 0; color: var(--subtle); font-size: 12px; }
+
+/* Muscle Heatmap (Fitbod style) */
+.muscle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+.muscle-card { display: grid; gap: 8px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line-soft); background: var(--surface-soft); }
+.muscle-card__header { display: flex; justify-content: space-between; align-items: center; }
+.muscle-card__header strong { font-size: 14px; color: var(--text); }
+.muscle-pct { font-size: 15px; font-weight: 800; }
+.muscle-card__footer { display: flex; justify-content: space-between; align-items: center; }
+.muscle-card__detail { padding-top: 6px; border-top: 1px solid var(--line-soft); }
+.muscle-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.bg-success { background-color: #10b981; }
+.bg-warning { background-color: #f59e0b; }
+.bg-danger { background-color: #ef4444; }
+
+/* Hinge Health Joint Care */
+.joint-pills { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.joint-pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-soft); color: var(--text); font-size: 13px; cursor: pointer; transition: all .15s ease; }
+.joint-pill:hover { border-color: rgba(217, 246, 111, .4); }
+.joint-pill.is-selected { background: rgba(239, 68, 68, .12); border-color: #ef4444; color: #ff9e92; font-weight: 700; }
+
+.empty-prehab-state { display: grid; place-items: center; text-align: center; gap: 10px; padding: 40px 20px; }
+.empty-prehab-state h4 { margin: 0; font-size: 16px; }
+
+.joint-routines-stack { display: grid; gap: 16px; margin-top: 16px; }
+.prehab-card { padding: 18px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-soft); display: grid; gap: 14px; }
+.prehab-card__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.prehab-card__header h4 { margin: 0; font-size: 15px; color: var(--text); }
+.prehab-exercises-list { display: grid; gap: 12px; }
+.prehab-exercise-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-soft); }
+.prehab-ex-num { width: 28px; height: 28px; border-radius: 50%; background: rgba(217, 246, 111, .1); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 12px; flex: none; }
+.prehab-ex-body { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.prehab-ex-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prehab-ex-purpose { font-size: 12px; color: #a3e635; margin: 0; }
+.prehab-ex-instruction { font-size: 12px; color: var(--subtle); margin: 2px 0 0; line-height: 1.7; }
+
+/* Noom Mindful Eating */
+.noom-colors-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+.noom-color-card { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-soft); display: grid; gap: 8px; }
+.noom-color-card__header { display: flex; align-items: center; gap: 8px; }
+.noom-color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.noom-target-badge { font-size: 12px; font-weight: 700; }
+.noom-examples-list { margin: 0; padding-right: 18px; font-size: 11px; color: var(--subtle); line-height: 1.8; }
+
+.mindful-form { padding: 16px; border-radius: 14px; background: var(--surface-soft); border: 1px solid var(--line); margin-top: 18px; display: grid; gap: 12px; }
+.mindful-form h4 { margin: 0; font-size: 14px; }
+.mindful-form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+
+.ai-feedback-banner { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: rgba(217, 246, 111, .07); border: 1px solid rgba(217, 246, 111, .25); margin-top: 14px; font-size: 13px; line-height: 1.8; }
+.ai-feedback-banner strong { display: block; color: var(--accent); margin-bottom: 2px; }
+.ai-feedback-banner p { margin: 0; color: var(--text); }
+
+.mindful-history { margin-top: 20px; display: grid; gap: 10px; }
+.mindful-history h5 { margin: 0; font-size: 14px; }
+.mindful-history-list { display: grid; gap: 8px; }
+.mindful-history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--surface-soft); border: 1px solid var(--line-soft); }
+.mindful-item-left { display: flex; align-items: center; gap: 10px; }
+.mindful-item-right { display: flex; align-items: center; gap: 8px; }
+
+/* Dashboard AI Widget */
+.dashboard-ai-card { display: grid; gap: 16px; padding: 18px 20px; border-radius: var(--radius); background: linear-gradient(135deg, rgba(217, 246, 111, .04), rgba(255, 255, 255, .02)); border: 1px solid rgba(217, 246, 111, .25); margin: 6px 0; box-shadow: 0 10px 30px rgba(0, 0, 0, .2); }
+.dashboard-ai-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.dashboard-ai-body { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+.dashboard-ai-score-pill { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); flex: none; }
+.dashboard-ai-score-num { font-size: 26px; font-weight: 900; line-height: 1; }
+.dashboard-ai-advice { flex: 1; min-width: 240px; font-size: 13px; line-height: 1.8; color: var(--text); margin: 0; }
+.dashboard-ai-muscles-preview { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
