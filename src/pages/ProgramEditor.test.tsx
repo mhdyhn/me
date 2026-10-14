@@ -97,4 +97,15 @@ describe('program editor with categorized movement picker', () => {
 
     expect(screen.getByDisplayValue('زیر بغل سیم‌کش تک‌دست')).toBeInTheDocument();
   });
+
+  it('finds "قفسه بالاسینه سیم‌کش" when searching for "کراس‌اوور سیم‌کش از پایین به بالا" or "Low-to-High"', async () => {
+    renderEditor('/program/edit?mode=blank');
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'کراس‌اوور از پایین به بالا');
+
+    expect(screen.getByText('قفسه بالاسینه سیم‌کش')).toBeInTheDocument();
+    expect(screen.getByText('Low-to-High Incline Cable Fly')).toBeInTheDocument();
+  });
 });
