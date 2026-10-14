@@ -146,4 +146,41 @@ describe('student programme', () => {
     const adminDel = await call('DELETE', `/api/students/${pupil.id}/program`, undefined, adminToken);
     expect(adminDel.status).toBe(200);
   });
+
+  it('syncs personal workout programme across devices for signed-in users', async () => {
+    const adminToken = await signIn('owner', 'owner-pass-123');
+
+    // Initially no personal program on server
+    const initial = await call('GET', '/api/me/personal-program', undefined, adminToken);
+    expect(initial.status).toBe(200);
+    expect(initial.json.program).toBeNull();
+
+    // Admin saves personal program on laptop
+    const myProgram = [
+      {
+        id: 'day-1',
+        name: 'روز اول اختصاصی مدیر',
+        dayLabel: 'روز ۰۱',
+        focus: 'سینه و دست‌ها',
+        durationMinutes: 50,
+        description: 'تمرین سنگین',
+        exercises: [],
+      },
+    ];
+    const saveRes = await call('PUT', '/api/me/personal-program', { program: myProgram }, adminToken);
+    expect(saveRes.status).toBe(200);
+    expect(saveRes.json.ok).toBe(true);
+
+    // Mobile phone logs in with same admin account and retrieves the program
+    const phoneRead = await call('GET', '/api/me/personal-program', undefined, adminToken);
+    expect(phoneRead.status).toBe(200);
+    expect(phoneRead.json.program).toHaveLength(1);
+    expect(phoneRead.json.program[0].name).toBe('روز اول اختصاصی مدیر');
+
+    // Delete personal program
+    const delRes = await call('DELETE', '/api/me/personal-program', undefined, adminToken);
+    expect(delRes.status).toBe(200);
+    const afterDel = await call('GET', '/api/me/personal-program', undefined, adminToken);
+    expect(afterDel.json.program).toBeNull();
+  });
 });

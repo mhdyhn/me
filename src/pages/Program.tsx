@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, PlusCircle, Sparkles, Trash2, X, CalendarPlus, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
@@ -6,7 +6,7 @@ import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
 import { getCompletedThisWeek } from '../lib/analytics';
 import { isProgramReadOnly, useAssignedMeta, useProgram } from '../lib/programStore';
-import { clearProgram, resetProgram, saveProgram } from '../lib/programPersistence';
+import { clearProgram, resetProgram, saveProgram, syncCloudProgram } from '../lib/programPersistence';
 import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
@@ -25,6 +25,12 @@ export function Program() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!readOnly) {
+      void syncCloudProgram();
+    }
+  }, [readOnly]);
 
   const primaryCount = workoutTemplates.filter((workout) => !workout.optional).length;
   const averageMinutes = workoutTemplates.length ? Math.round(workoutTemplates.reduce((sum, workout) => sum + workout.durationMinutes, 0) / workoutTemplates.length) : 0;

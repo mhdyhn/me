@@ -3,7 +3,7 @@ import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
-import { deleteProgramme, loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
+import { deletePersonalProgramme, deleteProgramme, loadPersonalProgramme, loadProgramme, savePersonalProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
@@ -501,6 +501,41 @@ export function createApp(options: AppOptions) {
             isPaid: true,
           },
         };
+      },
+    },
+
+    // Personal workout program cloud sync (for admin, coach, or any signed-in user)
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/personal-program$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        const result = await loadPersonalProgramme(db, user!.id);
+        return { status: 200, body: { program: result ? result.program : null, updatedAt: result ? result.updatedAt : null } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/me\/personal-program$/,
+      auth: 'signed-in',
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (!Array.isArray(input.program)) {
+          throw new HttpError(400, 'برنامه باید به صورت آرایه باشد.');
+        }
+        await savePersonalProgramme(db, user!.id, input.program, now());
+        return { status: 200, body: { ok: true, updatedAt: now().toISOString() } };
+      },
+    },
+
+    {
+      method: 'DELETE',
+      pattern: /^\/api\/me\/personal-program$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        await deletePersonalProgramme(db, user!.id);
+        return { status: 200, body: { ok: true } };
       },
     },
 

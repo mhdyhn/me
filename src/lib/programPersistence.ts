@@ -3,12 +3,46 @@ import { db } from './db';
 import { validateProgram } from './programRules';
 import { usesOwnerData } from './accountScope';
 import { getActiveProgram, isProgramReadOnly, originalProgramCopy, setActiveProgram } from './programStore';
+import { api } from './api';
 
 const PROGRAM_KEY = 'programTemplates';
 const BACKUP_KEY = 'programBackup';
 
 const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
   Array.isArray(value) && value.length > 0 && value.every((day) => day && typeof day === 'object' && Array.isArray((day as WorkoutTemplate).exercises));
+
+/**
+ * Syncs personal program with the cloud server (for manager/coach or any logged-in user).
+ * If cloud has a program, updates local storage. If cloud is empty and local has one, uploads local copy.
+ */
+export async function syncCloudProgram() {
+  if (isProgramReadOnly()) return;
+  try {
+    const res = await api<{ program: WorkoutTemplate[] | null; updatedAt: string | null }>('GET', '/me/personal-program');
+    if (res.program !== null) {
+      if (Array.isArray(res.program)) {
+        if (res.program.length === 0) {
+          await db.preferences.put({ key: PROGRAM_KEY, value: [] });
+          setActiveProgram([]);
+          return;
+        }
+        if (isProgramShape(res.program) && validateProgram(res.program).length === 0) {
+          await db.preferences.put({ key: PROGRAM_KEY, value: res.program });
+          setActiveProgram(res.program);
+          return;
+        }
+      }
+    } else {
+      // Cloud has no personal program yet: if this device has one, back it up to cloud
+      const current = getActiveProgram();
+      if (current && current.length > 0) {
+        await api('PUT', '/me/personal-program', { program: current }).catch(() => {});
+      }
+    }
+  } catch {
+    // Offline, guest, or unauthenticated: silently keep local program
+  }
+}
 
 /** Loads the account's own programme. The developer starts from the original programme; everyone else from an empty one. */
 export async function loadStoredProgram() {
@@ -19,14 +53,17 @@ export async function loadStoredProgram() {
       const value = record?.value;
       if (Array.isArray(value) && value.length === 0) {
         setActiveProgram([]);
+        void syncCloudProgram();
         return;
       }
       if (isProgramShape(value) && validateProgram(value).length === 0) {
         setActiveProgram(value);
+        void syncCloudProgram();
         return;
       }
     }
     setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
+    void syncCloudProgram();
   } catch (error) {
     console.error('Meety could not read the saved programme.', error);
   }
@@ -34,7 +71,7 @@ export async function loadStoredProgram() {
 
 /**
  * Saves a programme after validation. The previous programme is kept under a backup key
- * before it is replaced, so a bad edit can be recovered.
+ * before it is replaced, so a bad edit can be recovered. Also syncs to cloud if connected.
  */
 export async function saveProgram(next: WorkoutTemplate[]) {
   const errors = validateProgram(next);
@@ -42,13 +79,27 @@ export async function saveProgram(next: WorkoutTemplate[]) {
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
   await db.preferences.put({ key: PROGRAM_KEY, value: next });
   setActiveProgram(next);
+
+  // Sync to cloud in background
+  try {
+    await api('PUT', '/me/personal-program', { program: next });
+  } catch (err) {
+    console.warn('Personal programme cloud sync deferred (offline or guest):', err);
+  }
 }
 
-/** Clears/deletes the entire programme with backup preservation. */
+/** Clears/deletes the entire programme with backup preservation. Also syncs deletion to cloud. */
 export async function clearProgram() {
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
   await db.preferences.put({ key: PROGRAM_KEY, value: [] });
   setActiveProgram([]);
+
+  // Sync deletion to cloud in background
+  try {
+    await api('PUT', '/me/personal-program', { program: [] });
+  } catch (err) {
+    console.warn('Personal programme cloud clear deferred:', err);
+  }
 }
 
 /** Restores the original RAGE programme (the current one is kept as backup). */

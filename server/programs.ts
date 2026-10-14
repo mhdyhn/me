@@ -91,3 +91,25 @@ export async function deleteProgramme(db: Db, studentId: number): Promise<void> 
   await db.query('DELETE FROM student_programs WHERE student_id = $1', [studentId]);
 }
 
+export async function savePersonalProgramme(db: Db, userId: number, program: unknown[], now: Date): Promise<void> {
+  const updatedAt = now.toISOString();
+  await db.query(
+    `INSERT INTO user_personal_programs (user_id, body, updated_at) VALUES ($1, $2, $3)
+     ON CONFLICT(user_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(program), updatedAt],
+  );
+}
+
+export async function loadPersonalProgramme(db: Db, userId: number): Promise<{ program: unknown[]; updatedAt: string } | null> {
+  const row = (await db.query<{ body: string; updated_at: string }>(
+    'SELECT body, updated_at FROM user_personal_programs WHERE user_id = $1',
+    [userId],
+  ))[0];
+  if (!row) return null;
+  return { program: JSON.parse(row.body), updatedAt: row.updated_at };
+}
+
+export async function deletePersonalProgramme(db: Db, userId: number): Promise<void> {
+  await db.query('DELETE FROM user_personal_programs WHERE user_id = $1', [userId]);
+}
+
