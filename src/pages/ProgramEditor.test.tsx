@@ -124,4 +124,20 @@ describe('program editor with categorized movement picker', () => {
 
     expect(screen.getByDisplayValue('اسکوات با دستگاه اسمیت')).toBeInTheDocument();
   });
+
+  it('finds "چرخش خارجی شانه با سیم‌کش" when searching for "Cable External Rotation" or "روتیشن خارجی"', async () => {
+    renderEditor('/program/edit?mode=blank');
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'روتیشن خارجی');
+
+    expect(screen.getByText('چرخش خارجی شانه با سیم‌کش')).toBeInTheDocument();
+    expect(screen.getByText('Cable External Rotation')).toBeInTheDocument();
+
+    const addBtn = screen.getByRole('button', { name: /افزودن به این روز/ });
+    await user.click(addBtn);
+
+    expect(screen.getByDisplayValue('چرخش خارجی شانه با سیم‌کش')).toBeInTheDocument();
+  });
 });

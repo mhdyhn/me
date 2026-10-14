@@ -341,6 +341,19 @@ const programMeta: ProgramMeta[] = [
       safetyCues: ['پیش از شروع تمرین حتماً ضامن‌های ایمنی دستگاه را بررسی و تنظیم کن.', 'پاها را حدود چند سانتی‌متر جلوتر از میله بگذار تا فشار مستقیماً روی عضلات چهارسر و باسن باشد.'],
     },
   },
+  {
+    id: 'cable-external-rotation', category: 'Pull', difficulty: 'Beginner',
+    t: {
+      name: 'چرخش خارجی شانه با سیم‌کش', primaryMuscles: ['پشت سرشانه', 'سرشانه'], secondaryMuscles: ['بخش بالایی پشت'], equipment: ['دستگاه سیم‌کش', 'دستگیره تکی'],
+      setup: 'قرقرهٔ سیم‌کش را در ارتفاع آرنج (هم‌سطح کمر) تنظیم کن و دستگیرهٔ تکی را به آن متصل کن.',
+      startPosition: 'به پهلو نسبت به دستگاه بایست (به‌طوری که دست تمرینی دورتر از قرقره باشد). دستگیره را با دست بیرونی بگیر، آرنج را با زاویهٔ ۹۰ درجه به پهلو بچسبان و ساعد را موازی شکم نگه دار.',
+      execution: ['با ثابت نگه داشتن آرنج در کنار پهلو، ساعد را با چرخش از مفصل شانه به سمت بیرون هدایت کن.', 'در انتهای دامنه حرکت، یک ثانیه مکث کن و انقباض عضلات روتاتور کاف و پشت سرشانه را حس کن.', 'به‌آرامی و با کنترل کامل کابل، ساعد را به نقطهٔ شروع جلوی شکم بازگردان.'],
+      finishPosition: 'ساعد کنترل‌شده به جلوی شکم بازگشته در حالی که آرنج کاملاً چسبیده به پهلو مانده است.',
+      breathing: 'هنگام چرخاندن دست به بیرون بازدم و در مسیر بازگشت به داخل دم انجام بده.', tempo: '۲ ثانیه چرخش به بیرون، ۱ ثانیه مکث، ۲ تا ۳ ثانیه بازگشت.',
+      commonMistakes: ['جدا شدن آرنج از پهلو و حرکت دادن کل بازو به جای چرخش مفصل شانه', 'چرخاندن تنه و کمر برای کامل کردن حرکت', 'انتخاب وزنهٔ سنگین که به مفصل شانه آسیب می‌زند'],
+      safetyCues: ['این حرکت تقویت‌کنندهٔ روتاتور کاف است و حتماً با وزنهٔ بسیار سبک اجرا می‌شود.', 'آرنج را در تمام طول دامنه مثل لولا به پهلو ثابت نگه دار.'],
+    },
+  },
 ];
 
 const translationsById: Record<string, ExerciseTranslation> = Object.fromEntries(
@@ -373,6 +386,7 @@ const programEnglishNames: Record<string, string> = {
   'crossbody-hammer-curl': 'Crossbody Hammer Curl',
   'single-arm-lat-pulldown': 'Single-Arm Lat Pulldown',
   'smith-squat': 'Smith Machine Squat',
+  'cable-external-rotation': 'Cable External Rotation',
 };
 
 /** Persian copy for movements that were only in the programme, keyed by id. */

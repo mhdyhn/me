@@ -8,7 +8,7 @@ const hasPersian = (value: string) => /[\u0600-\u06FF]/.test(value);
 
 describe('Persian training content', () => {
   it('provides Persian descriptions and labels for every exercise', () => {
-    expect(exercises).toHaveLength(180); // 33 core library movements + 25 programme movements + 122 Lyfta gym movements
+    expect(exercises).toHaveLength(181); // 33 core library movements + 26 programme movements + 122 Lyfta gym movements
     for (const exercise of exercises) {
       const visibleCopy = [
         exercise.name,
@@ -32,7 +32,7 @@ describe('Persian training content', () => {
   });
 
   it('provides standard English names for every exercise in the catalogue', () => {
-    expect(exercises).toHaveLength(180);
+    expect(exercises).toHaveLength(181);
     for (const exercise of exercises) {
       expect(exercise.englishName).toBeDefined();
       expect(typeof exercise.englishName).toBe('string');
