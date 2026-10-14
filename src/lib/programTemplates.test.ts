@@ -17,8 +17,13 @@ describe('preset workout templates', () => {
     for (const template of presetTemplates) {
       const workouts = template.buildWorkoutTemplates();
       expect(workouts.length).toBeGreaterThanOrEqual(1);
-      const errors = validateProgram(workouts);
-      expect(errors).toEqual([]);
+      if (template.id !== 'blank') {
+        const errors = validateProgram(workouts);
+        expect(errors).toEqual([]);
+      } else {
+        // Blank template must start with 0 exercises so the user can define their own
+        expect(workouts[0]!.exercises).toHaveLength(0);
+      }
     }
   });
 
@@ -40,11 +45,15 @@ describe('preset workout templates', () => {
       expect(days.length).toBe(template.daysCount);
       for (const day of days) {
         expect(day.name.length).toBeGreaterThan(0);
-        expect(day.exercises.length).toBeGreaterThan(0);
-        for (const item of day.exercises) {
-          expect(item.sets).toBeGreaterThanOrEqual(1);
-          expect(item.sets).toBeLessThanOrEqual(10);
-          expect(item.restSeconds).toBeGreaterThanOrEqual(0);
+        if (template.id !== 'blank') {
+          expect(day.exercises.length).toBeGreaterThan(0);
+          for (const item of day.exercises) {
+            expect(item.sets).toBeGreaterThanOrEqual(1);
+            expect(item.sets).toBeLessThanOrEqual(10);
+            expect(item.restSeconds).toBeGreaterThanOrEqual(0);
+          }
+        } else {
+          expect(day.exercises).toHaveLength(0);
         }
       }
     }

@@ -108,3 +108,29 @@ export const lyftaCategoryFilters: { id: LyftaCategory; label: string }[] = [
   { id: 'Legs', label: lyftaCategoryLabels.Legs },
   { id: 'Core', label: lyftaCategoryLabels.Core },
 ];
+
+/** Common Persian gym nicknames and search aliases for movements */
+export const exerciseSearchAliases: Record<string, string[]> = {
+  'neutral-grip-lat-pulldown': ['دست خنثی', 'زیر بغل سیم‌کش دست خنثی', 'زیربغل سیمکش دست خنثی', 'سیم کش دست خنثی', 'لت دست خنثی', 'لت خنثی', 'لت موازی', 'گیرش خنثی'],
+  'lat-pulldown': ['لت', 'لت سیم کش', 'لت سیمکش', 'زیربغل لت'],
+  'reverse-grip-lat-pulldown': ['لت مچ برعکس', 'زیربغل مچ برعکس'],
+  'straight-arm-pulldown': ['پلاور سیم کش', 'پلاور سیمکش', 'لت دست صاف'],
+  'seated-cable-row': ['قایقی', 'روئینگ', 'روینگ سیم کش'],
+  'barbell-bench-press': ['پرس سینه', 'پرس بنچ', 'نیمکت'],
+  'incline-dumbbell-press': ['بالاسینه', 'بالا سینه', 'شیبدار'],
+  'barbell-squat': ['اسکات', 'اسکوات پا', 'اسکات پا'],
+  'romanian-deadlift': ['ددلیفت', 'ار دی ال', 'RDL'],
+  'cable-crunch': ['کرانچ', 'شکم سیم کش'],
+  'plank': ['پلانک', 'پلنک'],
+};
+
+export function exerciseSearchText(exercise: { id: string; name: string; englishName?: string; primaryMuscles: string[]; equipment: string[] }): string {
+  const aliases = exerciseSearchAliases[exercise.id] ?? [];
+  return [
+    exercise.name,
+    exercise.englishName ?? '',
+    ...exercise.primaryMuscles,
+    ...exercise.equipment,
+    ...aliases,
+  ].join(' ');
+}
