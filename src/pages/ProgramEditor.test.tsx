@@ -140,4 +140,20 @@ describe('program editor with categorized movement picker', () => {
 
     expect(screen.getByDisplayValue('چرخش خارجی شانه با سیم‌کش')).toBeInTheDocument();
   });
+
+  it('finds "جلو بازو دستگاه لاری (اسکات)" when searching for "جلو بازو دستگاه اسکات" or "Machine Preacher Curl"', async () => {
+    renderEditor('/program/edit?mode=blank');
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'جلو بازو دستگاه اسکات');
+
+    expect(screen.getByText('جلو بازو دستگاه لاری (اسکات)')).toBeInTheDocument();
+    expect(screen.getByText('Machine Preacher Curl')).toBeInTheDocument();
+
+    const addBtn = screen.getByRole('button', { name: /افزودن به این روز/ });
+    await user.click(addBtn);
+
+    expect(screen.getByDisplayValue('جلو بازو دستگاه لاری (اسکات)')).toBeInTheDocument();
+  });
 });

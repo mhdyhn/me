@@ -57,7 +57,7 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'reverse-fly': 'Shoulders',
   'cable-external-rotation': 'Shoulders',
 
-  // Biceps (8)
+  // Biceps (9)
   'barbell-curl': 'Biceps',
   'dumbbell-biceps-curl': 'Biceps',
   'hammer-curl': 'Biceps',
@@ -66,6 +66,7 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'ez-bar-curl': 'Biceps',
   'close-grip-barbell-curl': 'Biceps',
   'crossbody-hammer-curl': 'Biceps',
+  'machine-preacher-curl': 'Biceps',
 
   // Triceps (6)
   'cable-triceps-pushdown': 'Triceps',
@@ -131,6 +132,29 @@ export const exerciseSearchAliases: Record<string, string[]> = {
     'نشر خارجی سیم‌کش',
     'اکسترنال سیم کش',
     'اکسترنال',
+  ],
+  'machine-preacher-curl': [
+    'جلو بازو دستگاه اسکات',
+    'جلو بازو اسکات',
+    'جلو بازو دستگاه لاری',
+    'جلو بازو لاری دستگاه',
+    'دستگاه اسکات بازو',
+    'دستگاه لاری',
+    'دستگاه اسکات',
+    'لاری دستگاه',
+    'اسکات دستگاه',
+    'اسکات بازو',
+    'جلو بازو اسکات با دستگاه',
+    'Preacher Machine Curl',
+    'Machine Scott Curl',
+  ],
+  'preacher-curl': [
+    'جلو بازو اسکات',
+    'جلو بازو لاری',
+    'لاری هالتر',
+    'میز اسکات',
+    'میز لاری',
+    'لاری با میله',
   ],
   'single-arm-lat-pulldown': [
     'لت تک دست',
