@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Sparkles, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import type { Role } from '../lib/api';
@@ -17,6 +17,7 @@ const personalNavigation: NavItem[] = [
   { label: 'خانه', to: '/', icon: House, end: true },
   { label: 'برنامه', to: '/program', icon: CalendarDays },
   { label: 'حرکت‌ها', to: '/exercises', icon: Dumbbell },
+  { label: 'هوش سلامتی', to: '/ai-hub', icon: Sparkles },
   { label: 'پیشرفت', to: '/progress', icon: BarChart3 },
   { label: 'تغذیه', to: '/nutrition', icon: Utensils },
 ];
@@ -40,6 +41,7 @@ const personalTitles: Record<string, string> = {
   '/': 'تمرین امروزت',
   '/program': 'برنامه تمرینی',
   '/exercises': 'راهنمای حرکت‌ها',
+  '/ai-hub': 'اکوسیستم هوش سلامتی و عملکرد',
   '/progress': 'پیشرفت و سوابق',
   '/nutrition': 'تغذیه',
   '/settings': 'پروفایل و تنظیمات',
