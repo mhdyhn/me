@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { exercises as catalog } from '../../data/exercises';
+import { exerciseSearchText } from '../../data/exerciseCategories';
+import { matchesPersianSearch } from '../../lib/labels';
 import { ApiError, api, type ProgramDay, type ProgramItem, type Programme, type PublicUser } from '../../lib/api';
 import { presetTemplates, type PresetTemplate } from '../../lib/programTemplates';
 import { faNumber } from '../../lib/format';
@@ -11,7 +13,7 @@ const MAX_DAYS = 7;
 const MAX_EXERCISES = 15;
 const REPS_PATTERN = /^\d{1,2}(-\d{1,2})?$/;
 
-const muscleOptions = [...new Set(catalog.flatMap((exercise) => exercise.primaryMuscles))].sort((a, b) => a.localeCompare(b, 'fa'));
+const muscleOptions = ['همه', ...new Set(catalog.flatMap((exercise) => exercise.primaryMuscles))];
 
 export function ProgramBuilder() {
   return (
@@ -29,7 +31,7 @@ function Builder() {
   const [priceTomans, setPriceTomans] = useState(0);
   const [days, setDays] = useState<ProgramDay[]>([]);
   const [activeDay, setActiveDay] = useState(0);
-  const [muscle, setMuscle] = useState(muscleOptions[0] ?? '');
+  const [muscle, setMuscle] = useState('همه');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -66,9 +68,19 @@ function Builder() {
 
   const visibleExercises = useMemo(() => {
     const query = search.trim();
+    if (!query) {
+      return catalog
+        .filter((exercise) => muscle === 'همه' || exercise.primaryMuscles.includes(muscle))
+        .slice(0, 60);
+    }
+    const withinMuscle = muscle === 'همه' ? [] : catalog.filter((exercise) => {
+      if (!exercise.primaryMuscles.includes(muscle)) return false;
+      return matchesPersianSearch(exerciseSearchText(exercise), query);
+    });
+    if (withinMuscle.length > 0) return withinMuscle.slice(0, 60);
+
     return catalog
-      .filter((exercise) => exercise.primaryMuscles.includes(muscle))
-      .filter((exercise) => !query || exercise.name.includes(query))
+      .filter((exercise) => matchesPersianSearch(exerciseSearchText(exercise), query))
       .slice(0, 60);
   }, [muscle, search]);
 
@@ -321,11 +333,14 @@ function Builder() {
                   </button>
                 ))}
               </div>
-              <input className="picker__search" placeholder="جست‌وجو در این گروه" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input className="picker__search" placeholder="جست‌وجو با نام فارسی، انگلیسی یا حرکت (مثل اسکوات اسمیت)" value={search} onChange={(event) => setSearch(event.target.value)} />
               <ul className="picker-list">
                 {visibleExercises.map((exercise) => (
                   <li key={exercise.id}>
-                    <span>{exercise.name}</span>
+                    <div>
+                      <strong>{exercise.name}</strong>
+                      {exercise.englishName && <div className="account-muted" style={{ fontSize: 11 }} dir="ltr">{exercise.englishName}</div>}
+                    </div>
                     <button type="button" className="button button--ghost" onClick={() => addExercise(exercise)}>
                       <Plus size={16} /> افزودن
                     </button>

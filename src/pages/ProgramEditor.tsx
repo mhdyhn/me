@@ -330,13 +330,18 @@ function CategorizedExercisePicker({ onAdd }: { onAdd: (exercise: WorkoutExercis
 
   const matches = useMemo(() => {
     const q = query.trim();
-    return exercises.filter((exercise) => {
-      const matchesCategory = category === 'All' || exerciseLyftaCategory[exercise.id] === category;
-      if (!matchesCategory) return false;
-      if (!q) return true;
-      const searchable = exerciseSearchText(exercise);
-      return matchesPersianSearch(searchable, q);
-    }).slice(0, 50);
+    if (!q) {
+      return exercises.filter((exercise) => category === 'All' || exerciseLyftaCategory[exercise.id] === category).slice(0, 50);
+    }
+    // Search within currently selected category first
+    const withinCategory = category === 'All' ? [] : exercises.filter((exercise) => {
+      if (exerciseLyftaCategory[exercise.id] !== category) return false;
+      return matchesPersianSearch(exerciseSearchText(exercise), q);
+    });
+    if (withinCategory.length > 0) return withinCategory.slice(0, 50);
+
+    // If none found in selected category or if 'All', search across all exercises
+    return exercises.filter((exercise) => matchesPersianSearch(exerciseSearchText(exercise), q)).slice(0, 50);
   }, [category, query]);
 
   return (
