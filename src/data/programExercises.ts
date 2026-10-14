@@ -354,6 +354,19 @@ const programMeta: ProgramMeta[] = [
       safetyCues: ['این حرکت تقویت‌کنندهٔ روتاتور کاف است و حتماً با وزنهٔ بسیار سبک اجرا می‌شود.', 'آرنج را در تمام طول دامنه مثل لولا به پهلو ثابت نگه دار.'],
     },
   },
+  {
+    id: 'machine-preacher-curl', category: 'Pull', difficulty: 'Beginner',
+    t: {
+      name: 'جلو بازو دستگاه لاری (اسکات)', primaryMuscles: ['جلو بازو'], secondaryMuscles: ['عضلهٔ بازویی', 'ساعد'], equipment: ['دستگاه جلو بازو لاری'],
+      setup: 'صندلی دستگاه را طوری تنظیم کن که زیر بغل‌ها دقیقاً روی لبهٔ بالایی پد شیب‌دار (میز اسکات/لاری) قرار گیرند و سینه به پد تکیه داده شود.',
+      startPosition: 'روی صندلی بنشین، پشت بازوها را محکم روی پد تکیه بده و دسته‌ها را با کف دست رو به بالا بگیر. آرنج‌ها اندکی خمیده باشند و قفل نشوند.',
+      execution: ['با انقباض متمرکز جلو بازو و بدون جدا شدن بازوها از روی پد، دسته‌ها را به سمت بالا جمع کن.', 'در اوج انقباض یک ثانیه مکث کن و عضلهٔ جلو بازو را به شدت منقبض نگه دار.', 'به‌آرامی و با کنترل وزنه‌ها، دسته‌ها را تا نزدیکی باز شدن کامل به پایین برگردان.'],
+      finishPosition: 'دست‌ها در نزدیکی نقطهٔ شروع پایین آمده‌اند، بدون قفل شدن مفصل آرنج و با حفظ کشش پیوسته.',
+      breathing: 'هنگام بالا آوردن دسته‌ها بازدم و در مسیر پایین رفتن دم انجام بده.', tempo: '۲ ثانیه بالا کشیدن، ۱ ثانیه مکث در بالا، ۲ تا ۳ ثانیه بازگشت.',
+      commonMistakes: ['جدا شدن آرنج‌ها یا باسن از تکیه‌گاه هنگام بالا بردن وزنه', 'قفل کردن کامل و ضربه‌ای آرنج‌ها در انتهای دامنه پایین', 'استفاده از تکان دادن بالاتنه و کمر'],
+      safetyCues: ['در پایین‌ترین نقطه هرگز آرنج‌ها را قفل نکن تا از کشیدگی تاندون جلو بازو پیشگیری شود.', 'صندلی را دقیق تنظیم کن تا بازوها کاملاً روی پد ثابت بمانند.'],
+    },
+  },
 ];
 
 const translationsById: Record<string, ExerciseTranslation> = Object.fromEntries(
@@ -387,6 +400,7 @@ const programEnglishNames: Record<string, string> = {
   'single-arm-lat-pulldown': 'Single-Arm Lat Pulldown',
   'smith-squat': 'Smith Machine Squat',
   'cable-external-rotation': 'Cable External Rotation',
+  'machine-preacher-curl': 'Machine Preacher Curl',
 };
 
 /** Persian copy for movements that were only in the programme, keyed by id. */

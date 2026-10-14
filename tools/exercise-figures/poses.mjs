@@ -592,6 +592,29 @@ const cableExternalRotation = {
   },
 };
 
+const machinePreacherCurl = {
+  start: {
+    root: [210, 215],
+    torso: 80,
+    thigh: 0,
+    shin: 270,
+    foot: 0,
+    uarm: 330,
+    farm: 330,
+    equip: [{ t: 'box', x: 230, y: 175, w: 45, h: 45 }, { t: 'barSide', at: 'grip' }],
+  },
+  main: {
+    root: [210, 215],
+    torso: 80,
+    thigh: 0,
+    shin: 270,
+    foot: 0,
+    uarm: 330,
+    farm: 110,
+    equip: [{ t: 'box', x: 230, y: 175, w: 45, h: 45 }, { t: 'barSide', at: 'grip' }],
+  },
+};
+
 export const POSES = {
   'barbell-bench-press': bench,
   'barbell-squat': squat,
@@ -620,4 +643,5 @@ export const POSES = {
   'close-grip-barbell-curl': closeGripBarbellCurl,
   'crossbody-hammer-curl': crossbodyHammerCurl,
   'cable-external-rotation': cableExternalRotation,
+  'machine-preacher-curl': machinePreacherCurl,
 };
