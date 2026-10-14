@@ -43,17 +43,18 @@ export function Program() {
   }
 
   async function handleApplyTemplate(template: PresetTemplate, openEditor = false) {
+    if (template.id === 'blank' || openEditor) {
+      setShowTemplateModal(false);
+      navigate('/program/edit?mode=blank');
+      return;
+    }
     setBusy(true);
     setFeedback(null);
     try {
       const days = template.buildWorkoutTemplates();
       await saveProgram(days);
       setShowTemplateModal(false);
-      if (openEditor) {
-        navigate('/program/edit');
-      } else {
-        setFeedback({ text: `«${template.title}» با موفقیت فعال شد.`, type: 'success' });
-      }
+      setFeedback({ text: `«${template.title}» با موفقیت فعال شد.`, type: 'success' });
     } catch (err) {
       setFeedback({ text: err instanceof Error ? err.message : 'خطا در ایجاد برنامه جدید', type: 'error' });
     } finally {
