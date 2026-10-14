@@ -81,4 +81,20 @@ describe('program editor with categorized movement picker', () => {
 
     expect(screen.getByDisplayValue('زیر بغل سیم‌کش دست خنثی (دستگیرهٔ موازی)')).toBeInTheDocument();
   });
+
+  it('finds "زیر بغل سیم‌کش تک‌دست" when searching for "لت تک دست" or "Single-Arm Lat Pulldown"', async () => {
+    renderEditor('/program/edit?mode=blank');
+    const user = userEvent.setup();
+
+    const searchInput = screen.getByPlaceholderText(/جست‌وجوی حرکت با نام فارسی، انگلیسی/);
+    await user.type(searchInput, 'لت تک دست');
+
+    expect(screen.getByText('زیر بغل سیم‌کش تک‌دست')).toBeInTheDocument();
+    expect(screen.getByText('Single-Arm Lat Pulldown')).toBeInTheDocument();
+
+    const addBtn = screen.getByRole('button', { name: /افزودن به این روز/ });
+    await user.click(addBtn);
+
+    expect(screen.getByDisplayValue('زیر بغل سیم‌کش تک‌دست')).toBeInTheDocument();
+  });
 });
