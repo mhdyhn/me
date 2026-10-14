@@ -81,6 +81,10 @@ export const exercisePhotoIds = new Set<string>([
   'pull-up',
   'conventional-deadlift',
   'arnold-press',
+  'plank',
+  'chin-up',
+  'skull-crusher',
+  'goblet-squat',
 ]);
 
 /** True when the exercise has either a photo pair or an SVG pair. */
