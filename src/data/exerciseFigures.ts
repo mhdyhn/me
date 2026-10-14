@@ -31,6 +31,7 @@ export const exerciseFigureIds = new Set<string>([
   'crossbody-hammer-curl',
   'single-arm-lat-pulldown',
   'smith-squat',
+  'cable-external-rotation',
 ]);
 
 for (const meta of lyftaMetaExercises) {

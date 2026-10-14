@@ -45,7 +45,7 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'parallel-grip-pull-up': 'Back',
   'dead-hang': 'Back',
 
-  // Shoulders (9)
+  // Shoulders (10)
   'face-pull': 'Shoulders',
   'shoulder-press': 'Shoulders',
   'standing-barbell-press': 'Shoulders',
@@ -55,6 +55,7 @@ export const exerciseLyftaCategory: Record<string, LyftaCategory> = {
   'cable-lateral-raise': 'Shoulders',
   'machine-lateral-raise': 'Shoulders',
   'reverse-fly': 'Shoulders',
+  'cable-external-rotation': 'Shoulders',
 
   // Biceps (8)
   'barbell-curl': 'Biceps',
@@ -116,6 +117,21 @@ export const exerciseSearchAliases: Record<string, string[]> = {
   'neutral-grip-lat-pulldown': ['دست خنثی', 'زیر بغل سیم‌کش دست خنثی', 'زیربغل سیمکش دست خنثی', 'سیم کش دست خنثی', 'لت دست خنثی', 'لت خنثی', 'لت موازی', 'گیرش خنثی'],
   'lat-pulldown': ['لت', 'لت سیم کش', 'لت سیمکش', 'زیربغل لت'],
   'reverse-grip-lat-pulldown': ['لت مچ برعکس', 'زیربغل مچ برعکس'],
+  'cable-external-rotation': [
+    'اکسترنال روتیشن',
+    'اکسترنال روتیشن سیم کش',
+    'اکسترنال روتیشن سیم‌کش',
+    'روتیشن خارجی',
+    'چرخش خارجی شانه',
+    'چرخش خارجی سیم کش',
+    'چرخش خارجی سیم‌کش',
+    'روتاتور کاف',
+    'روتاتورکاف',
+    'نشر خارجی سیم کش',
+    'نشر خارجی سیم‌کش',
+    'اکسترنال سیم کش',
+    'اکسترنال',
+  ],
   'single-arm-lat-pulldown': [
     'لت تک دست',
     'لت تکدست',

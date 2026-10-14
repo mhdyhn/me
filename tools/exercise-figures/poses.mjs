@@ -569,6 +569,29 @@ const hollowHold = {
   },
 };
 
+const cableExternalRotation = {
+  start: {
+    root: [240, 124],
+    torso: 90,
+    thigh: 270,
+    shin: 270,
+    foot: 0,
+    uarm: 270,
+    farm: 0,
+    equip: [{ t: 'post', x: 120, y: 50, h: 240 }, { t: 'cable', at: 'grip', anchor: [120, 190] }],
+  },
+  main: {
+    root: [240, 124],
+    torso: 90,
+    thigh: 270,
+    shin: 270,
+    foot: 0,
+    uarm: 270,
+    farm: 70,
+    equip: [{ t: 'post', x: 120, y: 50, h: 240 }, { t: 'cable', at: 'grip', anchor: [120, 190] }],
+  },
+};
+
 export const POSES = {
   'barbell-bench-press': bench,
   'barbell-squat': squat,
@@ -596,4 +619,5 @@ export const POSES = {
   'close-grip-cable-row': closeGripCableRow,
   'close-grip-barbell-curl': closeGripBarbellCurl,
   'crossbody-hammer-curl': crossbodyHammerCurl,
+  'cable-external-rotation': cableExternalRotation,
 };
