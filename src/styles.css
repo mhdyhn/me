@@ -1450,3 +1450,21 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .dashboard-ai-advice { flex: 1; min-width: 240px; font-size: 13px; line-height: 1.8; color: var(--text); margin: 0; }
 .dashboard-ai-muscles-preview { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
+/* Coach AI Co-Pilot Widget on Student Progress */
+.coach-ai-panel { display: grid; gap: 12px; padding: 16px 18px; border-radius: var(--radius); background: linear-gradient(135deg, rgba(217, 246, 111, .06), rgba(59, 130, 246, .03)); border: 1px solid rgba(217, 246, 111, .25); margin-bottom: 16px; }
+.coach-ai-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.coach-ai-body { display: grid; gap: 12px; }
+.coach-ai-readiness { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-soft); font-size: 13px; line-height: 1.7; }
+.coach-ai-readiness strong { display: block; font-size: 13px; color: var(--text); }
+.coach-muscles-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Admin Club AI Overview */
+.admin-overview-card { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 16px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); margin-bottom: 16px; }
+.admin-overview-stats { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+.admin-stat-item { display: grid; gap: 2px; }
+.admin-stat-num { font-size: 22px; font-weight: 900; color: var(--text); line-height: 1; }
+.admin-stat-label { font-size: 11px; color: var(--muted); }
+.admin-stat-ai { border-right: 1px solid var(--line-soft); padding-right: 18px; }
+.admin-overview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+
