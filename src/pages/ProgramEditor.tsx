@@ -1,8 +1,15 @@
-import { ArrowDown, ArrowLeft, ArrowUp, Plus, RotateCcw, Save, Trash2, Undo2, Sparkles, X, ChevronLeft, Dumbbell } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowLeft, ArrowUp, Plus, RotateCcw, Save, Trash2, Undo2, Sparkles, X, ChevronLeft, Dumbbell, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
+import { hasExerciseFigure, exerciseFigureSrc } from '../data/exerciseFigures';
+import {
+  type LyftaCategory,
+  lyftaCategoryLabels,
+  exerciseLyftaCategory,
+  lyftaCategoryFilters,
+} from '../data/exerciseCategories';
 import { normalizePersianSearch } from '../lib/labels';
 import { finalizeProgram, newDay, newExercise, newId, validateProgram } from '../lib/programRules';
 import { resetProgram, saveProgram } from '../lib/programPersistence';
@@ -24,12 +31,41 @@ const numberValue = (raw: string) => (raw.trim() === '' ? NaN : Number(raw));
 
 export function ProgramEditor() {
   const saved = useProgram();
-  const [draft, setDraft] = useState<WorkoutTemplate[]>(() => structuredClone(saved));
+  const [searchParams] = useSearchParams();
+  const isBlankMode = searchParams.get('mode') === 'blank';
+
+  const [draft, setDraft] = useState<WorkoutTemplate[]>(() => {
+    if (isBlankMode) {
+      return [
+        {
+          id: newId('custom-day'),
+          name: 'روز ۱: شروع برنامه',
+          dayLabel: 'روز ۰۱',
+          focus: 'عضلات هدف',
+          durationMinutes: 0,
+          description: '',
+          exercises: [],
+        },
+      ];
+    }
+    return structuredClone(saved);
+  });
+
   const [errors, setErrors] = useState<string[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(() =>
+    isBlankMode
+      ? 'برنامهٔ جدید از صفر فعال شد. دسته‌بندی عضلانی مورد نظر را انتخاب و حرکت‌ها را اضافه کنید.'
+      : null,
+  );
   const [busy, setBusy] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+
+  useEffect(() => {
+    if (isBlankMode) {
+      setStatus('برنامهٔ جدید از صفر فعال شد. دسته‌بندی عضلانی مورد نظر را انتخاب و حرکت‌ها را اضافه کنید.');
+    }
+  }, [isBlankMode]);
 
   const update = (next: WorkoutTemplate[]) => {
     setDraft(next);
@@ -77,6 +113,22 @@ export function ProgramEditor() {
   };
 
   const applyTemplate = (template: PresetTemplate) => {
+    if (template.id === 'blank') {
+      update([
+        {
+          id: newId('custom-day'),
+          name: 'روز ۱: شروع برنامه',
+          dayLabel: 'روز ۰۱',
+          focus: 'عضلات هدف',
+          durationMinutes: 0,
+          description: '',
+          exercises: [],
+        },
+      ]);
+      setShowTemplateModal(false);
+      setStatus('برنامهٔ جدید از صفر آماده شد. دسته‌بندی دلخواه را انتخاب کرده و حرکت‌ها را اضافه کنید.');
+      return;
+    }
     update(template.buildWorkoutTemplates());
     setShowTemplateModal(false);
     setStatus(`الگوی «${template.title}» بارگذاری شد. پس از اعمال تغییرات، دکمهٔ «ذخیرهٔ برنامه» را بزنید.`);
@@ -150,11 +202,13 @@ export function ProgramEditor() {
       {status && <p className="program-editor__status" role="status">{status}</p>}
 
       {draft.length === 0 && (
-        <div className="panel-card" style={{ padding: '24px 20px', textAlign: 'center', display: 'grid', gap: 12, placeItems: 'center' }}>
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>برنامه در حال حاضر خالی است. می‌توانید روز اضافه کنید یا یک الگوی آماده بارگذاری کنید.</p>
+        <div className="panel-card" style={{ padding: '28px 20px', textAlign: 'center', display: 'grid', gap: 14, placeItems: 'center' }}>
+          <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.8 }}>
+            برنامه در حال حاضر خالی است. می‌توانید روز اضافه کنید یا از الگوهای آماده استفاده کنید.
+          </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button type="button" className="button button--primary button--small" onClick={() => setShowTemplateModal(true)}>
-              <Sparkles size={14} /> بارگذاری الگوی آماده
+              <Sparkles size={14} /> انتخاب از الگوها
             </button>
             <button type="button" className="button button--secondary button--small" onClick={() => update([newDay()])}>
               <Plus size={14} /> افزودن روز اول
@@ -182,7 +236,11 @@ export function ProgramEditor() {
           <label className="editor-check"><input type="checkbox" checked={Boolean(day.optional)} onChange={(event) => patchDay(dayIndex, { optional: event.target.checked })} /> روز اختیاری (در شمارش هفتگی و چرخهٔ جلسهٔ بعد نیست)</label>
 
           <div className="editor-exercises">
-            {day.exercises.length === 0 && <p className="muted">هنوز حرکتی ندارد.</p>}
+            {day.exercises.length === 0 && (
+              <p className="muted" style={{ padding: '8px 0', fontSize: 13 }}>
+                این روز هنوز حرکتی ندارد. از کادر زیر با دسته‌بندی عضلات یا جستجو حرکت‌های مورد نظرتان را اضافه کنید.
+              </p>
+            )}
             {day.exercises.map((item, exerciseIndex) => {
               const p = item.prescription;
               return (
@@ -207,7 +265,7 @@ export function ProgramEditor() {
             })}
           </div>
 
-          <AddExercise onAdd={(exercise) => addExercise(dayIndex, exercise)} />
+          <CategorizedExercisePicker onAdd={(exercise) => addExercise(dayIndex, exercise)} />
         </section>
       ))}
 
@@ -264,54 +322,142 @@ export function ProgramEditor() {
   );
 }
 
-function AddExercise({ onAdd }: { onAdd: (exercise: WorkoutExercise) => void }) {
+function CategorizedExercisePicker({ onAdd }: { onAdd: (exercise: WorkoutExercise) => void }) {
+  const [category, setCategory] = useState<LyftaCategory>('All');
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState('');
   const [customName, setCustomName] = useState('');
 
   const matches = useMemo(() => {
-    const needle = normalizePersianSearch(query);
-    return exercises
-      .filter((exercise) => normalizePersianSearch(exercise.name).includes(needle))
-      .slice(0, 40);
-  }, [query]);
-
-  const selected = exercises.find((exercise) => exercise.id === selectedId);
+    const needle = normalizePersianSearch(query.trim());
+    return exercises.filter((exercise) => {
+      const matchesCategory = category === 'All' || exerciseLyftaCategory[exercise.id] === category;
+      if (!matchesCategory) return false;
+      if (!needle) return true;
+      const searchable = normalizePersianSearch([
+        exercise.name,
+        exercise.englishName ?? '',
+        ...exercise.primaryMuscles,
+        ...exercise.equipment,
+      ].join(' '));
+      return searchable.includes(needle);
+    }).slice(0, 50);
+  }, [category, query]);
 
   return (
-    <div className="editor-add">
-      <div className="editor-grid">
-        <label className="field-control"><span>جستجوی حرکت از کتابخانه</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="مثلاً پرس، جلو بازو…" /></label>
-        <label className="field-control"><span>انتخاب حرکت</span>
-          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-            <option value="">— یک حرکت را انتخاب کن —</option>
-            {matches.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}
-          </select>
-        </label>
+    <div className="editor-picker-box">
+      <div className="editor-picker-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Dumbbell size={16} style={{ color: 'var(--accent)' }} />
+          <strong>انتخاب حرکت از دسته‌بندی‌ها</strong>
+        </div>
+        <span className="library-result-count" style={{ fontSize: 11 }}>
+          {faNumber(matches.length)} حرکت در دسترس
+        </span>
       </div>
-      <button
-        type="button"
-        className="button button--secondary button--small"
-        disabled={!selected}
-        onClick={() => {
-          if (!selected) return;
-          onAdd(newExercise(selected.id, selected.name));
-          setSelectedId('');
-        }}
-      ><Plus size={14} /> افزودن از کتابخانه</button>
 
-      <div className="editor-grid">
-        <label className="field-control"><span>حرکت سفارشی (نام آزاد)</span><input value={customName} onChange={(event) => setCustomName(event.target.value)} /></label>
+      {/* Category Chips */}
+      <div className="chip-row" role="group" aria-label="دسته‌بندی عضلانی">
+        {lyftaCategoryFilters.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            className={`chip${filter.id === category ? ' is-active' : ''}`}
+            aria-pressed={filter.id === category}
+            onClick={() => setCategory(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
-      <button
-        type="button"
-        className="button button--secondary button--small"
-        disabled={!customName.trim()}
-        onClick={() => {
-          onAdd(newExercise(newId('custom'), customName.trim()));
-          setCustomName('');
-        }}
-      ><Plus size={14} /> افزودن حرکت سفارشی</button>
+
+      {/* Search Input */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input
+          className="picker__search"
+          placeholder="جست‌وجوی حرکت با نام فارسی، انگلیسی (Bench, Squat, لت...) یا عضله"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          style={{ paddingInlineStart: 34, paddingInlineEnd: query ? 32 : 12 }}
+        />
+        <Search size={15} style={{ position: 'absolute', insetInlineStart: 12, color: 'var(--muted)', pointerEvents: 'none' }} />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="پاک کردن جستجو"
+            style={{ position: 'absolute', insetInlineEnd: 10, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Exercises List */}
+      <ul className="editor-picker-list">
+        {matches.map((exercise) => (
+          <li key={exercise.id} className="editor-picker-item">
+            <div className="editor-picker-item__media">
+              {hasExerciseFigure(exercise.id) ? (
+                <img
+                  src={exerciseFigureSrc(exercise.id, 'start')}
+                  alt=""
+                  loading="lazy"
+                  width={44}
+                  height={44}
+                  className="editor-picker-item__img"
+                />
+              ) : (
+                <div className="editor-picker-item__placeholder">
+                  <Dumbbell size={18} />
+                </div>
+              )}
+            </div>
+            <div className="editor-picker-item__info">
+              <strong>{exercise.name}</strong>
+              <div className="editor-picker-item__sub">
+                {exercise.englishName && <span dir="ltr">{exercise.englishName}</span>}
+                <span className="editor-picker-badge">{lyftaCategoryLabels[exerciseLyftaCategory[exercise.id] ?? 'All']}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => onAdd(newExercise(exercise.id, exercise.name))}
+            >
+              <Plus size={14} /> افزودن به این روز
+            </button>
+          </li>
+        ))}
+        {matches.length === 0 && (
+          <li className="account-muted" style={{ padding: '16px 0', textAlign: 'center', display: 'block' }}>
+            حرکتی با این مشخصات در دسته‌بندی «{lyftaCategoryLabels[category]}» یافت نشد. می‌توانید با جستجوی دیگر یا افزودن حرکت سفارشی ادامه دهید.
+          </li>
+        )}
+      </ul>
+
+      {/* Custom movement entry */}
+      <div className="editor-custom-add">
+        <label className="field-control" style={{ flex: '1 1 240px' }}>
+          <span style={{ fontSize: 11 }}>یا افزودن حرکت سفارشی (نام دلخواه)</span>
+          <input
+            value={customName}
+            onChange={(event) => setCustomName(event.target.value)}
+            placeholder="مثلاً: بارفیکس دست باز مچ برعکس"
+          />
+        </label>
+        <button
+          type="button"
+          className="button button--ghost button--small"
+          disabled={!customName.trim()}
+          onClick={() => {
+            onAdd(newExercise(newId('custom'), customName.trim()));
+            setCustomName('');
+          }}
+          style={{ minHeight: 40 }}
+        >
+          <Plus size={14} /> افزودن حرکت سفارشی
+        </button>
+      </div>
     </div>
   );
 }
