@@ -156,7 +156,7 @@ export function CoachEntry() {
 /** The coach's "add program" step: pick a student, then build their program in the builder. */
 export function ProgramPicker() {
   return (
-    <RequireRole roles={['coach']}>
+    <RequireRole roles={['coach', 'admin']}>
       <PickStudent />
     </RequireRole>
   );

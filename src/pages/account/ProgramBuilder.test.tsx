@@ -29,6 +29,7 @@ function mockApi(program: unknown = null) {
       if (method === 'GET' && input === '/api/students') [json, status] = [{ students: [student] }, 200];
       if (method === 'GET' && input === '/api/students/3/program') [json, status] = [{ program }, 200];
       if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), updatedAt: 'now' } }, 200];
+      if (method === 'DELETE' && input === '/api/students/3/program') [json, status] = [{ ok: true }, 200];
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
     }),
   );
@@ -132,5 +133,38 @@ describe('ordering in the builder', () => {
     const put = sent.find((call) => call.method === 'PUT')!;
     const names = (put.body as { days: { exercises: { name: string }[] }[] }).days[0]!.exercises.map((item) => item.name);
     expect(names).toEqual(['حرکت دوم', 'حرکت اول']);
+  });
+
+  it('deletes the student programme after confirmation', async () => {
+    const sent = mockApi({
+      title: 'برنامه برای حذف',
+      updatedAt: 'x',
+      days: [{ name: 'روز ۱', exercises: [{ exerciseId: 'first', name: 'حرکت', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderBuilder();
+    const user = userEvent.setup();
+
+    const deleteBtn = await screen.findByRole('button', { name: /حذف کامل برنامهٔ شاگرد/ });
+    await user.click(deleteBtn);
+
+    expect(confirm).toHaveBeenCalled();
+    expect(await screen.findByText(/برنامهٔ شاگرد با موفقیت حذف شد/)).toBeInTheDocument();
+    const del = sent.find((call) => call.method === 'DELETE');
+    expect(del?.path).toBe('/api/students/3/program');
+    confirm.mockRestore();
+  });
+
+  it('loads a preset template into the builder', async () => {
+    mockApi();
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /الگوهای آماده/ }));
+    const fullbodyOption = await screen.findByText(/برنامهٔ ۳ روزه فول بادی/);
+    await user.click(fullbodyOption);
+
+    expect(await screen.findByDisplayValue(/برنامهٔ ۳ روزه فول بادی/)).toBeInTheDocument();
+    expect(await screen.findByText(/الگوی «برنامهٔ ۳ روزه فول بادی/)).toBeInTheDocument();
   });
 });

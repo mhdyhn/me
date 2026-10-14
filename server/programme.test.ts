@@ -121,4 +121,29 @@ describe('student programme', () => {
     const otherCoach = await coach();
     expect((await call('GET', `/api/students/${pupil.id}/program`, undefined, otherCoach)).status).toBe(404);
   });
+
+  it('allows coach and admin to delete a programme', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken);
+
+    // Coach deletes programme
+    const delRes = await call('DELETE', `/api/students/${pupil.id}/program`, undefined, coachToken);
+    expect(delRes.status).toBe(200);
+    expect(delRes.json.ok).toBe(true);
+
+    const check = await call('GET', `/api/students/${pupil.id}/program`, undefined, coachToken);
+    expect(check.status).toBe(200);
+    expect(check.json.program).toBeNull();
+
+    // Admin can also manage and delete
+    const adminToken = await signIn('owner', 'owner-pass-123');
+    await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, adminToken);
+    const adminRead = await call('GET', `/api/students/${pupil.id}/program`, undefined, adminToken);
+    expect(adminRead.status).toBe(200);
+    expect(adminRead.json.program.title).toBe('برنامهٔ سه روزه');
+
+    const adminDel = await call('DELETE', `/api/students/${pupil.id}/program`, undefined, adminToken);
+    expect(adminDel.status).toBe(200);
+  });
 });

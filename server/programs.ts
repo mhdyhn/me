@@ -86,3 +86,8 @@ export async function loadProgramme(db: Db, studentId: number): Promise<Programm
   const parsed = JSON.parse(row.body) as Omit<Programme, 'updatedAt'>;
   return { ...parsed, priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at };
 }
+
+export async function deleteProgramme(db: Db, studentId: number): Promise<void> {
+  await db.query('DELETE FROM student_programs WHERE student_id = $1', [studentId]);
+}
+

@@ -1,22 +1,30 @@
 import { useState } from 'react';
-import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, PlusCircle, Sparkles, Trash2, X, CalendarPlus, ChevronLeft, AlertTriangle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
 import { getCompletedThisWeek } from '../lib/analytics';
 import { isProgramReadOnly, useAssignedMeta, useProgram } from '../lib/programStore';
+import { clearProgram, resetProgram, saveProgram } from '../lib/programPersistence';
+import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
 
 export function Program() {
   const { sessions } = useGym();
+  const navigate = useNavigate();
   const weeklyCount = getCompletedThisWeek(sessions);
   const workoutTemplates = useProgram();
   const readOnly = isProgramReadOnly();
   const assignedMeta = useAssignedMeta();
+
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const primaryCount = workoutTemplates.filter((workout) => !workout.optional).length;
   const averageMinutes = workoutTemplates.length ? Math.round(workoutTemplates.reduce((sum, workout) => sum + workout.durationMinutes, 0) / workoutTemplates.length) : 0;
@@ -31,6 +39,53 @@ export function Program() {
     } catch (err) {
       setPayError(err instanceof ApiError ? err.message : 'خطا در اتصال به درگاه پرداخت.');
       setPaying(false);
+    }
+  }
+
+  async function handleApplyTemplate(template: PresetTemplate, openEditor = false) {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const days = template.buildWorkoutTemplates();
+      await saveProgram(days);
+      setShowTemplateModal(false);
+      if (openEditor) {
+        navigate('/program/edit');
+      } else {
+        setFeedback({ text: `«${template.title}» با موفقیت فعال شد.`, type: 'success' });
+      }
+    } catch (err) {
+      setFeedback({ text: err instanceof Error ? err.message : 'خطا در ایجاد برنامه جدید', type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteProgram() {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await clearProgram();
+      setShowDeleteModal(false);
+      setFeedback({ text: 'برنامهٔ تمرینی فعلی با موفقیت حذف شد. یک نسخه پشتیبان حفظ شده است.', type: 'success' });
+    } catch (err) {
+      setFeedback({ text: err instanceof Error ? err.message : 'خطا در حذف برنامه', type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRestoreRage() {
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await resetProgram();
+      setShowDeleteModal(false);
+      setFeedback({ text: 'برنامهٔ پیش‌فرض RAGE با موفقیت بازگردانی شد.', type: 'success' });
+    } catch (err) {
+      setFeedback({ text: err instanceof Error ? err.message : 'خطا در بازگردانی برنامه', type: 'error' });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -74,16 +129,100 @@ export function Program() {
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="تقسیم‌بندی تمرین‌ها" title="هفته‌ات را با برنامه پیش ببر." description="جلسه‌های اصلی، روزهای اختیاری و زمان استراحت، همه از برنامهٔ همین حساب." />
-      {!readOnly && <div className="program-editor-entry"><Link to="/program/edit" className="button button--secondary button--small"><Pencil size={14} /> ویرایش برنامه</Link></div>}
-      {readOnly && <p className="account-muted">این برنامه را مربی شما تنظیم کرده است.</p>}
-      <div className="program-overview panel-card">
-        <div className="program-overview__main"><span className="eyebrow">ساختار هفتگی</span><strong>{structure || 'هنوز روزی نیست'}</strong><span>{readOnly ? 'برنامهٔ تنظیم‌شده توسط مربی شما' : 'برنامهٔ شخصی همین حساب'}</span></div>
-        <div className="program-overview__stat"><b>{faNumber(weeklyCount)}<small> / {faNumber(primaryCount)}</small></b><span>جلسهٔ اصلی<br />این هفته</span></div>
-        <div className="program-overview__stat"><b>{faNumber(averageMinutes)}<small> دقیقه</small></b><span>میانگین زمان<br />هر جلسه</span></div>
-      </div>
-      {workoutTemplates.length === 0 && (
-        <p className="account-muted">{readOnly ? 'مربی هنوز برنامه‌ای برای شما ثبت نکرده است.' : 'هنوز برنامه‌ای نساخته‌اید. از «ویرایش برنامه» روزها و حرکت‌ها را اضافه کنید.'}</p>
+
+      {/* Manager / Admin Program Actions Toolbar */}
+      {!readOnly && (
+        <div className="program-manager-bar">
+          <div className="program-manager-badge">
+            <Sparkles size={15} /> <span>نسخهٔ مدیریت برنامه</span>
+          </div>
+          <div className="program-manager-actions">
+            <button
+              type="button"
+              className="button button--primary button--small"
+              onClick={() => setShowTemplateModal(true)}
+            >
+              <PlusCircle size={14} /> تعریف برنامه جدید
+            </button>
+            <Link to="/program/edit" className="button button--secondary button--small">
+              <Pencil size={14} /> ویرایش برنامه
+            </Link>
+            {workoutTemplates.length > 0 && (
+              <button
+                type="button"
+                className="button button--ghost button--small button--danger-text"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                <Trash2 size={14} /> حذف برنامه
+              </button>
+            )}
+          </div>
+        </div>
       )}
+
+      {readOnly && <p className="account-muted">این برنامه را مربی شما تنظیم کرده است.</p>}
+
+      {feedback && (
+        <div className={feedback.type === 'success' ? 'form-success' : 'form-error'} role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 4 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <div className="program-overview panel-card">
+        <div className="program-overview__main">
+          <span className="eyebrow">ساختار هفتگی</span>
+          <strong>{structure || 'هنوز برنامه‌ای تعریف نشده'}</strong>
+          <span>{readOnly ? 'برنامهٔ تنظیم‌شده توسط مربی شما' : 'برنامهٔ فعال حساب کاربری'}</span>
+        </div>
+        <div className="program-overview__stat">
+          <b>{faNumber(weeklyCount)}<small> / {faNumber(primaryCount)}</small></b>
+          <span>جلسهٔ اصلی<br />این هفته</span>
+        </div>
+        <div className="program-overview__stat">
+          <b>{faNumber(averageMinutes)}<small> دقیقه</small></b>
+          <span>میانگین زمان<br />هر جلسه</span>
+        </div>
+      </div>
+
+      {workoutTemplates.length === 0 && (
+        <div className="panel-card program-empty-card">
+          <div className="program-empty-icon">
+            <CalendarPlus size={36} />
+          </div>
+          <h3 style={{ margin: 0, fontSize: '1.2rem' }}>هنوز برنامه‌ای تعریف نشده است</h3>
+          <p className="account-muted" style={{ margin: 0, maxWidth: 480, lineHeight: 1.8 }}>
+            {readOnly
+              ? 'مربی هنوز برنامه‌ای برای شما ثبت نکرده است.'
+              : 'می‌توانید همین حالا با استفاده از الگوهای استاندارد (۳ روزه، ۴ روزه، ۵ روزه یا RAGE) یک برنامه بسازید یا حرکت‌ها را از صفر طراحی کنید.'}
+          </p>
+          {!readOnly && (
+            <div className="program-empty-actions">
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={() => setShowTemplateModal(true)}
+              >
+                <PlusCircle size={16} /> تعریف برنامه جدید از الگوها
+              </button>
+              <Link to="/program/edit" className="button button--secondary">
+                <Pencil size={16} /> ساخت در ویرایشگر
+              </Link>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => void handleRestoreRage()}
+                disabled={busy}
+              >
+                بارگذاری برنامهٔ پیش‌فرض RAGE
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="program-list">
         {workoutTemplates.map((workout, index) => {
           const exerciseCount = workout.exercises.length;
@@ -111,7 +250,105 @@ export function Program() {
           );
         })}
       </div>
+
       <div className="program-rest-note"><span className="subtle-icon"><Info size={17} /></span><p><strong>استراحت هم بخشی از برنامه است.</strong> روز هفتم استراحت کن. جلسهٔ اختیاری را سبک نگه دار و اگر خواب، انرژی یا ریکاوری‌ات مناسب نیست، از آن بگذر.</p></div>
+
+      {/* New Program / Template Selection Modal */}
+      {showTemplateModal && (
+        <div className="program-modal-backdrop" onClick={() => setShowTemplateModal(false)}>
+          <div className="program-modal" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-new-program-title">
+            <div className="program-modal__header">
+              <div>
+                <h2 id="modal-new-program-title" className="program-modal__title">تعریف برنامهٔ تمرینی جدید</h2>
+                <p className="program-modal__subtitle">یک الگوی استاندارد آماده انتخاب کنید یا از صفر شروع کنید:</p>
+              </div>
+              <button type="button" className="icon-button" aria-label="بستن پنجره" onClick={() => setShowTemplateModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="template-grid">
+              {presetTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className="template-card"
+                  onClick={() => void handleApplyTemplate(template)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') void handleApplyTemplate(template); }}
+                >
+                  <div className="template-card__head">
+                    <strong>{template.title}</strong>
+                    <span className="template-card__badge">{template.badge}</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{template.description}</p>
+                  <div className="template-card__meta">
+                    <span><Dumbbell size={13} /> {faNumber(template.daysCount)} روز تمرینی</span>
+                    <span>·</span>
+                    <span>{faNumber(template.exercisesCount)} حرکت تنظیم‌شده</span>
+                    <span style={{ marginInlineStart: 'auto', color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      انتخاب این برنامه <ChevronLeft size={14} />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid var(--line-soft)', flexWrap: 'wrap', gap: 10 }}>
+              <button
+                type="button"
+                className="button button--secondary button--small"
+                onClick={() => {
+                  setShowTemplateModal(false);
+                  navigate('/program/edit');
+                }}
+              >
+                <Pencil size={14} /> ورود مستقیم به ویرایشگر برنامه
+              </button>
+              <button type="button" className="button button--ghost button--small" onClick={() => setShowTemplateModal(false)}>
+                انصراف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Program Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="program-modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+          <div className="program-modal" style={{ maxWidth: 460 }} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+            <div className="program-modal__header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(242, 143, 130, 0.12)', color: 'var(--red)', display: 'grid', placeItems: 'center' }}>
+                  <AlertTriangle size={20} />
+                </div>
+                <h2 id="modal-delete-title" className="program-modal__title">حذف کامل برنامهٔ تمرینی</h2>
+              </div>
+              <button type="button" className="icon-button" aria-label="بستن پنجره" onClick={() => setShowDeleteModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+              آیا از حذف این برنامه اطمینان دارید؟ تمام روزها و حرکت‌های برنامهٔ فعلی پاک خواهند شد. یک نسخهٔ پشتیبان برای بازیابی احتمالی نگه‌داری می‌شود.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+              <button type="button" className="button button--ghost" onClick={() => setShowDeleteModal(false)} disabled={busy}>
+                انصراف
+              </button>
+              <button
+                type="button"
+                className="button button--danger"
+                onClick={() => void handleDeleteProgram()}
+                disabled={busy}
+              >
+                <Trash2 size={16} /> {busy ? 'در حال حذف…' : 'بله، برنامه حذف شود'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

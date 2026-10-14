@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowDown, ArrowRight, ArrowUp, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { exercises as catalog } from '../../data/exercises';
 import { ApiError, api, type ProgramDay, type ProgramItem, type Programme, type PublicUser } from '../../lib/api';
+import { presetTemplates, type PresetTemplate } from '../../lib/programTemplates';
+import { faNumber } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
 
 const MAX_DAYS = 7;
@@ -13,7 +15,7 @@ const muscleOptions = [...new Set(catalog.flatMap((exercise) => exercise.primary
 
 export function ProgramBuilder() {
   return (
-    <RequireRole roles={['coach']}>
+    <RequireRole roles={['coach', 'admin']}>
       <Builder />
     </RequireRole>
   );
@@ -34,6 +36,7 @@ function Builder() {
   const [message, setMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +168,32 @@ function Builder() {
     }
   }
 
+  async function deleteProgram() {
+    if (!window.confirm(`برنامهٔ ${student ? student.displayName : 'این شاگرد'} به طور کامل حذف شود؟ این کار قابل بازگشت نیست.`)) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api('DELETE', `/students/${id}/program`, {});
+      setTitle('');
+      setPriceTomans(0);
+      setDays([]);
+      setActiveDay(0);
+      setMessage('برنامهٔ شاگرد با موفقیت حذف شد.');
+    } catch (caught) {
+      setSaveError(caught instanceof ApiError ? caught.message : 'برنامه حذف نشد. دوباره تلاش کنید.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function loadTemplate(template: PresetTemplate) {
+    setTitle(template.title);
+    setDays(template.buildProgramDays());
+    setActiveDay(0);
+    setShowTemplateModal(false);
+    setMessage(`الگوی «${template.title}» بارگذاری شد. تغییرات را اعمال کرده و ذخیره نمایید.`);
+  }
+
   if (loading) return <PanelPage title="ساخت برنامه"><p className="account-muted">در حال بارگذاری…</p></PanelPage>;
   if (loadError) return <PanelPage title="ساخت برنامه"><p className="form-error" role="alert">{loadError}</p></PanelPage>;
 
@@ -206,9 +235,14 @@ function Builder() {
       <section className="builder-section">
         <div className="builder-section__head">
           <h2>روزها</h2>
-          <button type="button" className="button button--ghost" onClick={addDay} disabled={days.length >= MAX_DAYS}>
-            <Plus size={16} /> روز جدید
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="button button--ghost" onClick={() => setShowTemplateModal(true)}>
+              <Sparkles size={16} /> الگوهای آماده
+            </button>
+            <button type="button" className="button button--ghost" onClick={addDay} disabled={days.length >= MAX_DAYS}>
+              <Plus size={16} /> روز جدید
+            </button>
+          </div>
         </div>
         {days.length === 0 && <p className="account-muted">هنوز روزی نساخته‌اید. با «روز جدید» شروع کنید.</p>}
         <div className="day-tabs" role="tablist">
@@ -306,11 +340,65 @@ function Builder() {
 
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
       {message && <p className="form-success" role="status">{message}</p>}
-      <div className="builder-save">
+      <div className="builder-save" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <button type="button" className="button button--primary" onClick={() => void save()} disabled={saving}>
           <Save size={16} /> {saving ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}
         </button>
+        {(days.length > 0 || title) && (
+          <button type="button" className="button button--ghost button--danger-text" onClick={() => void deleteProgram()} disabled={saving}>
+            <Trash2 size={16} /> حذف کامل برنامهٔ شاگرد
+          </button>
+        )}
       </div>
+
+      {showTemplateModal && (
+        <div className="program-modal-backdrop" onClick={() => setShowTemplateModal(false)}>
+          <div className="program-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="builder-modal-template-title">
+            <div className="program-modal__header">
+              <div>
+                <h2 id="builder-modal-template-title" className="program-modal__title">انتخاب الگوی برنامه</h2>
+                <p className="program-modal__subtitle">الگوی مورد نظر را انتخاب کنید تا برای این شاگرد تنظیم شود:</p>
+              </div>
+              <button type="button" className="icon-button" aria-label="بستن پنجره" onClick={() => setShowTemplateModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="template-grid">
+              {presetTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className="template-card"
+                  onClick={() => loadTemplate(template)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') loadTemplate(template); }}
+                >
+                  <div className="template-card__head">
+                    <strong>{template.title}</strong>
+                    <span className="template-card__badge">{template.badge}</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{template.description}</p>
+                  <div className="template-card__meta">
+                    <span><Dumbbell size={13} /> {faNumber(template.daysCount)} روز</span>
+                    <span>·</span>
+                    <span>{faNumber(template.exercisesCount)} حرکت</span>
+                    <span style={{ marginInlineStart: 'auto', color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      بارگذاری در برنامه <ChevronLeft size={14} />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--line-soft)' }}>
+              <button type="button" className="button button--ghost button--small" onClick={() => setShowTemplateModal(false)}>
+                انصراف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PanelPage>
   );
 }

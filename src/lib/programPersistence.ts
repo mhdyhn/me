@@ -14,10 +14,19 @@ const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
 export async function loadStoredProgram() {
   try {
     const record = await db.preferences.get(PROGRAM_KEY);
-    const value = record?.value;
     if (isProgramReadOnly()) return;
-    if (isProgramShape(value) && validateProgram(value).length === 0) setActiveProgram(value);
-    else setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
+    if (record !== undefined) {
+      const value = record?.value;
+      if (Array.isArray(value) && value.length === 0) {
+        setActiveProgram([]);
+        return;
+      }
+      if (isProgramShape(value) && validateProgram(value).length === 0) {
+        setActiveProgram(value);
+        return;
+      }
+    }
+    setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
   } catch (error) {
     console.error('Meety could not read the saved programme.', error);
   }
@@ -33,6 +42,13 @@ export async function saveProgram(next: WorkoutTemplate[]) {
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
   await db.preferences.put({ key: PROGRAM_KEY, value: next });
   setActiveProgram(next);
+}
+
+/** Clears/deletes the entire programme with backup preservation. */
+export async function clearProgram() {
+  await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
+  await db.preferences.put({ key: PROGRAM_KEY, value: [] });
+  setActiveProgram([]);
 }
 
 /** Restores the original RAGE programme (the current one is kept as backup). */
