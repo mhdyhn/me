@@ -110,6 +110,13 @@ async function migrate(db: Db): Promise<void> {
       updated_at TEXT NOT NULL
     );
 
+    -- Personal workout programme synced across devices for any signed-in user (admin, coach, etc.)
+    CREATE TABLE IF NOT EXISTS user_personal_programs (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
