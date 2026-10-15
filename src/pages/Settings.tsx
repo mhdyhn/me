@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, Download, Info, LockKeyhole, Save, ShieldCheck, UserRound } from 'lucide-react';
+import { Check, Download, Info, LockKeyhole, Save, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
+import { InstallAppModal } from '../components/InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { db } from '../lib/db';
 import { faNumber } from '../lib/format';
@@ -12,6 +13,7 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [backupError, setBackupError] = useState('');
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   useEffect(() => setDraft(profile), [profile]);
 
@@ -70,11 +72,32 @@ export function Settings() {
         </form>
 
         <aside className="settings-aside page-stack page-stack--tight">
+          <section className="panel-card install-card" style={{ border: '1px solid rgba(217, 246, 111, 0.25)', background: 'linear-gradient(135deg, rgba(217, 246, 111, 0.06), transparent)' }}>
+            <div className="card-topline">
+              <div>
+                <span className="eyebrow">برنامه روی گوشی</span>
+                <h3>نصب اپلیکیشن میتی</h3>
+              </div>
+              <Smartphone size={18} className="icon-accent" />
+            </div>
+            <p className="muted small-text">
+              میتی را به صورت تمام‌صفحه روی گوشی اندروید یا آیفون خود نصب کنید تا سریع و بدون نوار مرورگر باز شود.
+            </p>
+            <button
+              type="button"
+              className="button button--primary button--full"
+              onClick={() => setShowInstallModal(true)}
+            >
+              <Smartphone size={16} /> نصب اپلیکیشن روی گوشی
+            </button>
+          </section>
+
           <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>
           <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">ذخیره‌سازی محلی</span><h3>داده‌ها همین‌جا می‌مانند.</h3><p>ست‌ها، سوابق تمرین، وزن‌کشی و یادداشت‌های تغذیه در IndexedDB همین مرورگر ذخیره می‌شوند. پاک‌کردن داده‌های مرورگر ممکن است آن‌ها را حذف کند.</p><div className="privacy-points"><span><ShieldCheck size={14} /> حساب کاربری یا همگام‌سازی ابری تنظیم نشده است</span><span><ShieldCheck size={14} /> بدون آمارگیری یا ردیابی شخص ثالث</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">یک فایل JSON از پروفایل و گزارش‌ها دریافت می‌کنی.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>
+      <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 }

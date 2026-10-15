@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Dumbbell, Eye, EyeOff, KeyRound, LogIn, User } from 'lucide-react';
+import { Dumbbell, Eye, EyeOff, KeyRound, LogIn, Smartphone, User } from 'lucide-react';
 import { ApiError } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
+import { InstallAppModal } from '../../components/InstallAppModal';
 import { homeFor } from './AccountShell';
 
 /** Standalone sign-in screen. Nothing else in the app is reachable until this succeeds. */
@@ -14,6 +15,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   if (status === 'signed-in' && user) {
     return <Navigate to={user.mustChangePassword ? '/account/change-password' : homeFor(user.role)} replace />;
@@ -76,7 +78,20 @@ export function Login() {
         </form>
 
         <p className="login-help">رمز را فراموش کرده‌اید؟ از مربی بخواهید رمز تازه بسازد.</p>
+
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line-soft)', textAlign: 'center' }}>
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            onClick={() => setShowInstallModal(true)}
+            style={{ width: '100%', justifyContent: 'center' }}
+          >
+            <Smartphone size={15} /> نصب اپلیکیشن روی گوشی (PWA / آفلاین)
+          </button>
+        </div>
       </main>
+
+      <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 }

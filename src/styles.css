@@ -1480,4 +1480,12 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .latest-completed-stat { text-align: left; display: grid; gap: 2px; }
 .latest-completed-stat strong { font-size: 18px; color: var(--accent); }
 
+/* Generic Modal Overlay & Install App Modal */
+.modal-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, .78); backdrop-filter: blur(8px); display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.modal-content { position: relative; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, .75); display: grid; gap: 14px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.install-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.install-tab-pane { padding: 4px 0; }
+
+
 
