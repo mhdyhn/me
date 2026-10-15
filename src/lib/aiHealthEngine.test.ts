@@ -169,5 +169,20 @@ describe('aiHealthEngine', () => {
       expect(NOOM_CALORIC_CATEGORIES.yellow.color).toBeTruthy();
       expect(NOOM_CALORIC_CATEGORIES.red.color).toBeTruthy();
     });
+
+    it('saves and deletes mindful nutrition logs', async () => {
+      const { saveMindfulLog, deleteMindfulLog, getStoredMindfulLogs } = await import('./aiHealthEngine');
+      const created = saveMindfulLog({
+        foodName: 'سیب تست',
+        trigger: 'physical_hunger',
+        category: 'green',
+      });
+
+      expect(getStoredMindfulLogs().some((l) => l.id === created.id)).toBe(true);
+
+      const remaining = deleteMindfulLog(created.id);
+      expect(remaining.some((l) => l.id === created.id)).toBe(false);
+      expect(getStoredMindfulLogs().some((l) => l.id === created.id)).toBe(false);
+    });
   });
 });

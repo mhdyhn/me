@@ -13,6 +13,7 @@ import {
   Moon,
   ShieldAlert,
   Sparkles,
+  Trash2,
   Utensils,
   Watch,
   Zap,
@@ -23,6 +24,7 @@ import {
   calculateMuscleRecovery,
   calculateReadinessScore,
   classifyFoodCaloricDensity,
+  deleteMindfulLog,
   getStoredHealthMetrics,
   getStoredJointConcerns,
   getStoredMindfulLogs,
@@ -141,6 +143,12 @@ export function AiHub() {
     setFoodInput('');
     setFoodNote('');
     setLastLoggedFeedback(MINDFUL_INSIGHTS[selectedTrigger].advice);
+  };
+
+  const handleDeleteMindfulLog = (id: string, foodName: string) => {
+    if (!window.confirm(`ثبت «${foodName}» حذف شود؟`)) return;
+    const remaining = deleteMindfulLog(id);
+    setMindfulLogs(remaining);
   };
 
   return (
@@ -672,11 +680,21 @@ export function AiHub() {
                           </div>
                         </div>
 
-                        <div className="mindful-item-right">
+                        <div className="mindful-item-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span className="badge badge--neutral">{insight.label}</span>
                           <span className="badge" style={{ color: catInfo.color, borderColor: `${catInfo.color}40` }}>
                             {catInfo.label.split(' ')[0]}
                           </span>
+                          <button
+                            type="button"
+                            className="button button--ghost button--small icon-only"
+                            style={{ padding: '4px', minHeight: 'auto', border: 'none' }}
+                            onClick={() => handleDeleteMindfulLog(log.id, log.foodName)}
+                            title="حذف این ثبت"
+                            aria-label={`حذف ثبت ${log.foodName}`}
+                          >
+                            <Trash2 size={15} style={{ color: 'var(--color-text-muted)' }} />
+                          </button>
                         </div>
                       </div>
                     );
