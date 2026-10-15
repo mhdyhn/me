@@ -29,7 +29,12 @@ export async function openDatabase(target: string): Promise<Db> {
 }
 
 function fromPool(url: string): Db {
-  const pool = new pg.Pool({ connectionString: url, max: 5 });
+  const isCloud = url.includes('neon.tech') || url.includes('sslmode=require') || url.includes('render.com') || process.env.NODE_ENV === 'production';
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: 5,
+    ssl: isCloud ? { rejectUnauthorized: false } : undefined,
+  });
   // The hosted database closes idle connections (free tier pauses after inactivity). Without this listener
   // Node treats the error as fatal and the whole server stops. The pool opens a new connection on the next request.
   pool.on('error', (error) => {
