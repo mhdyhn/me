@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, HeartPulse, Sparkles } from 'lucide-react';
+import { ArrowLeft, HeartPulse, Search, Sparkles } from 'lucide-react';
 import { ApiError, api } from '../../lib/api';
 import { exerciseById } from '../../data/exercises';
 import { faNumber, formatDate } from '../../lib/format';
 import { calculateMuscleRecovery, calculateReadinessScore, DEFAULT_HEALTH_METRICS } from '../../lib/aiHealthEngine';
+import { runStudentDiagnostic } from '../../lib/studentDiagnostic';
 import type { WorkoutSession } from '../../types';
 import { RequireRole, PanelPage } from './AccountShell';
 
@@ -97,10 +98,16 @@ function StudentProgressScreen() {
 
   const studentReadiness = calculateReadinessScore(DEFAULT_HEALTH_METRICS, mappedSessions);
   const studentMuscles = calculateMuscleRecovery(mappedSessions);
+  const diagnostic = runStudentDiagnostic(data?.sessions ?? []);
 
   return (
     <PanelPage title={data ? `پیشرفت ${data.studentName}` : 'پیشرفت شاگرد'}>
-      <Link className="chat-back" to="/coach"><ArrowLeft size={16} /> همهٔ شاگردها</Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Link className="chat-back" to="/coach" style={{ margin: 0 }}><ArrowLeft size={16} /> همهٔ شاگردها</Link>
+        <Link to={`/coach/students/${studentId}/ai`} className="button button--ghost button--small">
+          <Sparkles size={15} /> تنظیمات هوش و بیومتریک
+        </Link>
+      </div>
 
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!data && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
@@ -155,6 +162,22 @@ function StudentProgressScreen() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Diagnostic Snapshot */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Search size={16} className="icon-accent" />
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>عیب‌یابی روند پیشرفت: </span>
+                  <span className="badge text-xs" style={{ backgroundColor: `${diagnostic.statusColor}20`, color: diagnostic.statusColor }}>
+                    {diagnostic.statusLabel}
+                  </span>
+                </div>
+              </div>
+              <Link to={`/coach/students/${studentId}/ai`} className="text-link text-xs">
+                دیدن گزارش عیب‌یابی کامل و پایش بیومتریک <ArrowLeft size={13} />
+              </Link>
             </div>
           </section>
 

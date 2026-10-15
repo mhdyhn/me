@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarCheck2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
@@ -5,12 +6,26 @@ import { useGym } from '../context/GymProvider';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
+import { ALL_AI_MODULES, getMyAiSettings, type AiModuleKey } from '../lib/studentAiBiometrics';
 import { faNumber, formatDate, kg } from '../lib/format';
 
 export function Dashboard() {
   const { sessions, bodyweights, profile, activeSession } = useGym();
   const program = useProgram();
   const navigate = useNavigate();
+  const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
+
+  useEffect(() => {
+    let mounted = true;
+    void getMyAiSettings().then((settings) => {
+      if (mounted && settings.enabledModules) {
+        setEnabledModules(settings.enabledModules);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'صبح به‌خیر' : hour < 18 ? 'روز به‌خیر' : 'عصر به‌خیر';
@@ -104,54 +119,62 @@ export function Dashboard() {
       </div>
 
       {/* AI Health & Recovery Intelligence Widget (Whoop, Oura, Fitbod) */}
-      <section className="dashboard-ai-card">
-        <div className="dashboard-ai-top">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge--success" style={{ borderColor: `${readiness.color}40`, color: readiness.color }}>
-              <Sparkles size={13} /> {readiness.levelLabel.split('(')[0]}
-            </span>
-            <span className="muted text-xs">موتور یکپارچه Whoop & Oura</span>
-          </div>
-          <Link to="/ai-hub" className="text-link">
-            مرکز هوش سلامتی و مفاصل <ArrowRight size={14} />
-          </Link>
-        </div>
-
-        <div className="dashboard-ai-body">
-          <div className="dashboard-ai-score-pill">
-            <HeartPulse size={22} style={{ color: readiness.color }} />
-            <div>
-              <span className="dashboard-ai-score-num" style={{ color: readiness.color }}>
-                {faNumber(readiness.score)}٪
+      {(enabledModules.includes('recovery') || enabledModules.includes('muscles')) && (
+        <section className="dashboard-ai-card">
+          <div className="dashboard-ai-top">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge badge--success" style={{ borderColor: `${readiness.color}40`, color: readiness.color }}>
+                <Sparkles size={13} /> {readiness.levelLabel.split('(')[0]}
               </span>
-              <small className="muted" style={{ display: 'block', fontSize: '11px' }}>نمره آمادگی بدن</small>
+              <span className="muted text-xs">
+                {enabledModules.includes('recovery') ? 'موتور Whoop & Oura' : 'موتور Fitbod'}
+              </span>
             </div>
+            <Link to="/ai-hub" className="text-link">
+              مرکز هوش سلامتی و مفاصل <ArrowRight size={14} />
+            </Link>
           </div>
-          <p className="dashboard-ai-advice">
-            <strong>توصیه مربی هوشمند برای امروز: </strong>
-            {readiness.coachRecommendation}
-          </p>
-        </div>
 
-        <div className="dashboard-ai-muscles-preview">
-          <span className="muted text-xs">وضعیت عضلات (Fitbod):</span>
-          {muscleRecoveries.slice(0, 4).map((m) => (
-            <span key={m.zoneKey} className="badge badge--neutral text-xs">
-              <span
-                style={{
-                  backgroundColor: m.color,
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  display: 'inline-block',
-                  marginInlineEnd: 4,
-                }}
-              />
-              {m.label}: {faNumber(m.recoveryPercent)}٪
-            </span>
-          ))}
-        </div>
-      </section>
+          {enabledModules.includes('recovery') && (
+            <div className="dashboard-ai-body">
+              <div className="dashboard-ai-score-pill">
+                <HeartPulse size={22} style={{ color: readiness.color }} />
+                <div>
+                  <span className="dashboard-ai-score-num" style={{ color: readiness.color }}>
+                    {faNumber(readiness.score)}٪
+                  </span>
+                  <small className="muted" style={{ display: 'block', fontSize: '11px' }}>نمره آمادگی بدن</small>
+                </div>
+              </div>
+              <p className="dashboard-ai-advice">
+                <strong>توصیه مربی هوشمند برای امروز: </strong>
+                {readiness.coachRecommendation}
+              </p>
+            </div>
+          )}
+
+          {enabledModules.includes('muscles') && (
+            <div className="dashboard-ai-muscles-preview">
+              <span className="muted text-xs">وضعیت عضلات (Fitbod):</span>
+              {muscleRecoveries.slice(0, 4).map((m) => (
+                <span key={m.zoneKey} className="badge badge--neutral text-xs">
+                  <span
+                    style={{
+                      backgroundColor: m.color,
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      marginInlineEnd: 4,
+                    }}
+                  />
+                  {m.label}: {faNumber(m.recoveryPercent)}٪
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="dashboard-lower-grid">
         <section className="panel-card records-card">

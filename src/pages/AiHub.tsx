@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity,
   AlertCircle,
@@ -7,6 +7,7 @@ import {
   Brain,
   CheckCircle2,
   Flame,
+  Heart,
   HeartPulse,
   Info,
   Moon,
@@ -39,9 +40,15 @@ import {
   type MindfulHungerTrigger,
   type MindfulLogEntry,
 } from '../lib/aiHealthEngine';
+import {
+  ALL_AI_MODULES,
+  getMyAiSettings,
+  type AiModuleKey,
+  type StudentBiometricsData,
+} from '../lib/studentAiBiometrics';
 import { faNumber, formatDate } from '../lib/format';
 
-type ActiveTab = 'recovery' | 'muscles' | 'hinge' | 'noom';
+type ActiveTab = 'recovery' | 'muscles' | 'hinge' | 'noom' | 'biometrics';
 
 export function AiHub() {
   const { sessions } = useGym();
@@ -49,6 +56,26 @@ export function AiHub() {
   const [metrics, setMetrics] = useState<HealthMetrics>(getStoredHealthMetrics);
   const [activeJoints, setActiveJoints] = useState<JointKey[]>(getStoredJointConcerns);
   const [mindfulLogs, setMindfulLogs] = useState<MindfulLogEntry[]>(getStoredMindfulLogs);
+  const [biometricsData, setBiometricsData] = useState<StudentBiometricsData | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void getMyAiSettings().then((data) => {
+      if (mounted) {
+        setBiometricsData(data);
+        // If current active tab is disabled by coach, switch to first enabled
+        const enabled = data.enabledModules && data.enabledModules.length > 0 ? data.enabledModules : ALL_AI_MODULES;
+        if (!enabled.includes(activeTab as AiModuleKey) && activeTab !== 'biometrics') {
+          setActiveTab(enabled[0] || 'biometrics');
+        }
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const enabledModules = biometricsData?.enabledModules ?? ALL_AI_MODULES;
 
   // Noom input state
   const [foodInput, setFoodInput] = useState('');
@@ -132,52 +159,72 @@ export function AiHub() {
 
       {/* Primary Tab Navigation */}
       <div className="ai-tabs-bar" role="tablist" aria-label="بخش‌های هوش سلامتی">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'recovery'}
-          className={`ai-tab-button ${activeTab === 'recovery' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('recovery')}
-        >
-          <HeartPulse size={16} />
-          <span>ریکاوری و فیزیولوژی</span>
-          <span className="ai-tab-badge">Whoop</span>
-        </button>
+        {enabledModules.includes('recovery') && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'recovery'}
+            className={`ai-tab-button ${activeTab === 'recovery' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('recovery')}
+          >
+            <HeartPulse size={16} />
+            <span>ریکاوری و فیزیولوژی</span>
+            <span className="ai-tab-badge">Whoop</span>
+          </button>
+        )}
+
+        {enabledModules.includes('muscles') && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'muscles'}
+            className={`ai-tab-button ${activeTab === 'muscles' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('muscles')}
+          >
+            <Activity size={16} />
+            <span>نقشه عضلات</span>
+            <span className="ai-tab-badge">Fitbod</span>
+          </button>
+        )}
+
+        {enabledModules.includes('hinge') && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'hinge'}
+            className={`ai-tab-button ${activeTab === 'hinge' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('hinge')}
+          >
+            <ShieldAlert size={16} />
+            <span>مفاصل و آسیب‌ها</span>
+            <span className="ai-tab-badge">Hinge</span>
+          </button>
+        )}
+
+        {enabledModules.includes('noom') && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'noom'}
+            className={`ai-tab-button ${activeTab === 'noom' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('noom')}
+          >
+            <Utensils size={16} />
+            <span>تغذیه رفتاری</span>
+            <span className="ai-tab-badge">Noom</span>
+          </button>
+        )}
 
         <button
           type="button"
           role="tab"
-          aria-selected={activeTab === 'muscles'}
-          className={`ai-tab-button ${activeTab === 'muscles' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('muscles')}
+          aria-selected={activeTab === 'biometrics'}
+          className={`ai-tab-button ${activeTab === 'biometrics' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('biometrics')}
         >
-          <Activity size={16} />
-          <span>نقشه عضلات</span>
-          <span className="ai-tab-badge">Fitbod</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'hinge'}
-          className={`ai-tab-button ${activeTab === 'hinge' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('hinge')}
-        >
-          <ShieldAlert size={16} />
-          <span>مفاصل و آسیب‌ها</span>
-          <span className="ai-tab-badge">Hinge</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'noom'}
-          className={`ai-tab-button ${activeTab === 'noom' ? 'is-active' : ''}`}
-          onClick={() => setActiveTab('noom')}
-        >
-          <Utensils size={16} />
-          <span>تغذیه رفتاری</span>
-          <span className="ai-tab-badge">Noom</span>
+          <Heart size={16} />
+          <span>پایش قلب و بیومتریک</span>
+          <span className="ai-tab-badge">HR Zones</span>
         </button>
       </div>
 
@@ -635,6 +682,160 @@ export function AiHub() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB 5: BIOMETRICS & CARDIOVASCULAR ZONES ================= */}
+      {activeTab === 'biometrics' && (
+        <div className="ai-tab-content">
+          <div className="card" style={{ padding: 22 }}>
+            <div className="card-header" style={{ marginBottom: 16 }}>
+              <div>
+                <span className="eyebrow">فیزیولوژی و سیستم قلبی-عروقی</span>
+                <h3>پایش بیومتریک و زون‌های تمرینی قلب</h3>
+              </div>
+              <span className="badge badge--neutral">محاسبه علمی بر پایه HRR</span>
+            </div>
+
+            <p className="muted" style={{ fontSize: '13px', lineHeight: 1.6, marginBottom: 20 }}>
+              ضربان قلب و زون‌های ۵ گانهٔ تمرینی، شدت تلاش سیستم هوازی و بی‌هوازی شما را تعیین می‌کنند. تمرین در هر زون، اثر انطباقی فیزیولوژیک متفاوتی بر میتوکندری‌ها، چربی‌سوزی، و آستانه اسید لاکتیک ایجاد می‌کند.
+            </p>
+
+            {/* Quick Stats Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 14,
+                marginBottom: 24,
+              }}
+            >
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: 'var(--color-surface-elevated)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <span className="muted text-xs block">حداکثر ضربان قلب (HR Max)</span>
+                <strong style={{ fontSize: '24px', color: '#ef4444' }}>
+                  {faNumber(biometricsData?.maxHr ?? 190)}
+                  <small style={{ fontSize: '13px', fontWeight: 400, marginInlineStart: 4 }}>BPM</small>
+                </strong>
+                <span className="muted text-xs block" style={{ marginTop: 4 }}>
+                  روش: {biometricsData?.maxHrMethod === 'fox' ? 'فرمول فاکس (۲۲۰ - سن)' : biometricsData?.maxHrMethod === 'custom' ? 'رکورد تست بیشینه' : 'فرمول تاناکا (۲۰۸ - ۰٫۷×سن)'}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: 'var(--color-surface-elevated)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <span className="muted text-xs block">ضربان قلب در استراحت (RHR)</span>
+                <strong style={{ fontSize: '24px', color: '#06b6d4' }}>
+                  {biometricsData?.restingHr ? faNumber(biometricsData.restingHr) : '—'}
+                  <small style={{ fontSize: '13px', fontWeight: 400, marginInlineStart: 4 }}>BPM</small>
+                </strong>
+                <span className="muted text-xs block" style={{ marginTop: 4 }}>
+                  {biometricsData?.restingHr ? 'ثبت‌شده در پایش بدنی' : 'هنوز ثبت نشده است'}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: 'var(--color-surface-elevated)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <span className="muted text-xs block">سن ورزشکار</span>
+                <strong style={{ fontSize: '24px', color: '#f59e0b' }}>
+                  {biometricsData?.age ? faNumber(biometricsData.age) : '—'}
+                  <small style={{ fontSize: '13px', fontWeight: 400, marginInlineStart: 4 }}>سال</small>
+                </strong>
+                <span className="muted text-xs block" style={{ marginTop: 4 }}>
+                  شاخص مبنای انطباق قلبی
+                </span>
+              </div>
+            </div>
+
+            {/* Coach Limitations & Medical Constraints Note */}
+            {biometricsData?.limitations && biometricsData.limitations.trim().length > 0 && (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  border: '1.5px solid rgba(239, 68, 68, 0.3)',
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <ShieldAlert size={18} style={{ color: '#ef4444' }} />
+                  <strong style={{ color: '#ef4444', fontSize: '14px' }}>
+                    ملاحظات پزشکی و محدودیت‌های ثبت‌شده توسط مربی:
+                  </strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.6, color: 'var(--color-text)' }}>
+                  {biometricsData.limitations}
+                </p>
+              </div>
+            )}
+
+            {/* Target Zones Detailed Breakdown */}
+            <h4 style={{ margin: '0 0 12px', fontSize: '15px' }}>زون‌های هدف تمرین و محدوده ضربان قلب (HR Zones):</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(biometricsData?.zones ?? []).map((z) => (
+                <div
+                  key={z.zone}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--color-surface-elevated)',
+                    borderRight: `5px solid ${z.color}`,
+                    gap: 14,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ flex: '1 1 240px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <strong style={{ color: z.color, fontSize: '14px' }}>{z.persianName}</strong>
+                      <span className="muted text-xs">({z.name})</span>
+                    </div>
+                    <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px', lineHeight: 1.5 }}>
+                      {z.purpose}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'left', minWidth: 140 }}>
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: `${z.color}20`,
+                        color: z.color,
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        padding: '4px 10px',
+                      }}
+                    >
+                      {faNumber(z.minBpm)} تا {faNumber(z.maxBpm)} BPM
+                    </span>
+                    <span className="muted text-xs block" style={{ marginTop: 4, textAlign: 'center' }}>
+                      فشار: {z.intensityPercent}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
