@@ -23,7 +23,7 @@ import { MealsEditor, dayItems } from './MealsEditor';
 /** The coach's editor for one student's weekly nutrition plan. Saved as a whole, after each change is checked by the server. */
 export function NutritionEditor() {
   return (
-    <RequireRole roles={['coach']}>
+    <RequireRole roles={['coach', 'admin']}>
       <NutritionEditorScreen />
     </RequireRole>
   );
