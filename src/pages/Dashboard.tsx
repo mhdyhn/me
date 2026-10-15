@@ -7,12 +7,14 @@ import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
 import { ALL_AI_MODULES, getMyAiSettings, type AiModuleKey } from '../lib/studentAiBiometrics';
+import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate, kg } from '../lib/format';
 
 export function Dashboard() {
   const { sessions, bodyweights, profile, activeSession } = useGym();
   const program = useProgram();
   const navigate = useNavigate();
+  const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export function Dashboard() {
         <div>
           <p className="eyebrow">{formatDate(now, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
           <h2>{greeting}<span className="accent-dot">.</span></h2>
-          <p className="muted">یک جلسهٔ متمرکز، یک قدم رو به جلوست. حرکت‌ها را تمیز و پیوسته اجرا کن.</p>
+          <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
         </div>
         <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
       </section>

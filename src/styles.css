@@ -1436,12 +1436,93 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .ai-feedback-banner strong { display: block; color: var(--accent); margin-bottom: 2px; }
 .ai-feedback-banner p { margin: 0; color: var(--text); }
 
-.mindful-history { margin-top: 20px; display: grid; gap: 10px; }
-.mindful-history h5 { margin: 0; font-size: 14px; }
-.mindful-history-list { display: grid; gap: 8px; }
-.mindful-history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--surface-soft); border: 1px solid var(--line-soft); }
-.mindful-item-left { display: flex; align-items: center; gap: 10px; }
-.mindful-item-right { display: flex; align-items: center; gap: 8px; }
+.mindful-history { margin-top: 24px; display: grid; gap: 14px; }
+.mindful-history-header { display: grid; gap: 4px; }
+.mindful-history-header h5 { margin: 0; font-size: 15px; font-weight: 800; color: var(--text); }
+.mindful-history-list { display: grid; gap: 12px; }
+
+.mindful-history-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  transition: border-color .18s ease, transform .15s ease;
+}
+.mindful-history-card:hover {
+  border-color: rgba(217, 246, 111, .3);
+}
+
+.mindful-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.mindful-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mindful-food-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.3;
+}
+.mindful-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mindful-delete-btn {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition: all .15s ease;
+}
+.mindful-delete-btn:hover {
+  color: var(--red);
+  background: rgba(242, 143, 130, .14);
+  border-color: rgba(242, 143, 130, .3);
+}
+
+.mindful-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.mindful-trigger-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line-soft);
+  color: #c0ccc3;
+  white-space: nowrap;
+}
+.mindful-time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
 
 /* Dashboard AI Widget */
 .dashboard-ai-card { display: grid; gap: 16px; padding: 18px 20px; border-radius: var(--radius); background: linear-gradient(135deg, rgba(217, 246, 111, .04), rgba(255, 255, 255, .02)); border: 1px solid rgba(217, 246, 111, .25); margin: 6px 0; box-shadow: 0 10px 30px rgba(0, 0, 0, .2); }

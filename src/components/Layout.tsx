@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Sparkles, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
+import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import type { Role } from '../lib/api';
 
 interface NavItem {
@@ -52,6 +53,7 @@ export function Layout() {
   const location = useLocation();
   const { activeSession, storageWarning } = useGym();
   const { user, signOut } = useSession();
+  const quote = useMotivationalQuote();
   const navigate = useNavigate();
   const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
@@ -82,7 +84,7 @@ export function Layout() {
         <div className="sidebar-spacer" />
         <div className="sidebar-coach-note">
             <span className="note-mark"><Zap size={15} fill="currentColor" /></span>
-            <p><strong>با هدف تمرین کن.</strong><br />پیشرفت از قدم‌های کوچک می‌آید.</p>
+            <p><strong>{quote.title}</strong><br />{quote.subtitle}</p>
         </div>
         <NavLink to="/settings" className={({ isActive }) => `nav-link settings-link${isActive ? ' is-active' : ''}`}>
           <Settings2 size={18} /><span>پروفایل و تنظیمات</span>
