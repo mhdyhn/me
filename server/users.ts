@@ -130,17 +130,3 @@ export async function listStudents(db: Db, coachId: number, key: SecretKey): Pro
     return { ...toPublic(user), password: decryptSecret(key, user.passwordEnc) };
   });
 }
-
-export async function listAllStudents(db: Db, key: SecretKey): Promise<(PublicUser & { coachName: string | null; password: string | null })[]> {
-  const rows = await db.query<UserRow & { coach_name: string | null }>(
-    `SELECT s.*, c.display_name AS coach_name
-     FROM users s
-     LEFT JOIN users c ON s.coach_id = c.id
-     WHERE s.role = 'student'
-     ORDER BY s.id`,
-  );
-  return rows.map((row) => {
-    const user = fromRow(row);
-    return { ...toPublic(user), coachName: row.coach_name ?? null, password: decryptSecret(key, user.passwordEnc) };
-  });
-}

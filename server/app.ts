@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listAllStudents, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
 import { deletePersonalProgramme, deleteProgramme, loadPersonalProgramme, loadProgramme, savePersonalProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
@@ -264,13 +264,8 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET',
       pattern: /^\/api\/students$/,
-      auth: ['coach', 'admin'],
-      handler: async ({ user }) => {
-        if (user!.role === 'admin') {
-          return { status: 200, body: { students: await listAllStudents(db, secretKey) } };
-        }
-        return { status: 200, body: { students: await listStudents(db, user!.id, secretKey) } };
-      },
+      auth: ['coach'],
+      handler: async ({ user }) => ({ status: 200, body: { students: await listStudents(db, user!.id, secretKey) } }),
     },
 
     {
@@ -362,7 +357,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         return { status: 200, body: { plan: await loadPlan(db, student.id) ?? emptyPlan() } };
@@ -372,7 +367,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/diary\/([^/]+)$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const day = validateDay(decodeURIComponent(params[1]!));
@@ -383,7 +378,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const plan = validatePlan(body);
@@ -658,7 +653,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/sessions$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         return { status: 200, body: { studentName: student.displayName, sessions: await listSummaries(db, student.id) } };
@@ -701,7 +696,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'DELETE',
       pattern: /^\/api\/students\/(\d+)$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         await deleteSessionsForUser(db, student.id);
@@ -713,7 +708,7 @@ export function createApp(options: AppOptions) {
     {
       method: 'POST',
       pattern: /^\/api\/students\/(\d+)\/reset-password$/,
-      auth: ['coach', 'admin'],
+      auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const password = generatePassword();

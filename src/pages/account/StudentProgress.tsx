@@ -47,7 +47,7 @@ const STATUS_LABEL: Record<SummarySession['status'], string> = {
 /** A coach's view of one student's workouts: date, exercises, sets, weight and reps, and whether each session was finished. */
 export function StudentProgress() {
   return (
-    <RequireRole roles={['coach', 'admin']}>
+    <RequireRole roles={['coach']}>
       <StudentProgressScreen />
     </RequireRole>
   );
