@@ -740,3 +740,14 @@ export function saveMindfulLog(entry: Omit<MindfulLogEntry, 'id' | 'timestamp'>)
   }
   return newEntry;
 }
+
+export function deleteMindfulLog(id: string): MindfulLogEntry[] {
+  const logs = getStoredMindfulLogs();
+  const updated = logs.filter((entry) => entry.id !== id);
+  try {
+    localStorage.setItem(STORAGE_KEY_MINDFUL, JSON.stringify(updated));
+  } catch {
+    // Ignore quota errors
+  }
+  return updated;
+}

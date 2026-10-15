@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, Plus, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
+import { Activity, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, Plus, Trash2, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
@@ -11,7 +11,7 @@ import { getBestSet, getExercisePerformances, getSessionTotals, getWeekCompariso
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
 export function Progress() {
-  const { sessions, bodyweights, profile, addBodyweight } = useGym();
+  const { sessions, bodyweights, profile, addBodyweight, deleteBodyweight, deleteSession } = useGym();
   useProgram();
 
   const completedSessions = useMemo(() => {
@@ -90,6 +90,16 @@ export function Progress() {
     setWeightInput(''); setWeightNote(''); setFormError('');
   };
 
+  const handleDeleteWeight = async (id: string, weightKg: number) => {
+    if (!window.confirm(`ثبت وزن ${kg(weightKg)} حذف شود؟`)) return;
+    await deleteBodyweight(id);
+  };
+
+  const handleDeleteSession = async (id: string, name: string) => {
+    if (!window.confirm(`جلسهٔ «${name}» از سوابق تمرین حذف شود؟ این کار قابل بازگشت نیست.`)) return;
+    await deleteSession(id);
+  };
+
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="دادهٔ واقعی · پیشرفت پیوسته" title="پیشرفت، نه حدس و گمان." description="روندها از جلسه‌ها و وزن‌کشی‌های ثبت‌شده ساخته می‌شوند. هیچ عددی به‌عنوان رکورد شخصی حدس زده نمی‌شود." />
@@ -154,7 +164,28 @@ export function Progress() {
           <div className="card-topline"><div><span className="eyebrow">روند وزن بدن</span><h2>پیوسته باش، نه افراطی.</h2></div><Weight size={18} className="icon-accent" /></div>
           <div className="bodyweight-metrics"><div><span>فعلی</span><strong>{kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : 'وزن پایهٔ پروفایل'}</small></div><div><span>آغازین</span><strong>{firstLoggedWeight === null ? '—' : kg(firstLoggedWeight)}</strong><small>{firstLoggedWeight === null ? 'به ۲ ثبت وزن نیاز است' : 'اولین ثبت'}</small></div><div><span>میانگین ۷ روز</span><strong>{weeklyAverage === null ? '—' : kg(weeklyAverage)}</strong><small>{recentWeights.length ? `${faNumber(recentWeights.length)} بار ثبت` : 'ثبت تازه‌ای نیست'}</small></div></div>
           <ProgressChart points={weightPoints} unit=" کیلوگرم" label="وزن بدن" color="var(--blue)" />
-          <div className="weight-log-list">{bodyweights.slice(0, 5).map((entry) => <div key={entry.id}><span>{formatDate(`${entry.date}T00:00:00`, { weekday: 'short', day: 'numeric', month: 'short' })}</span><strong>{kg(entry.weightKg)}</strong>{entry.notes && <small>{entry.notes}</small>}</div>)}{!bodyweights.length && <p className="muted small-text">چند بار در شرایط مشابه وزن‌کشی کن تا روند واقعی‌ات مشخص شود.</p>}</div>
+          <div className="weight-log-list">
+            {bodyweights.slice(0, 10).map((entry) => (
+              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                <div>
+                  <span style={{ marginInlineEnd: 10 }}>{formatDate(`${entry.date}T00:00:00`, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                  <strong>{kg(entry.weightKg)}</strong>
+                  {entry.notes && <small style={{ marginInlineStart: 8, color: 'var(--color-text-muted)' }}>{entry.notes}</small>}
+                </div>
+                <button
+                  type="button"
+                  className="button button--ghost button--small icon-only"
+                  style={{ padding: '4px', minHeight: 'auto', border: 'none' }}
+                  onClick={() => void handleDeleteWeight(entry.id, entry.weightKg)}
+                  title="حذف این ثبت وزن"
+                  aria-label={`حذف ثبت وزن ${entry.weightKg} کیلوگرم`}
+                >
+                  <Trash2 size={14} style={{ color: 'var(--color-text-muted)' }} />
+                </button>
+              </div>
+            ))}
+            {!bodyweights.length && <p className="muted small-text">چند بار در شرایط مشابه وزن‌کشی کن تا روند واقعی‌ات مشخص شود.</p>}
+          </div>
         </div>
         <div className="panel-card bodyweight-form-card">
           <span className="eyebrow">ثبت وزن</span><h3>وزن بدن را وارد کن</h3><p className="muted">در شرایط مشابه وزن‌کشی کن و روند را در طول زمان بررسی کن.</p>
@@ -197,6 +228,16 @@ export function Progress() {
                       </div>
                     ))}
                     {session.notes && <p className="session-history-note"><strong>یادداشت جلسه</strong>{session.notes}</p>}
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="button button--ghost button--small text-xs"
+                        style={{ color: '#ef4444' }}
+                        onClick={() => void handleDeleteSession(session.id, workoutName)}
+                      >
+                        <Trash2 size={13} /> حذف این جلسه از سوابق
+                      </button>
+                    </div>
                   </div>
                 </details>
               );

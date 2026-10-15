@@ -9,6 +9,7 @@ import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAll
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
+import { loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
 
 export interface AppOptions {
   db: Db;
@@ -656,6 +657,39 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         return { status: 200, body: { studentName: student.displayName, sessions: await listSummaries(db, student.id) } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/ai-settings$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        const biometrics = await loadBiometrics(db, user!.id);
+        return { status: 200, body: { biometrics } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/ai-settings$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const biometrics = await loadBiometrics(db, student.id);
+        return { status: 200, body: { studentName: student.displayName, biometrics } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/ai-settings$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const input = validateBiometricsInput(body);
+        const biometrics = await saveBiometrics(db, student.id, user!.id, input, now().toISOString());
+        return { status: 200, body: { studentName: student.displayName, biometrics } };
       },
     },
 

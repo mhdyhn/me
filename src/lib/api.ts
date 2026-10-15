@@ -3,6 +3,7 @@
  * same origin, and the dev server or the production host forwards them to the API.
  */
 const TOKEN_KEY = 'meety.session-token';
+const USER_KEY = 'meety.session-user';
 
 /** Empty on the website (same origin). The Android build sets it to the live server address. */
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
@@ -81,8 +82,34 @@ export function setToken(token: string): void {
   window.localStorage.setItem(TOKEN_KEY, token);
 }
 
+export function getStoredUser(): PublicUser | null {
+  try {
+    const raw = window.localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as PublicUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user: PublicUser): void {
+  try {
+    window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearStoredUser(): void {
+  try {
+    window.localStorage.removeItem(USER_KEY);
+  } catch {
+    // Storage unavailable
+  }
+}
+
 export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
+  clearStoredUser();
 }
 
 export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, timeoutMs = 25000): Promise<T> {

@@ -34,6 +34,7 @@ const ProgramPicker = lazy(() => import('./pages/account/CoachHome').then((modul
 const ProgramBuilder = lazy(() => import('./pages/account/ProgramBuilder').then((module) => ({ default: module.ProgramBuilder })));
 const NutritionEditor = lazy(() => import('./pages/account/NutritionEditor').then((module) => ({ default: module.NutritionEditor })));
 const StudentProgress = lazy(() => import('./pages/account/StudentProgress').then((module) => ({ default: module.StudentProgress })));
+const StudentAiSettings = lazy(() => import('./pages/account/StudentAiSettings').then((module) => ({ default: module.StudentAiSettings })));
 const StudentChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.StudentChat })));
 const CoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachChat })));
 const CoachAdminChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachAdminChat })));
@@ -110,6 +111,7 @@ export function App() {
               <Route path="coach/students/:studentId/program" element={<ForRoles roles={['coach', 'admin']}><ProgramBuilder /></ForRoles>} />
               <Route path="coach/students/:studentId/nutrition" element={<ForRoles roles={['coach']}><NutritionEditor /></ForRoles>} />
               <Route path="coach/students/:studentId/progress" element={<ForRoles roles={['coach']}><StudentProgress /></ForRoles>} />
+              <Route path="coach/students/:studentId/ai" element={<ForRoles roles={['coach', 'admin']}><StudentAiSettings /></ForRoles>} />
               <Route path="coach/transactions" element={<ForRoles roles={['coach']}><CoachTransactions /></ForRoles>} />
               <Route path="coach/admin/transactions" element={<ForRoles roles={['admin']}><AdminTransactions /></ForRoles>} />
               <Route path="*" element={<NotFound />} />

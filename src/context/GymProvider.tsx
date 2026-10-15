@@ -20,7 +20,10 @@ interface GymContextValue {
   saveProfile: (profile: UserProfile) => Promise<void>;
   saveNutritionGoals: (goals: NutritionGoals) => Promise<void>;
   addBodyweight: (entry: Omit<BodyweightEntry, 'id'>) => Promise<void>;
+  deleteBodyweight: (id: string) => Promise<void>;
   saveNutritionDay: (day: Omit<NutritionDay, 'id'>) => Promise<void>;
+  deleteNutritionDay: (id: string) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
 }
 
 const GymContext = createContext<GymContextValue | null>(null);
@@ -127,17 +130,35 @@ export function GymProvider({ children }: { children: ReactNode }) {
     await persist(() => db.bodyweights.put(fullEntry));
   }, [persist]);
 
+  const deleteBodyweight = useCallback(async (id: string) => {
+    setBodyweights((current) => current.filter((entry) => entry.id !== id));
+    await persist(() => db.bodyweights.delete(id));
+  }, [persist]);
+
+  const deleteSession = useCallback(async (id: string) => {
+    setSessions((current) => current.filter((session) => session.id !== id));
+    await persist(() => db.sessions.delete(id));
+  }, [persist]);
+
   const saveNutritionDay = useCallback(async (day: Omit<NutritionDay, 'id'>) => {
     const fullDay: NutritionDay = { ...day, id: day.date || dateInputValue() };
     setNutritionDays((current) => [fullDay, ...current.filter((item) => item.id !== fullDay.id)].sort((a, b) => b.date.localeCompare(a.date)));
     await persist(() => db.nutritionDays.put(fullDay));
   }, [persist]);
 
+  const deleteNutritionDay = useCallback(async (id: string) => {
+    setNutritionDays((current) => current.filter((day) => day.id !== id));
+    await persist(() => db.nutritionDays.delete(id));
+  }, [persist]);
+
   const activeSession = sessions.find((session) => session.status === 'active') ?? null;
   const value = useMemo<GymContextValue>(() => ({
     sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
-    saveSession, startWorkout, saveProfile, saveNutritionGoals: saveGoals, addBodyweight, saveNutritionDay,
-  }), [sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession, saveSession, startWorkout, saveProfile, saveGoals, addBodyweight, saveNutritionDay]);
+    saveSession, deleteSession, startWorkout, saveProfile, saveNutritionGoals: saveGoals,
+    addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay,
+  }), [sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
+      saveSession, deleteSession, startWorkout, saveProfile, saveGoals,
+      addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay]);
 
   return <GymContext.Provider value={value}>{children}</GymContext.Provider>;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { exercises as catalog } from '../../data/exercises';
 import { exerciseSearchText } from '../../data/exerciseCategories';
 import { matchesPersianSearch } from '../../lib/labels';
@@ -39,14 +39,16 @@ function Builder() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [limitations, setLimitations] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [list, programmeResult] = await Promise.all([
+        const [list, programmeResult, biometricsResult] = await Promise.all([
           api<{ students: PublicUser[] }>('GET', '/students'),
           api<{ program: Programme | null }>('GET', `/students/${id}/program`),
+          api<{ biometrics: { limitations?: string } }>('GET', `/students/${id}/ai-settings`).catch(() => ({ biometrics: { limitations: '' } })),
         ]);
         if (cancelled) return;
         setStudent(list.students.find((candidate) => candidate.id === id) ?? null);
@@ -54,6 +56,9 @@ function Builder() {
           setTitle(programmeResult.program.title);
           setPriceTomans(programmeResult.program.priceTomans ?? 0);
           setDays(programmeResult.program.days);
+        }
+        if (biometricsResult?.biometrics?.limitations) {
+          setLimitations(biometricsResult.biometrics.limitations);
         }
       } catch (caught) {
         if (!cancelled) setLoadError(caught instanceof ApiError ? caught.message : 'برنامه بارگذاری نشد.');
@@ -240,6 +245,20 @@ function Builder() {
             <span style={{ color: '#4ade80', fontWeight: 600 }}>سهم مربی (۹۰٪): {Math.floor(priceTomans * 0.9).toLocaleString('fa-IR')} تومان</span>
             <span className="account-muted">|</span>
             <span className="account-muted">سهم مدیر (۱۰٪): {(priceTomans - Math.floor(priceTomans * 0.9)).toLocaleString('fa-IR')} تومان</span>
+          </div>
+        )}
+
+        {limitations && limitations.trim().length > 0 && (
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1.5px solid rgba(239, 68, 68, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShieldAlert size={16} style={{ color: '#ef4444' }} />
+              <span style={{ fontSize: '13px', color: '#ef4444' }}>
+                <strong>ملاحظات ارتوپدی و آسیب‌های ثبت‌شده شاگرد: </strong>{limitations}
+              </span>
+            </div>
+            <Link to={`/coach/students/${id}/ai`} className="text-link text-xs">
+              ویرایش بیومتریک و پایش
+            </Link>
           </div>
         )}
       </section>
