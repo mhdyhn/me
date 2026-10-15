@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Brain,
   CheckCircle2,
+  Clock,
   Flame,
   Heart,
   HeartPulse,
@@ -654,49 +655,71 @@ export function AiHub() {
             {/* Mindful Logs History */}
             {mindfulLogs.length > 0 && (
               <div className="mindful-history">
-                <h5>سوابق تحلیل هوشمند خوراک</h5>
+                <div className="mindful-history-header">
+                  <span className="eyebrow">تحلیل‌های اخیر</span>
+                  <h5>سوابق تحلیل هوشمند خوراک</h5>
+                </div>
                 <div className="mindful-history-list">
                   {mindfulLogs.slice(0, 5).map((log) => {
                     const catInfo = NOOM_CALORIC_CATEGORIES[log.category];
                     const insight = MINDFUL_INSIGHTS[log.trigger];
+                    const formattedDate = formatDate(new Date(log.timestamp), {
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
                     return (
-                      <div key={log.id} className="mindful-history-item">
-                        <div className="mindful-item-left">
-                          <span
-                            className="noom-color-dot"
-                            style={{ backgroundColor: catInfo.color }}
-                            title={catInfo.label}
-                          />
-                          <div>
-                            <strong>{log.foodName}</strong>
-                            <small className="muted block">
-                              {formatDate(new Date(log.timestamp), {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </small>
+                      <article key={log.id} className="mindful-history-card">
+                        <div className="mindful-card-top">
+                          <div className="mindful-card-title-group">
+                            <span
+                              className="noom-color-dot"
+                              style={{
+                                backgroundColor: catInfo.color,
+                                boxShadow: `0 0 0 3px ${catInfo.color}25`,
+                              }}
+                              title={catInfo.label}
+                            />
+                            <strong className="mindful-food-title">{log.foodName}</strong>
+                          </div>
+
+                          <div className="mindful-card-actions">
+                            <span
+                              className="badge"
+                              style={{
+                                color: catInfo.color,
+                                backgroundColor: `${catInfo.color}15`,
+                                borderColor: `${catInfo.color}40`,
+                                fontSize: '11px',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {catInfo.label}
+                            </span>
+                            <button
+                              type="button"
+                              className="button button--ghost icon-only mindful-delete-btn"
+                              onClick={() => handleDeleteMindfulLog(log.id, log.foodName)}
+                              title="حذف این ثبت"
+                              aria-label={`حذف ثبت ${log.foodName}`}
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
                         </div>
 
-                        <div className="mindful-item-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span className="badge badge--neutral">{insight.label}</span>
-                          <span className="badge" style={{ color: catInfo.color, borderColor: `${catInfo.color}40` }}>
-                            {catInfo.label.split(' ')[0]}
+                        <div className="mindful-card-meta">
+                          <span className="mindful-trigger-pill">
+                            <Brain size={13} className="icon-accent" />
+                            <span>محرک ذهنی: <strong>{insight.label}</strong></span>
                           </span>
-                          <button
-                            type="button"
-                            className="button button--ghost button--small icon-only"
-                            style={{ padding: '4px', minHeight: 'auto', border: 'none' }}
-                            onClick={() => handleDeleteMindfulLog(log.id, log.foodName)}
-                            title="حذف این ثبت"
-                            aria-label={`حذف ثبت ${log.foodName}`}
-                          >
-                            <Trash2 size={15} style={{ color: 'var(--color-text-muted)' }} />
-                          </button>
+                          <span className="mindful-time-pill">
+                            <Clock size={13} className="text-muted" />
+                            <span>{formattedDate}</span>
+                          </span>
                         </div>
-                      </div>
+                      </article>
                     );
                   })}
                 </div>
