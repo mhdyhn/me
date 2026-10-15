@@ -109,8 +109,8 @@ export function App() {
               <Route path="coach" element={<ForRoles roles={['coach', 'admin']}><CoachEntry /></ForRoles>} />
               <Route path="coach/programs/new" element={<ForRoles roles={['coach', 'admin']}><ProgramPicker /></ForRoles>} />
               <Route path="coach/students/:studentId/program" element={<ForRoles roles={['coach', 'admin']}><ProgramBuilder /></ForRoles>} />
-              <Route path="coach/students/:studentId/nutrition" element={<ForRoles roles={['coach']}><NutritionEditor /></ForRoles>} />
-              <Route path="coach/students/:studentId/progress" element={<ForRoles roles={['coach']}><StudentProgress /></ForRoles>} />
+              <Route path="coach/students/:studentId/nutrition" element={<ForRoles roles={['coach', 'admin']}><NutritionEditor /></ForRoles>} />
+              <Route path="coach/students/:studentId/progress" element={<ForRoles roles={['coach', 'admin']}><StudentProgress /></ForRoles>} />
               <Route path="coach/students/:studentId/ai" element={<ForRoles roles={['coach', 'admin']}><StudentAiSettings /></ForRoles>} />
               <Route path="coach/transactions" element={<ForRoles roles={['coach']}><CoachTransactions /></ForRoles>} />
               <Route path="coach/admin/transactions" element={<ForRoles roles={['admin']}><AdminTransactions /></ForRoles>} />
