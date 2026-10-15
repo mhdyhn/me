@@ -194,8 +194,11 @@ export function saveLocalFallbackBiometrics(data: StudentBiometricsData): void {
 export async function getStudentBiometrics(studentId: number): Promise<StudentBiometricsData> {
   try {
     const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('GET', `/students/${studentId}/ai-settings`);
-    saveLocalFallbackBiometrics(res.biometrics);
-    return res.biometrics;
+    if (res && res.biometrics) {
+      saveLocalFallbackBiometrics(res.biometrics);
+      return res.biometrics;
+    }
+    return getLocalFallbackBiometrics(studentId);
   } catch {
     return getLocalFallbackBiometrics(studentId);
   }
@@ -215,36 +218,43 @@ export async function saveStudentBiometricsApi(
 ): Promise<StudentBiometricsData> {
   try {
     const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('PUT', `/students/${studentId}/ai-settings`, data);
-    saveLocalFallbackBiometrics(res.biometrics);
-    return res.biometrics;
-  } catch (caught) {
-    const current = getLocalFallbackBiometrics(studentId);
-    const age = data.age !== undefined ? data.age : current.age;
-    const restingHr = data.restingHr !== undefined ? data.restingHr : current.restingHr;
-    const maxHrMethod = data.maxHrMethod ?? current.maxHrMethod;
-    const maxHr = data.maxHr && maxHrMethod === 'custom'
-      ? data.maxHr
-      : calculateMaxHeartRate(age, maxHrMethod, data.maxHr);
-    const updated: StudentBiometricsData = {
-      ...current,
-      ...data,
-      age,
-      restingHr,
-      maxHrMethod,
-      maxHr,
-      zones: calculateHeartRateZones(maxHr, restingHr),
-      updatedAt: new Date().toISOString(),
-    };
-    saveLocalFallbackBiometrics(updated);
-    return updated;
+    if (res && res.biometrics) {
+      saveLocalFallbackBiometrics(res.biometrics);
+      return res.biometrics;
+    }
+  } catch {
+    // fallback below
   }
+
+  const current = getLocalFallbackBiometrics(studentId);
+  const age = data.age !== undefined ? data.age : current.age;
+  const restingHr = data.restingHr !== undefined ? data.restingHr : current.restingHr;
+  const maxHrMethod = data.maxHrMethod ?? current.maxHrMethod;
+  const maxHr = data.maxHr && maxHrMethod === 'custom'
+    ? data.maxHr
+    : calculateMaxHeartRate(age, maxHrMethod, data.maxHr);
+  const updated: StudentBiometricsData = {
+    ...current,
+    ...data,
+    age,
+    restingHr,
+    maxHrMethod,
+    maxHr,
+    zones: calculateHeartRateZones(maxHr, restingHr),
+    updatedAt: new Date().toISOString(),
+  };
+  saveLocalFallbackBiometrics(updated);
+  return updated;
 }
 
 export async function getMyAiSettings(): Promise<StudentBiometricsData> {
   try {
     const res = await api<{ biometrics: StudentBiometricsData }>('GET', '/me/ai-settings');
-    saveLocalFallbackBiometrics(res.biometrics);
-    return res.biometrics;
+    if (res && res.biometrics) {
+      saveLocalFallbackBiometrics(res.biometrics);
+      return res.biometrics;
+    }
+    return getLocalFallbackBiometrics(0);
   } catch {
     return getLocalFallbackBiometrics(0);
   }

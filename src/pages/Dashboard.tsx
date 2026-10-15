@@ -17,11 +17,13 @@ export function Dashboard() {
 
   useEffect(() => {
     let mounted = true;
-    void getMyAiSettings().then((settings) => {
-      if (mounted && settings.enabledModules) {
-        setEnabledModules(settings.enabledModules);
-      }
-    });
+    void getMyAiSettings()
+      .then((settings) => {
+        if (mounted && settings && settings.enabledModules) {
+          setEnabledModules(settings.enabledModules);
+        }
+      })
+      .catch(() => {});
     return () => {
       mounted = false;
     };

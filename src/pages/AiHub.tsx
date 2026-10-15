@@ -60,16 +60,18 @@ export function AiHub() {
 
   useEffect(() => {
     let mounted = true;
-    void getMyAiSettings().then((data) => {
-      if (mounted) {
-        setBiometricsData(data);
-        // If current active tab is disabled by coach, switch to first enabled
-        const enabled = data.enabledModules && data.enabledModules.length > 0 ? data.enabledModules : ALL_AI_MODULES;
-        if (!enabled.includes(activeTab as AiModuleKey) && activeTab !== 'biometrics') {
-          setActiveTab(enabled[0] || 'biometrics');
+    void getMyAiSettings()
+      .then((data) => {
+        if (mounted && data) {
+          setBiometricsData(data);
+          // If current active tab is disabled by coach, switch to first enabled
+          const enabled = data.enabledModules && data.enabledModules.length > 0 ? data.enabledModules : ALL_AI_MODULES;
+          if (!enabled.includes(activeTab as AiModuleKey) && activeTab !== 'biometrics') {
+            setActiveTab(enabled[0] || 'biometrics');
+          }
         }
-      }
-    });
+      })
+      .catch(() => {});
     return () => {
       mounted = false;
     };
