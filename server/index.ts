@@ -116,11 +116,28 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
     }
   }
 
+  const publicApk = resolve('public', 'meety.apk');
+  if (isFile(publicApk)) {
+    const stat = statSync(publicApk);
+    response.writeHead(200, {
+      'Content-Type': 'application/vnd.android.package-archive',
+      'Content-Disposition': 'attachment; filename="meety.apk"',
+      'Content-Length': stat.size,
+    });
+    createReadStream(publicApk).pipe(response);
+    return;
+  }
+
   const remoteUrl = 'https://github.com/mhdyhn/me/releases/download/v1.0.0-app/meety.apk';
   const followAndPipe = (url: string, redirectsRemaining = 5) => {
     httpsGet(url, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsRemaining > 0) {
         followAndPipe(res.headers.location, redirectsRemaining - 1);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        response.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('فایل نصبی اندروید در حال ساخت و استقرار است. لطفاً دقایقی بعد مجدداً تلاش کنید.');
         return;
       }
       response.writeHead(200, {
@@ -130,12 +147,8 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
       });
       res.pipe(response);
     }).on('error', () => {
-      response.writeHead(302, {
-        'Location': remoteUrl,
-        'Content-Type': 'application/vnd.android.package-archive',
-        'Content-Disposition': 'attachment; filename="meety.apk"',
-      });
-      response.end();
+      response.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('در حال حاضر امکان دانلود مستقیم فایل وجود ندارد.');
     });
   };
   followAndPipe(remoteUrl);

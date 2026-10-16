@@ -49,6 +49,7 @@ function CoachStudents() {
       const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/students', { displayName: name.trim() });
       setCredentials({ user: created.user, username: created.username, password: created.password });
       setName('');
+      void load();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'شاگرد ساخته نشد.');
     } finally {
@@ -87,7 +88,15 @@ function CoachStudents() {
         </Link>
       </div>
       {credentials ? (
-        <CredentialsCard credentials={credentials} onDone={() => { setCredentials(null); void load(); }} />
+        <CredentialsCard
+          credentials={credentials}
+          onDone={() => { setCredentials(null); void load(); }}
+          action={
+            <Link to={`/coach/students/${credentials.user.id}/program`} className="button button--primary">
+              <ListChecks size={16} /> ساخت برنامه برای {credentials.user.displayName}
+            </Link>
+          }
+        />
       ) : (
         <form className="account-form account-form--inline" onSubmit={(event) => void addStudent(event)}>
           <label className="field">

@@ -208,7 +208,7 @@ function buildPplTemplates(): WorkoutTemplate[] {
   return [
     {
       id: 'template-ppl-1',
-      name: 'روز ۱: پوش (Push - سینه، سرشانه و پشت بازو)',
+      name: 'روز ۱: پوش (سینه، سرشانه و پشت‌بازو)',
       dayLabel: 'روز ۰۱',
       focus: 'سینه · دلتوئید قدامی و میانی · پشت بازو',
       durationMinutes: estimateMinutes(push),
@@ -217,7 +217,7 @@ function buildPplTemplates(): WorkoutTemplate[] {
     },
     {
       id: 'template-ppl-2',
-      name: 'روز ۲: پول (Pull - زیربغل، سرشانه خلفی و جلوبازو)',
+      name: 'روز ۲: پول (زیربغل و جلوبازو)',
       dayLabel: 'روز ۰۲',
       focus: 'عضلات پشت · دلتوئید خلفی · جلو بازو · ساعد',
       durationMinutes: estimateMinutes(pull),
@@ -226,7 +226,7 @@ function buildPplTemplates(): WorkoutTemplate[] {
     },
     {
       id: 'template-ppl-3',
-      name: 'روز ۳: لگز (Legs - پا، ساق و شکم)',
+      name: 'روز ۳: لگز (پا، ساق و شکم)',
       dayLabel: 'روز ۰۳',
       focus: 'چهارسر · همسترینگ · سرینی · ساق · شکم',
       durationMinutes: estimateMinutes(legs),
@@ -235,7 +235,7 @@ function buildPplTemplates(): WorkoutTemplate[] {
     },
     {
       id: 'template-ppl-4',
-      name: 'روز ۴: بالاتنه ترکیبی (Upper Body)',
+      name: 'روز ۴: بالاتنه ترکیبی',
       dayLabel: 'روز ۰۴',
       focus: 'سینه · پشت · سرشانه · دست‌ها',
       durationMinutes: estimateMinutes(upper),
@@ -244,7 +244,7 @@ function buildPplTemplates(): WorkoutTemplate[] {
     },
     {
       id: 'template-ppl-5',
-      name: 'روز ۵: پایین‌تنه و میان‌تنه (Lower & Core)',
+      name: 'روز ۵: پایین‌تنه و میان‌تنه',
       dayLabel: 'روز ۰۵',
       focus: 'چهارسر · همسترینگ · ساق · پلانک و شکم',
       durationMinutes: estimateMinutes(lower),
@@ -263,7 +263,9 @@ function templatesToProgramDays(templates: WorkoutTemplate[]): ProgramDay[] {
       name: item.name,
       muscle: day.focus.split('·')[0]?.trim() || 'عمومی',
       sets: item.prescription.sets,
-      reps: `${item.prescription.minReps}-${item.prescription.maxReps}`,
+      reps: item.prescription.minReps === item.prescription.maxReps
+        ? String(item.prescription.minReps)
+        : `${item.prescription.minReps}-${item.prescription.maxReps}`,
       restSeconds: item.prescription.restSeconds,
     })),
   }));

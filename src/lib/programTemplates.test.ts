@@ -58,4 +58,13 @@ describe('preset workout templates', () => {
       }
     }
   });
+
+  it('ensures all non-blank preset templates pass backend validateProgramme', async () => {
+    const { validateProgramme } = await import('../../server/programs');
+    for (const template of presetTemplates) {
+      if (template.id === 'blank') continue;
+      const days = template.buildProgramDays();
+      expect(() => validateProgramme({ title: template.title, days })).not.toThrow();
+    }
+  });
 });

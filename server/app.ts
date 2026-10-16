@@ -297,7 +297,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { program: await loadProgramme(db, student.id) } };
+        return { status: 200, body: { student: toPublic(student), program: await loadProgramme(db, student.id) } };
       },
     },
 

@@ -97,6 +97,25 @@ describe('coach programme builder', () => {
     expect(sent.some((call) => call.method === 'PUT')).toBe(false);
   });
 
+  it('accepts Persian digits in reps and normalizes them upon saving', async () => {
+    const sent = mockApi();
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText('عنوان برنامه'), 'برنامه با اعداد فارسی');
+    await user.click(screen.getByRole('button', { name: /روز جدید/ }));
+    const firstAdd = (await screen.findAllByRole('button', { name: 'افزودن' }))[0];
+    await user.click(firstAdd!);
+    const repsInput = await screen.findByDisplayValue('8-12');
+    await user.clear(repsInput);
+    await user.type(repsInput, '۸-۱۲');
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+    await screen.findByText('برنامه ذخیره شد. شاگرد همین حالا آن را می‌بیند.');
+    const put = sent.find((item) => item.method === 'PUT');
+    expect(put?.path).toBe('/api/students/3/program');
+    expect((put?.body as { days: Array<{ exercises: Array<{ reps: string }> }> }).days[0]!.exercises[0]!.reps).toBe('8-12');
+  });
+
   it('deleting a day asks for confirmation first', async () => {
     mockApi({ title: 'برنامه', updatedAt: 'x', days: [{ name: 'روز اول', exercises: [] }] });
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
