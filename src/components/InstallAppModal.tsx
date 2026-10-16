@@ -124,6 +124,16 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
                 <ExternalLink size={15} /> مشاهده بیلدها و آرشیو APK در گیت‌هاب اکشنز
               </a>
 
+              <a
+                href="https://github.com/mhdyhn/me/releases/tag/v1.0.0-app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button button--ghost button--full"
+                style={{ textAlign: 'center', justifyContent: 'center', fontSize: 12 }}
+              >
+                <ExternalLink size={14} /> صفحهٔ دانلود در انتشار رسمی گیت‌هاب (GitHub Releases)
+              </a>
+
               <div style={{ background: 'var(--panel-soft)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-strong)', marginBottom: 4 }}>
                   <ShieldAlert size={14} /> راهنمای نصب فایل نصبی در اندروید:
