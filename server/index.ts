@@ -2,6 +2,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
+import { get as httpsGet } from 'node:https';
 import { resolve } from 'node:path';
 import { createApp } from './app.ts';
 import { ensureAdmin } from './bootstrap.ts';
@@ -31,6 +32,10 @@ const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 const staticDir = resolveStaticDir(process.env.STATIC_DIR ?? 'dist');
 const server = createServer((request, response) => {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+  if (request.method === 'GET' && (pathname === '/meety.apk' || pathname === '/download/meety.apk')) {
+    handleApkDownload(staticDir, response);
+    return;
+  }
   if (staticDir && request.method === 'GET' && !pathname.startsWith('/api')) {
     if (serveStatic(staticDir, pathname, response, request)) return;
   }
@@ -93,7 +98,48 @@ const MIME_TYPES: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.apk': 'application/vnd.android.package-archive',
 };
+
+function handleApkDownload(staticDir: string | null, response: import('node:http').ServerResponse) {
+  if (staticDir) {
+    const localApk = join(staticDir, 'meety.apk');
+    if (isFile(localApk)) {
+      const stat = statSync(localApk);
+      response.writeHead(200, {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': 'attachment; filename="meety.apk"',
+        'Content-Length': stat.size,
+      });
+      createReadStream(localApk).pipe(response);
+      return;
+    }
+  }
+
+  const remoteUrl = 'https://github.com/mhdyhn/me/releases/download/v1.0.0-app/meety.apk';
+  const followAndPipe = (url: string, redirectsRemaining = 5) => {
+    httpsGet(url, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsRemaining > 0) {
+        followAndPipe(res.headers.location, redirectsRemaining - 1);
+        return;
+      }
+      response.writeHead(200, {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': 'attachment; filename="meety.apk"',
+        ...(res.headers['content-length'] ? { 'Content-Length': res.headers['content-length'] } : {}),
+      });
+      res.pipe(response);
+    }).on('error', () => {
+      response.writeHead(302, {
+        'Location': remoteUrl,
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': 'attachment; filename="meety.apk"',
+      });
+      response.end();
+    });
+  };
+  followAndPipe(remoteUrl);
+}
 
 /** The folder with the built app, or null when it has not been built (API-only mode). */
 function resolveStaticDir(path: string): string | null {

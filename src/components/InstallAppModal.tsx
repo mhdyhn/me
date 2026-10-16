@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Smartphone, X, Check, Apple, ExternalLink, FileBox, ShieldAlert } from 'lucide-react';
+import { Download, Smartphone, X, Check, Apple, FileBox, ShieldAlert } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,7 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [activeTab, setActiveTab] = useState<'apk' | 'pwa' | 'ios'>('apk');
+  const [activeTab, setActiveTab] = useState<'pwa' | 'apk' | 'ios'>('pwa');
 
   useEffect(() => {
     // Check if already installed in standalone mode safely
@@ -55,8 +55,8 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
               <Smartphone size={18} />
             </span>
             <div>
-              <h2 style={{ fontSize: 18, margin: 0 }}>نصب و دانلود اپلیکیشن میتی</h2>
-              <p className="muted" style={{ fontSize: 12, margin: '2px 0 0' }}>فایل نصبی اندروید (APK)، وب‌اپ PWA و راهنمای آیفون</p>
+              <h2 style={{ fontSize: 18, margin: 0 }}>نصب مستقیم اپلیکیشن روی گوشی</h2>
+              <p className="muted" style={{ fontSize: 12, margin: '2px 0 0' }}>اجرای سریع، تمام‌صفحه و بدون نیاز به ورود به مرورگر</p>
             </div>
           </div>
           <button type="button" className="button button--ghost" onClick={onClose} aria-label="بستن">
@@ -68,17 +68,17 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         <div className="install-tabs" style={{ display: 'flex', gap: 6, margin: '16px 0', borderBottom: '1px solid var(--line-soft)', paddingBottom: 10, overflowX: 'auto' }}>
           <button
             type="button"
-            className={`button button--small ${activeTab === 'apk' ? 'button--primary' : 'button--ghost'}`}
-            onClick={() => setActiveTab('apk')}
-          >
-            <FileBox size={14} /> فایل نصبی اندروید (APK)
-          </button>
-          <button
-            type="button"
             className={`button button--small ${activeTab === 'pwa' ? 'button--primary' : 'button--ghost'}`}
             onClick={() => setActiveTab('pwa')}
           >
-            <Smartphone size={14} /> وب‌اپ (PWA)
+            <Smartphone size={14} /> نصب مستقیم روی گوشی (یک‌کلیک)
+          </button>
+          <button
+            type="button"
+            className={`button button--small ${activeTab === 'apk' ? 'button--primary' : 'button--ghost'}`}
+            onClick={() => setActiveTab('apk')}
+          >
+            <FileBox size={14} /> دانلود فایل نصبی (APK)
           </button>
           <button
             type="button"
@@ -89,87 +89,71 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           </button>
         </div>
 
-        {/* ================= TAB 1: APK (REAL ANDROID PACKAGE) ================= */}
-        {activeTab === 'apk' && (
-          <div className="install-tab-pane">
-            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-              فایل نصبی استاندارد اندروید (<strong dir="ltr">.APK</strong>) ویژه گوشی‌های اندرویدی. این فایل اپلیکیشن بومی کامل میتی همراه با پایگاه داده داخلی، ابزارهای هوش مصنوعی و بیومتریک است.
-            </p>
-
-            <div style={{ display: 'grid', gap: 12 }}>
-              <a
-                href="https://github.com/mhdyhn/me/releases/download/v1.0.0-app/meety.apk"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button button--primary button--full"
-                style={{ textAlign: 'center', justifyContent: 'center', padding: '12px 16px', fontSize: 14 }}
-              >
-                <Download size={18} /> دانلود مستقیم فایل نصبی اندروید (meety.apk)
-              </a>
-
-              <a
-                href="https://github.com/mhdyhn/me/actions/workflows/android-apk.yml"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button button--secondary button--full"
-                style={{ textAlign: 'center', justifyContent: 'center', fontSize: 13 }}
-              >
-                <ExternalLink size={15} /> مشاهده بیلدها و آرشیو APK در گیت‌هاب اکشنز
-              </a>
-
-              <a
-                href="https://github.com/mhdyhn/me/releases/tag/v1.0.0-app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button button--ghost button--full"
-                style={{ textAlign: 'center', justifyContent: 'center', fontSize: 12 }}
-              >
-                <ExternalLink size={14} /> صفحهٔ دانلود در انتشار رسمی گیت‌هاب (GitHub Releases)
-              </a>
-
-              <div style={{ background: 'var(--panel-soft)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
-                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-strong)', marginBottom: 4 }}>
-                  <ShieldAlert size={14} /> راهنمای نصب فایل نصبی در اندروید:
-                </strong>
-                <ol style={{ paddingRight: 18, margin: 0 }}>
-                  <li>پس از دانلود فایل <code dir="ltr">meety.apk</code> روی گوشی، آن را از پوشه Downloads باز کنید.</li>
-                  <li>در صورت نمایش پیام امنیتی، گزینهٔ <strong>«اجازه نصب از این منبع» (Install unknown apps)</strong> را فعال کنید.</li>
-                  <li>روی <strong>«نصب» (Install)</strong> بزنید تا آیکون میتی مستقیماً به فهرست برنامه‌های گوشی شما اضافه شود.</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 2: PWA (BROWSER DIRECT INSTALL) ================= */}
+        {/* ================= TAB 1: PWA (DIRECT INSTALL - NO EXTERNAL SITES) ================= */}
         {activeTab === 'pwa' && (
           <div className="install-tab-pane">
             {isInstalled ? (
               <div className="banner-success" style={{ padding: 14, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(217, 246, 111, 0.1)', color: 'var(--accent)', border: '1px solid rgba(217, 246, 111, 0.2)' }}>
                 <Check size={20} />
-                <span>اپلیکیشن روی این دستگاه با موفقیت نصب شده و در حالت تمام‌صفحه در دسترس است!</span>
+                <span>اپلیکیشن روی این دستگاه با موفقیت نصب شده و در صفحهٔ برنامه‌های گوشی قرار دارد!</span>
               </div>
             ) : deferredPrompt ? (
               <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                <p style={{ fontSize: 14, marginBottom: 16 }}>
-                  بدون نیاز به دانلود فایل APK، می‌توانید برنامه را با یک کلیک مستقیماً روی صفحه گوشی نصب کنید:
+                <p style={{ fontSize: 14, marginBottom: 16, lineHeight: 1.6 }}>
+                  با لمس دکمهٔ زیر، اپلیکیشن میتی مستقیماً و بدون نیاز به دانلود هیچ فایلی روی گوشی شما نصب می‌شود:
                 </p>
-                <button type="button" className="button button--primary button--full" onClick={() => void handleInstallClick()} style={{ fontSize: 15, padding: '12px 20px' }}>
-                  <Smartphone size={18} /> نصب مستقیم برنامه روی گوشی (PWA)
+                <button type="button" className="button button--primary button--large button--full" onClick={() => void handleInstallClick()} style={{ fontSize: 15, padding: '14px 20px', justifyContent: 'center' }}>
+                  <Smartphone size={19} /> نصب مستقیم و فوری اپلیکیشن
                 </button>
               </div>
             ) : (
               <div>
-                <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>
-                  برای نصب بدون دانلود فایل در مرورگر کروم یا سامسونگ اینترنت گوشی:
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <button type="button" className="button button--primary button--large button--full" onClick={() => void handleInstallClick()} style={{ fontSize: 15, padding: '14px 20px', justifyContent: 'center' }}>
+                    <Smartphone size={19} /> نصب مستقیم اپلیکیشن روی گوشی
+                  </button>
+                </div>
+                <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 10, color: 'var(--muted)' }}>
+                  اگر دکمه بالا منوی نصب را باز نکرد، در مرورگر کروم یا سامسونگ اینترنت گوشی:
                 </p>
                 <ol style={{ paddingRight: 20, margin: 0, display: 'grid', gap: 8, fontSize: 12, lineHeight: 1.6 }}>
-                  <li>روی <strong>منوی ۳ نقطه</strong> در گوشه بالا یا پایین مرورگر ضربه بزنید.</li>
+                  <li>روی <strong>منوی ۳ نقطه</strong> مرورگر گوشی ضربه بزنید.</li>
                   <li>گزینهٔ <strong>«نصب برنامه» (Install App)</strong> یا <strong>«افزودن به صفحه اصلی» (Add to Home screen)</strong> را انتخاب کنید.</li>
-                  <li>در پنجره باز شده روی <strong>نصب (Install)</strong> بزنید.</li>
+                  <li>با زدن <strong>نصب (Install)</strong>، آیکون میتی به جمع برنامه‌های گوشی افزوده می‌شود.</li>
                 </ol>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= TAB 2: DIRECT APK DOWNLOAD (SAME ORIGIN - NO GITHUB PAGE) ================= */}
+        {activeTab === 'apk' && (
+          <div className="install-tab-pane">
+            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
+              دانلود مستقیم فایل بستهٔ نصبی اندروید (<strong dir="ltr">meety.apk</strong>) با سرور اختصاصی، بدون باز شدن صفحات خارجی:
+            </p>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              <a
+                href="/meety.apk"
+                download="meety.apk"
+                className="button button--primary button--full"
+                style={{ textAlign: 'center', justifyContent: 'center', padding: '12px 16px', fontSize: 14 }}
+              >
+                <Download size={18} /> دریافت مستقیم فایل meety.apk
+              </a>
+
+              <div style={{ background: 'var(--panel-soft)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-strong)', marginBottom: 4 }}>
+                  <ShieldAlert size={14} /> راهنمای نصب پس از دانلود:
+                </strong>
+                <ol style={{ paddingRight: 18, margin: 0 }}>
+                  <li>پس از اتمام دانلود فایل، آن را از نوار اعلان‌ها یا پوشهٔ دانلودها (Downloads) باز کنید.</li>
+                  <li>در صورت درخواست مجوز، گزینهٔ <strong>«اجازه نصب از این منبع» (Install unknown apps)</strong> را فعال کنید.</li>
+                  <li>روی <strong>«نصب» (Install)</strong> بزنید.</li>
+                </ol>
+              </div>
+            </div>
           </div>
         )}
 
@@ -177,17 +161,17 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         {activeTab === 'ios' && (
           <div className="install-tab-pane">
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-              در گوشی‌های آیفون و مرورگر <strong>Safari</strong>، مراحل زیر را طی کنید تا برنامه مانند یک اپلیکیشن بومی در صفحه‌اصلی قرار گیرد:
+              در گوشی‌های آیفون و مرورگر <strong>Safari</strong>، برای نصب مستقل برنامه در صفحهٔ اصلی:
             </p>
             <ol style={{ paddingRight: 20, margin: 0, display: 'grid', gap: 10, fontSize: 13, lineHeight: 1.6 }}>
               <li>
-                در نوار پایین مرورگر Safari، روی دکمهٔ <strong>اشتراک‌گذاری (Share)</strong> <ExternalLink size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> ضربه بزنید.
+                در نوار پایین مرورگر Safari، دکمهٔ <strong>اشتراک‌گذاری (Share ⎋)</strong> را لمس کنید.
               </li>
               <li>
-                در منوی باز شده به پایین اسکرول کرده و گزینهٔ <strong>«Add to Home Screen» (افزودن به صفحهٔ اصلی)</strong> را انتخاب کنید.
+                در منوی باز شده گزینهٔ <strong>«Add to Home Screen» (افزودن به صفحهٔ اصلی ⊞)</strong> را انتخاب کنید.
               </li>
               <li>
-                در گوشهٔ بالا روی دکمهٔ <strong>«Add»</strong> بزنید. آیکون برنامه <strong>میتی</strong> در کنار سایر برنامه‌ها قرار می‌گیرد.
+                در بالا سمت راست روی <strong>«Add»</strong> بزنید. اپلیکیشن میتی بدون نوار آدرس روی صفحه گوشی نصب می‌شود.
               </li>
             </ol>
           </div>
