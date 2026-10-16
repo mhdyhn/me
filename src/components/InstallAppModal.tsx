@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Smartphone, X, Check, Apple, ExternalLink, HelpCircle, FileBox, ShieldAlert } from 'lucide-react';
+import { Download, Smartphone, X, Check, Apple, ExternalLink, FileBox, ShieldAlert } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,7 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [activeTab, setActiveTab] = useState<'apk' | 'pwa' | 'ios' | 'offline'>('apk');
+  const [activeTab, setActiveTab] = useState<'apk' | 'pwa' | 'ios'>('apk');
 
   useEffect(() => {
     // Check if already installed in standalone mode safely
@@ -86,13 +86,6 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
             onClick={() => setActiveTab('ios')}
           >
             <Apple size={14} /> راهنمای آیفون (iOS)
-          </button>
-          <button
-            type="button"
-            className={`button button--small ${activeTab === 'offline' ? 'button--primary' : 'button--ghost'}`}
-            onClick={() => setActiveTab('offline')}
-          >
-            <Download size={14} /> فایل تک‌صفحه‌ای
           </button>
         </div>
 
@@ -197,28 +190,6 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
                 در گوشهٔ بالا روی دکمهٔ <strong>«Add»</strong> بزنید. آیکون برنامه <strong>میتی</strong> در کنار سایر برنامه‌ها قرار می‌گیرد.
               </li>
             </ol>
-          </div>
-        )}
-
-        {/* ================= TAB 4: OFFLINE SINGLE FILE ================= */}
-        {activeTab === 'offline' && (
-          <div className="install-tab-pane">
-            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-              نسخهٔ آفلاین تک‌فایلی (<code dir="ltr">meety-offline.html</code>) برای اجرای مستقل در کامپیوتر یا تبلت بدون نیاز به سرور و اینترنت:
-            </p>
-            <div style={{ display: 'grid', gap: 10 }}>
-              <a
-                href="/meety-offline.html"
-                download="meety-offline.html"
-                className="button button--secondary button--full"
-                style={{ textAlign: 'center', justifyContent: 'center' }}
-              >
-                <Download size={16} /> دانلود فایل تک‌صفحه‌ای آفلاین (۱.۱ مگابایت)
-              </a>
-              <p className="muted" style={{ fontSize: 11, margin: 0, lineHeight: 1.5 }}>
-                <HelpCircle size={13} style={{ display: 'inline', verticalAlign: 'middle' }} /> این فایل را در هر مرورگری در کامپیوتر یا گوشی باز کنید، کل داده‌ها در حافظه داخلی ذخیره می‌شود.
-              </p>
-            </div>
           </div>
         )}
 

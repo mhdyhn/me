@@ -76,6 +76,7 @@ function CoachTransactionsView() {
         </p>
         <form onSubmit={(e) => void onSaveIban(e)} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
           <input
+            aria-label="شماره شبای بانکی"
             value={iban}
             onChange={(e) => setIban(e.target.value)}
             placeholder="IR..."

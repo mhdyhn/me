@@ -425,6 +425,7 @@ function ChatThread({
         ref={photoInputRef}
         type="file"
         accept="image/*"
+        aria-label="انتخاب عکس برای ارسال"
         style={{ display: 'none' }}
         onChange={(e) => void onPhotoSelected(e)}
       />
@@ -432,6 +433,7 @@ function ChatThread({
         ref={videoInputRef}
         type="file"
         accept="video/*"
+        aria-label="انتخاب ویدیو برای ارسال"
         style={{ display: 'none' }}
         onChange={(e) => void onVideoSelected(e)}
       />
