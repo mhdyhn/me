@@ -6,12 +6,38 @@ import { useSession } from '../../context/SessionContext';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { homeFor } from './AccountShell';
 
+export const SAVED_CREDENTIALS_KEY = 'meety.saved-credentials';
+
+export interface SavedCredentials {
+  username: string;
+  password?: string;
+  remember: boolean;
+}
+
+export function getSavedCredentials(): SavedCredentials | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(SAVED_CREDENTIALS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.username === 'string') {
+      return parsed as SavedCredentials;
+    }
+  } catch {
+    // Ignore storage parse errors
+  }
+  return null;
+}
+
 /** Standalone sign-in screen. Nothing else in the app is reachable until this succeeds. */
 export function Login() {
   const { status, user, signIn } = useSession();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+
+  const [savedCreds, setSavedCreds] = useState<SavedCredentials | null>(() => getSavedCredentials());
+  const [username, setUsername] = useState(() => savedCreds?.username ?? '');
+  const [password, setPassword] = useState(() => savedCreds?.password ?? '');
+  const [rememberMe, setRememberMe] = useState(() => savedCreds?.remember ?? true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,14 +51,45 @@ export function Login() {
     event.preventDefault();
     setError(null);
     setBusy(true);
+    const cleanUsername = username.trim();
     try {
-      const signedIn = await signIn(username.trim(), password);
+      const signedIn = await signIn(cleanUsername, password);
+
+      // Save or clear credentials for all roles (student, coach, admin)
+      try {
+        if (rememberMe) {
+          const payload: SavedCredentials = {
+            username: cleanUsername,
+            password,
+            remember: true,
+          };
+          window.localStorage.setItem(SAVED_CREDENTIALS_KEY, JSON.stringify(payload));
+          setSavedCreds(payload);
+        } else {
+          window.localStorage.removeItem(SAVED_CREDENTIALS_KEY);
+          setSavedCreds(null);
+        }
+      } catch {
+        // Ignore localStorage quota errors
+      }
+
       navigate(signedIn.mustChangePassword ? '/account/change-password' : homeFor(signedIn.role), { replace: true });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'ورود انجام نشد. دوباره تلاش کنید.');
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleClearSaved() {
+    setUsername('');
+    setPassword('');
+    try {
+      window.localStorage.removeItem(SAVED_CREDENTIALS_KEY);
+    } catch {
+      // Ignore
+    }
+    setSavedCreds(null);
   }
 
   return (
@@ -48,27 +105,93 @@ export function Login() {
         </div>
 
         <h1>خوش آمدید</h1>
-        <p className="login-sub">با نام کاربری و رمزی که مربی به شما داده وارد شوید.</p>
+        <p className="login-sub">با نام کاربری و رمزی که مربی یا مدیر باشگاه به شما داده وارد شوید.</p>
 
         <form className="login-form" onSubmit={(event) => void submit(event)}>
-          <label className="login-field">
+          <label className="login-field" htmlFor="login-username">
             <span>نام کاربری</span>
             <div className="login-input">
               <User size={18} aria-hidden="true" />
-              <input dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} required />
+              <input
+                id="login-username"
+                name="username"
+                dir="ltr"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                required
+              />
             </div>
           </label>
 
-          <label className="login-field">
+          <label className="login-field" htmlFor="login-password">
             <span>رمز عبور</span>
             <div className="login-input">
               <KeyRound size={18} aria-hidden="true" />
-              <input dir="ltr" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <button type="button" className="login-eye" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}>
+              <input
+                id="login-password"
+                name="password"
+                dir="ltr"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="login-eye"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+              >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </label>
+
+          <div
+            className="login-remember-row"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              margin: '2px 0 12px',
+              fontSize: 13,
+            }}
+          >
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                cursor: 'pointer',
+                userSelect: 'none',
+                color: 'var(--text-soft, #cfd8d3)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+              />
+              <span>ذخیره نام کاربری و رمز عبور</span>
+            </label>
+
+            {savedCreds && (
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                style={{ fontSize: 11, padding: '2px 8px', height: 'auto', color: 'var(--muted)' }}
+                onClick={handleClearSaved}
+                title="پاک کردن اطلاعات ذخیره‌شده"
+              >
+                حذف ذخیره
+              </button>
+            )}
+          </div>
 
           {error && <p className="login-error" role="alert">{error}</p>}
 
@@ -77,7 +200,7 @@ export function Login() {
           </button>
         </form>
 
-        <p className="login-help">رمز را فراموش کرده‌اید؟ از مربی بخواهید رمز تازه بسازد.</p>
+        <p className="login-help">رمز را فراموش کرده‌اید؟ از مربی یا مدیر باشگاه بخواهید رمز تازه بسازد.</p>
 
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line-soft)', textAlign: 'center' }}>
           <button

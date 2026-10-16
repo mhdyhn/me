@@ -1,6 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowRight, ArrowUp, Image as ImageIcon, MessageCircle, Mic, Video as VideoIcon, X } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUp,
+  CheckCheck,
+  Download,
+  Image as ImageIcon,
+  Maximize2,
+  MessageCircle,
+  Mic,
+  Video as VideoIcon,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { ApiError, api } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { RequireRole } from './AccountShell';
@@ -24,11 +37,18 @@ interface ChatResponse {
   messages: ChatMessage[];
 }
 
+interface ActivePhoto {
+  src: string;
+  caption?: string;
+  sender?: string;
+  time?: string;
+}
+
 /** A student's thread with their coach. */
 export function StudentChat() {
   return (
     <RequireRole roles={['student']}>
-      <ChatThread path="/me/chat" backTo="/" defaultRoleTitle="مربی" />
+      <ChatThread path="/me/chat" backTo="/" defaultRoleTitle="مربی تمرین" />
     </RequireRole>
   );
 }
@@ -120,9 +140,106 @@ function compressImage(file: File): Promise<string> {
   });
 }
 
+/** Full-screen photo lightbox viewer like Telegram */
+export function ChatPhotoLightbox({
+  photo,
+  onClose,
+}: {
+  photo: ActivePhoto;
+  onClose: () => void;
+}) {
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    function onKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  function handleDownload() {
+    const a = document.createElement('a');
+    a.href = photo.src;
+    a.download = `meety-photo-${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  return (
+    <div
+      className="chat-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="نمایش تصویر در اندازه بزرگ"
+      onClick={onClose}
+    >
+      <header className="chat-lightbox__header" onClick={(e) => e.stopPropagation()}>
+        <div className="chat-lightbox__info">
+          {photo.sender && <strong>{photo.sender}</strong>}
+          {photo.time && <span>{photo.time}</span>}
+        </div>
+        <div className="chat-lightbox__tools">
+          <button
+            type="button"
+            className="chat-lightbox__btn"
+            onClick={() => setZoomed((z) => !z)}
+            title={zoomed ? 'اندازه معمولی' : 'بزرگ‌نمایی'}
+            aria-label={zoomed ? 'اندازه معمولی' : 'بزرگ‌نمایی'}
+          >
+            {zoomed ? <ZoomOut size={19} /> : <ZoomIn size={19} />}
+          </button>
+          <button
+            type="button"
+            className="chat-lightbox__btn"
+            onClick={handleDownload}
+            title="دانلود تصویر"
+            aria-label="دانلود تصویر"
+          >
+            <Download size={19} />
+          </button>
+          <button
+            type="button"
+            className="chat-lightbox__btn chat-lightbox__btn--close"
+            onClick={onClose}
+            title="بستن"
+            aria-label="بستن"
+          >
+            <X size={21} />
+          </button>
+        </div>
+      </header>
+
+      <div
+        className={`chat-lightbox__stage${zoomed ? ' is-zoomed' : ''}`}
+        onClick={onClose}
+      >
+        <img
+          src={photo.src}
+          alt={photo.caption || 'تصویر پیام'}
+          className="chat-lightbox__img"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomed((z) => !z);
+          }}
+          title="برای بزرگ‌نمایی یا کوچک‌کردن کلیک کنید"
+        />
+      </div>
+
+      {photo.caption && (
+        <div className="chat-lightbox__caption" onClick={(e) => e.stopPropagation()}>
+          <p>{photo.caption}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * The conversation screen. The thread fills the screen height, the newest message stays in view,
- * and the composer sits at the bottom. Supports text, voice notes, photos, and short videos.
+ * and the composer sits at the bottom. Supports text, voice notes, photos with full-screen lightbox,
+ * and short videos. Styled like Telegram for all 3 user roles.
  */
 function ChatThread({
   path,
@@ -140,6 +257,9 @@ function ChatThread({
   const [sendError, setSendError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Active full-screen photo lightbox
+  const [activePhoto, setActivePhoto] = useState<ActivePhoto | null>(null);
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -151,6 +271,7 @@ function ChatThread({
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   const logRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const stickToBottom = useRef(true);
 
   async function load() {
@@ -201,6 +322,9 @@ function ChatThread({
     try {
       await api<{ message: ChatMessage }>('POST', path, payload);
       setDraft('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
       await load();
     } catch (caught) {
       setSendError(caught instanceof ApiError ? caught.message : 'پیام ارسال نشد. دوباره تلاش کنید.');
@@ -228,6 +352,14 @@ function ChatThread({
     }
   }
 
+  function onTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setDraft(e.target.value);
+    // Auto-adjust height up to 128px like Telegram
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }
+
   async function startRecording() {
     if (busy) return;
     setSendError(null);
@@ -237,55 +369,75 @@ function ChatThread({
       if (typeof MediaRecorder.isTypeSupported === 'function') {
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
           mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
         } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
           mimeType = 'audio/mp4';
         }
       }
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const options = mimeType ? { mimeType } : undefined;
+      const recorder = new MediaRecorder(stream, options);
       audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
-      recorder.start(250);
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
       mediaRecorderRef.current = recorder;
-      setIsRecording(true);
+      recorder.start(250);
       setRecordSeconds(0);
+      setIsRecording(true);
     } catch {
-      setSendError('دسترسی به میکروفون داده نشد یا میکروفون در دسترس نیست.');
+      setSendError('دسترسی به میکروفون داده نشد یا مرورگر از ضبط صدا پشتیبانی نمی‌کند.');
     }
   }
 
   async function stopAndSendRecording() {
     const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === 'inactive') return;
-    setIsRecording(false);
+    if (!recorder || recorder.state === 'inactive') {
+      setIsRecording(false);
+      return;
+    }
+
     setBusy(true);
+    setSendError(null);
 
-    recorder.onstop = () => {
+    const actualMime = recorder.mimeType || 'audio/webm';
+    recorder.onstop = async () => {
       try {
-        recorder.stream?.getTracks().forEach((track) => track.stop());
-      } catch {}
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
+        if (audioBlob.size < 100) {
+          setSendError('صدایی ضبط نشد.');
+          setBusy(false);
+          setIsRecording(false);
+          return;
+        }
 
-      const blobType = recorder.mimeType || 'audio/webm';
-      const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
-      audioChunksRef.current = [];
-
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const dataUrl = reader.result as string;
-        await sendPayload({
-          body: 'پیام صوتی',
-          mediaType: 'voice',
-          mediaData: dataUrl,
-        });
-      };
-      reader.onerror = () => {
-        setSendError('خطا در خواندن فایل صوتی.');
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          await sendPayload({
+            body: 'پیام صوتی',
+            mediaType: 'voice',
+            mediaData: dataUrl,
+          });
+          setIsRecording(false);
+        };
+        reader.onerror = () => {
+          setSendError('خطا در تبدیل فایل صوتی.');
+          setBusy(false);
+          setIsRecording(false);
+        };
+        reader.readAsDataURL(audioBlob);
+      } catch {
+        setSendError('خطا در ارسال ویس.');
         setBusy(false);
-      };
-      reader.readAsDataURL(audioBlob);
+        setIsRecording(false);
+      }
     };
 
     recorder.stop();
@@ -294,9 +446,6 @@ function ChatThread({
   function cancelRecording() {
     const recorder = mediaRecorderRef.current;
     if (recorder) {
-      try {
-        recorder.stream?.getTracks().forEach((track) => track.stop());
-      } catch {}
       audioChunksRef.current = [];
       if (recorder.state !== 'inactive') {
         recorder.stop();
@@ -368,7 +517,7 @@ function ChatThread({
         <span className="chat-avatar" aria-hidden="true">
           {partner ? partner.trim().charAt(0) : <MessageCircle size={18} />}
         </span>
-        <div>
+        <div className="chat-header__text">
           <strong>{partner ?? 'گفتگو'}</strong>
           <span>{roleTitle}</span>
         </div>
@@ -379,9 +528,9 @@ function ChatThread({
         {data === null && !loadError && <p className="chat-notice">در حال بارگذاری…</p>}
         {data && messages.length === 0 && (
           <div className="chat-empty">
-            <MessageCircle size={28} />
-            <p>هنوز پیامی نیست.</p>
-            <span>اولین پیام، تصویر یا ویس را ارسال کنید.</span>
+            <MessageCircle size={32} />
+            <p>هنوز پیامی رد و بدل نشده است.</p>
+            <span>اولین پیام متنی، عکس یا پیام صوتی خود را ارسال کنید.</span>
           </div>
         )}
         {messages.map((message, index) => {
@@ -393,24 +542,63 @@ function ChatThread({
 
           return (
             <div key={message.id}>
-              {newDay && <div className="chat-day"><span>{dayLabel(message.createdAt)}</span></div>}
+              {newDay && (
+                <div className="chat-day">
+                  <span>{dayLabel(message.createdAt)}</span>
+                </div>
+              )}
               <div className={`chat-row${mine ? ' chat-row--mine' : ''}`}>
-                <div className="chat-bubble">
+                <div className={`chat-bubble${message.mediaType === 'image' ? ' chat-bubble--has-image' : ''}`}>
+                  {/* Photo with full-screen lightbox trigger */}
                   {message.mediaType === 'image' && message.mediaData && (
-                    <a href={message.mediaData} target="_blank" rel="noopener noreferrer" title="مشاهده در اندازه کامل">
+                    <button
+                      type="button"
+                      className="chat-media-img-wrapper"
+                      onClick={() =>
+                        setActivePhoto({
+                          src: message.mediaData!,
+                          caption: !isGenericCaption ? message.body : undefined,
+                          time: timeLabel(message.createdAt),
+                          sender: mine ? 'شما' : partner ?? 'هم‌صحبت',
+                        })
+                      }
+                      title="مشاهده تصویر در اندازه تمام‌صفحه"
+                      aria-label="مشاهده تصویر در اندازه تمام‌صفحه"
+                    >
                       <img src={message.mediaData} alt="تصویر ارسالی" className="chat-media-img" loading="lazy" />
-                    </a>
+                      <span className="chat-media-img-overlay">
+                        <Maximize2 size={18} />
+                        <span>تمام‌صفحه</span>
+                      </span>
+                    </button>
                   )}
+
+                  {/* Voice note */}
                   {message.mediaType === 'voice' && message.mediaData && (
-                    <audio controls src={message.mediaData} className="chat-media-audio" preload="metadata" />
+                    <div className="chat-voice-wrap">
+                      <audio controls src={message.mediaData} className="chat-media-audio" preload="metadata" />
+                    </div>
                   )}
+
+                  {/* Video */}
                   {message.mediaType === 'video' && message.mediaData && (
                     <video controls src={message.mediaData} playsInline className="chat-media-video" preload="metadata" />
                   )}
+
+                  {/* Text caption or body */}
                   {(!hasMedia || !isGenericCaption) && message.body && (
-                    <p>{message.body}</p>
+                    <p className="chat-body-text">{message.body}</p>
                   )}
-                  <time dateTime={message.createdAt}>{timeLabel(message.createdAt)}</time>
+
+                  {/* Telegram-style metadata: time and delivery ticks */}
+                  <div className="chat-meta">
+                    <time dateTime={message.createdAt}>{timeLabel(message.createdAt)}</time>
+                    {mine && (
+                      <span className="chat-tick" title="ارسال شد">
+                        <CheckCheck size={14} className="chat-tick-icon" />
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -500,8 +688,9 @@ function ChatThread({
             </button>
           </div>
           <textarea
+            ref={textareaRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={onTextareaChange}
             onKeyDown={onKeyDown}
             maxLength={MESSAGE_MAX}
             rows={1}
@@ -517,6 +706,14 @@ function ChatThread({
             <ArrowUp size={20} strokeWidth={2.4} />
           </button>
         </form>
+      )}
+
+      {/* Telegram-style full-screen image lightbox */}
+      {activePhoto && (
+        <ChatPhotoLightbox
+          photo={activePhoto}
+          onClose={() => setActivePhoto(null)}
+        />
       )}
     </section>
   );

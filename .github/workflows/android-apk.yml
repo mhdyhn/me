@@ -56,17 +56,33 @@ jobs:
           fi
           ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" || true
 
-      - name: Build the debug APK
+      - name: Prepare release signing keystore
+        working-directory: android/app
+        run: |
+          if [ ! -f meety-release.keystore ]; then
+            echo "Generating release signing keystore..."
+            keytool -genkeypair -v \
+              -keystore meety-release.keystore \
+              -alias meety \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass meety123456 \
+              -keypass meety123456 \
+              -dname "CN=Meety App, OU=Engineering, O=Meety, L=Tehran, ST=Tehran, C=IR"
+          fi
+
+      - name: Build the signed release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload the APK as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: meety-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: meety-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -75,11 +91,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/meety.apk
+          APK_FILE="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK_FILE" ]; then
+            APK_FILE="android/app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          cp "$APK_FILE" /tmp/meety.apk
           gh release upload v1.0.0-app /tmp/meety.apk --clobber || \
           gh release create v1.0.0-app /tmp/meety.apk \
             --title "اپلیکیشن اندروید میتی (APK)" \
-            --notes "دانلود مستقیم فایل نصبی اندروید میتی (APK) نسخه ۱.۰" \
+            --notes "دانلود مستقیم فایل نصبی رسمی اندروید میتی (APK) نسخه ۱.۰" \
             --target main \
             --clobber || true
 
@@ -88,14 +108,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          APK_FILE="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK_FILE" ]; then
+            APK_FILE="android/app/build/outputs/apk/debug/app-debug.apk"
+          fi
           mkdir -p public
-          cp android/app/build/outputs/apk/debug/app-debug.apk public/meety.apk
+          cp "$APK_FILE" public/meety.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f public/meety.apk
           if git diff --staged --quiet; then
             echo "No change in APK binary"
           else
-            git commit -m "chore: embed latest Android APK binary [skip ci]"
+            git commit -m "chore: embed latest Android release APK binary [skip ci]"
             git push origin HEAD:main
           fi
