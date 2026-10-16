@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { KeyRound, MessageCircle, Receipt, Sparkles, Trash2, UserPlus, Users } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
@@ -77,7 +77,7 @@ function AdminCoaches() {
     }
   }
 
-  const totalStudents = coaches?.reduce((sum, c) => sum + (c.studentCount || 0), 0) ?? 0;
+  const totalStudents = useMemo(() => coaches?.reduce((sum, c) => sum + (c.studentCount || 0), 0) ?? 0, [coaches]);
 
   return (
     <PanelPage title="مدیریت مربی‌ها و باشگاه">
