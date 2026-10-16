@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Download, Flame, HeartPulse, Plus, Smartphone, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
-import { InstallAppModal } from '../components/InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
@@ -17,7 +16,6 @@ export function Dashboard() {
   const navigate = useNavigate();
   const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
-  const [showInstallModal, setShowInstallModal] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -70,34 +68,7 @@ export function Dashboard() {
           <h2>{greeting}<span className="accent-dot">.</span></h2>
           <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            type="button"
-            className="button button--secondary button--small"
-            onClick={() => setShowInstallModal(true)}
-          >
-            <Smartphone size={15} /> نصب اپلیکیشن
-          </button>
-          <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
-        </div>
-      </section>
-
-      {/* Mobile-first Install Callout Banner */}
-      <section className="app-install-banner">
-        <div className="install-banner-content">
-          <span className="brand-mark install-banner-icon"><Smartphone size={20} /></span>
-          <div>
-            <strong>نصب و دانلود اپلیکیشن میتی</strong>
-            <p>دانلود مستقیم فایل نصبی اندروید (APK)، وب‌اپ PWA و راهنمای آیفون</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="button button--primary button--small"
-          onClick={() => setShowInstallModal(true)}
-        >
-          <Download size={15} /> دریافت و نصب
-        </button>
+        <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
       </section>
 
       {activeSession && (
@@ -299,8 +270,6 @@ export function Dashboard() {
       </section>
 
       {program.length === 0 && <p className="muted">هنوز برنامهٔ تمرینی‌ای در دسترس نیست.</p>}
-
-      <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 }

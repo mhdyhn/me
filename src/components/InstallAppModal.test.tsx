@@ -4,31 +4,37 @@ import userEvent from '@testing-library/user-event';
 import { InstallAppModal } from './InstallAppModal';
 
 describe('InstallAppModal', () => {
-  it('renders modal with APK download tab by default', () => {
+  it('renders modal with direct PWA install by default and no external GitHub links', async () => {
+    const user = userEvent.setup();
     const handleClose = vi.fn();
     render(<InstallAppModal isOpen={true} onClose={handleClose} />);
 
-    expect(screen.getByText('نصب و دانلود اپلیکیشن میتی')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /فایل نصبی اندروید \(APK\)/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /وب‌اپ \(PWA\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'نصب مستقیم اپلیکیشن روی گوشی' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /نصب مستقیم/ }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /راهنمای آیفون \(iOS\)/ })).toBeInTheDocument();
-    expect(screen.queryByText(/فایل تک‌صفحه‌ای/)).not.toBeInTheDocument();
 
-    const apkLink = screen.getByRole('link', { name: /دانلود مستقیم فایل نصبی اندروید \(meety\.apk\)/ });
+    // Verify no GitHub links exist in the modal
+    const allLinks = screen.queryAllByRole('link');
+    for (const link of allLinks) {
+      expect(link.getAttribute('href')).not.toContain('github.com');
+    }
+
+    // Switch to APK tab
+    await user.click(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ }));
+    const apkLink = screen.getByRole('link', { name: /دریافت مستقیم فایل meety\.apk/ });
     expect(apkLink).toBeInTheDocument();
-    expect(apkLink).toHaveAttribute('href', expect.stringContaining('meety.apk'));
+    expect(apkLink).toHaveAttribute('href', '/meety.apk');
+    expect(apkLink).toHaveAttribute('download', 'meety.apk');
   });
 
-  it('switches to PWA and iOS tabs properly', async () => {
+  it('switches to iOS tab properly', async () => {
     const user = userEvent.setup();
     render(<InstallAppModal isOpen={true} onClose={() => {}} />);
 
     await user.click(screen.getByRole('button', { name: /راهنمای آیفون \(iOS\)/ }));
     expect(screen.getAllByText(/Safari/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Add to Home Screen/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /وب‌اپ \(PWA\)/ }));
-    expect(screen.getByText(/نصب برنامه/)).toBeInTheDocument();
   });
 
   it('calls onClose when close button is clicked', async () => {
