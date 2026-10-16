@@ -24,6 +24,7 @@ interface GymContextValue {
   saveNutritionDay: (day: Omit<NutritionDay, 'id'>) => Promise<void>;
   deleteNutritionDay: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  completeActiveSession: (id: string) => Promise<void>;
 }
 
 const GymContext = createContext<GymContextValue | null>(null);
@@ -140,6 +141,18 @@ export function GymProvider({ children }: { children: ReactNode }) {
     await persist(() => db.sessions.delete(id));
   }, [persist]);
 
+  const completeActiveSession = useCallback(async (id: string) => {
+    const target = sessions.find((session) => session.id === id);
+    if (!target) return;
+    const completed: WorkoutSession = {
+      ...target,
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      restTimer: undefined,
+    };
+    await saveSession(completed);
+  }, [sessions, saveSession]);
+
   const saveNutritionDay = useCallback(async (day: Omit<NutritionDay, 'id'>) => {
     const fullDay: NutritionDay = { ...day, id: day.date || dateInputValue() };
     setNutritionDays((current) => [fullDay, ...current.filter((item) => item.id !== fullDay.id)].sort((a, b) => b.date.localeCompare(a.date)));
@@ -154,10 +167,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const activeSession = sessions.find((session) => session.status === 'active') ?? null;
   const value = useMemo<GymContextValue>(() => ({
     sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
-    saveSession, deleteSession, startWorkout, saveProfile, saveNutritionGoals: saveGoals,
+    saveSession, deleteSession, completeActiveSession, startWorkout, saveProfile, saveNutritionGoals: saveGoals,
     addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay,
   }), [sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
-      saveSession, deleteSession, startWorkout, saveProfile, saveGoals,
+      saveSession, deleteSession, completeActiveSession, startWorkout, saveProfile, saveGoals,
       addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay]);
 
   return <GymContext.Provider value={value}>{children}</GymContext.Provider>;

@@ -102,4 +102,58 @@ describe('workout flow', () => {
     expect(screen.getByText('۱۰۰')).toBeInTheDocument();
     expect(screen.getByLabelText('نکته‌ای هست که بخواهی یادت بماند؟')).toBeInTheDocument();
   });
+
+  it('resolves conflict by completing previous active session and starting new workout day', async () => {
+    const user = userEvent.setup();
+    const activeSession: WorkoutSession = {
+      id: 'active-day-1',
+      templateId: 'day-1',
+      name: 'روز ۱: سینه و جلو بازو',
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+      status: 'active',
+      notes: '',
+      currentExerciseIndex: 0,
+      currentSetIndex: 0,
+      exercises: [{ exerciseId: 'bench-press', sets: [] }],
+    };
+    await db.sessions.put(activeSession);
+
+    renderWorkout('/workout/day-2');
+
+    expect(await screen.findByText('جلسهٔ دیگری در حال انجام است')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /اتمام و ثبت جلسهٔ قبلی و شروع این روز/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /اتمام و ثبت جلسهٔ قبلی و شروع این روز/ }));
+
+    // Verify previous session is marked completed in db
+    const prevInDb = await db.sessions.get('active-day-1');
+    expect(prevInDb?.status).toBe('completed');
+  });
+
+  it('resolves conflict by discarding previous active session and starting new workout day', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const activeSession: WorkoutSession = {
+      id: 'active-to-cancel',
+      templateId: 'day-1',
+      name: 'روز ۱: سینه و جلو بازو',
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+      status: 'active',
+      notes: '',
+      currentExerciseIndex: 0,
+      currentSetIndex: 0,
+      exercises: [{ exerciseId: 'bench-press', sets: [] }],
+    };
+    await db.sessions.put(activeSession);
+
+    renderWorkout('/workout/day-2');
+
+    expect(await screen.findByText('جلسهٔ دیگری در حال انجام است')).toBeInTheDocument();
+    const cancelBtn = screen.getByRole('button', { name: /لغو جلسهٔ قبلی و شروع این روز/ });
+    await user.click(cancelBtn);
+
+    const prevInDb = await db.sessions.get('active-to-cancel');
+    expect(prevInDb).toBeUndefined();
+  });
 });
