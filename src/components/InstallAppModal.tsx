@@ -130,7 +130,7 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         {activeTab === 'apk' && (
           <div className="install-tab-pane">
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-              دانلود مستقیم فایل بستهٔ نصبی اندروید (<strong dir="ltr">meety.apk</strong>) با سرور اختصاصی، بدون باز شدن صفحات خارجی:
+              دانلود مستقیم فایل بستهٔ نصبی اندروید (<strong dir="ltr">meety.apk</strong>) نسخهٔ رسمی با سرور اختصاصی و مستقیم:
             </p>
 
             <div style={{ display: 'grid', gap: 12 }}>
@@ -143,15 +143,29 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
                 <Download size={18} /> دریافت مستقیم فایل meety.apk
               </a>
 
-              <div style={{ background: 'var(--panel-soft)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
-                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-strong)', marginBottom: 4 }}>
-                  <ShieldAlert size={14} /> راهنمای نصب پس از دانلود:
+              {/* Security Warning & Play Protect Guide */}
+              <div style={{ background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.28)', padding: 14, borderRadius: 12, fontSize: 12.5, lineHeight: 1.75 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#facc15', marginBottom: 6, fontSize: 13 }}>
+                  <ShieldAlert size={16} /> رفع هشدار امنیتی گوگل‌پلی (Play Protect) هنگام نصب:
                 </strong>
-                <ol style={{ paddingRight: 18, margin: 0 }}>
-                  <li>پس از اتمام دانلود فایل، آن را از نوار اعلان‌ها یا پوشهٔ دانلودها (Downloads) باز کنید.</li>
-                  <li>در صورت درخواست مجوز، گزینهٔ <strong>«اجازه نصب از این منبع» (Install unknown apps)</strong> را فعال کنید.</li>
-                  <li>روی <strong>«نصب» (Install)</strong> بزنید.</li>
+                <p style={{ margin: '0 0 8px', color: 'var(--text-soft)' }}>
+                  نمایش هشدار امنیتی در گوشی‌های اندروید هنگام نصب مستقیم فایل APK طبیعی است، زیرا برنامه مستقیماً از وب‌سایت دانلود شده و از طریق گوگل‌پلی استور نیست. این فایل کاملاً امن و فاقد هرگونه بدافزار است:
+                </p>
+                <ol style={{ paddingRight: 18, margin: 0, display: 'grid', gap: 6 }}>
+                  <li>اگر پیام <strong>«مسدود شد توسط سپر ایمنی Google Play»</strong> را دیدید، روی گزینهٔ <strong>«جزئیات بیشتر» (More details)</strong> ضربه بزنید.</li>
+                  <li>سپس گزینهٔ <strong>«به هر حال نصب شود» (Install anyway)</strong> را انتخاب کنید تا برنامه نصب شود.</li>
+                  <li>در صورت نمایش پنجره «اجازه نصب برنامه‌های ناشناخته»، روی <strong>«تنظیمات» (Settings)</strong> زده و گزینه <strong>«اجازه از این منبع» (Allow from this source)</strong> را فعال کنید.</li>
                 </ol>
+              </div>
+
+              {/* Recommendation to use 1-click PWA */}
+              <div style={{ background: 'rgba(217, 246, 111, 0.08)', border: '1px solid rgba(217, 246, 111, 0.22)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', marginBottom: 4 }}>
+                  <Smartphone size={14} /> نصب فوری بدون هیچ هشدار امنیتی:
+                </strong>
+                <p style={{ margin: 0, color: 'var(--text-soft)' }}>
+                  اگر ترجیح می‌دهید هیچ هشدار امنیتی مشاهده نکنید، از تب اول در بالا یعنی <strong>«نصب مستقیم روی گوشی (یک‌کلیک)»</strong> استفاده کنید؛ اپلیکیشن بدون دانلود فایل و بدون هیچ هشدار امنیتی روی گوشی نصب می‌شود.
+                </p>
               </div>
             </div>
           </div>
