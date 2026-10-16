@@ -11,7 +11,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -69,3 +69,14 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/meety.apk
+          gh release create v1.0.0-app /tmp/meety.apk \
+            --title "اپلیکیشن اندروید میتی (APK)" \
+            --notes "دانلود مستقیم فایل نصبی اندروید میتی (APK) نسخه ۱.۰" \
+            --clobber || \
+          gh release upload v1.0.0-app /tmp/meety.apk --clobber

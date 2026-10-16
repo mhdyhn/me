@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Dumbbell, Info, Minus, Pause, Play, Plus, Trophy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Dumbbell, Info, Minus, Pause, Play, Plus, Trash2, Trophy } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
@@ -17,7 +17,7 @@ export function Workout() {
   const { templateId = '' } = useParams();
   const template = getWorkoutTemplate(templateId);
   const navigate = useNavigate();
-  const { sessions, loading, activeSession, startWorkout, saveSession } = useGym();
+  const { sessions, loading, activeSession, startWorkout, saveSession, completeActiveSession, deleteSession } = useGym();
   useProgram();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [summary, setSummary] = useState<WorkoutSession | null>(null);
@@ -93,7 +93,43 @@ export function Workout() {
   }
 
   if (isDifferentActiveSession && activeSession) {
-    return <div className="workout-conflict panel-card"><span className="eyebrow">جلسهٔ دیگری در حال انجام است</span><h2>هر بار فقط یک جلسه را پیش ببر.</h2><p>جلسهٔ <strong>{getWorkoutTemplate(activeSession.templateId)?.name ?? activeSession.name}</strong> هنوز تمام نشده و ست‌هایت ذخیره شده‌اند. پیش از شروع روزی دیگر، همین جلسه را ادامه بده.</p><Link className="button button--primary" to={`/workout/${activeSession.templateId}`}>ادامهٔ {getWorkoutTemplate(activeSession.templateId)?.name ?? activeSession.name} <ArrowRight size={16} /></Link></div>;
+    const prevWorkoutName = getWorkoutTemplate(activeSession.templateId)?.name ?? activeSession.name;
+    return (
+      <div className="workout-conflict panel-card">
+        <span className="eyebrow">جلسهٔ دیگری در حال انجام است</span>
+        <h2>تمرین روز قبل هنوز پایان نیافته است.</h2>
+        <p>
+          جلسهٔ <strong>{prevWorkoutName}</strong> همچنان باز است. شما می‌توانید این جلسهٔ جدید را آغاز کنید، جلسهٔ قبلی را به اتمام برسانید، یا آن را لغو کنید:
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={async () => {
+              await completeActiveSession(activeSession.id);
+              void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
+            }}
+          >
+            <CheckCircle2 size={16} /> اتمام و ثبت جلسهٔ قبلی و شروع این روز
+          </button>
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={async () => {
+              if (window.confirm(`آیا جلسهٔ قبلی (${prevWorkoutName}) لغو شود و تمرین امروز آغاز گردد؟`)) {
+                await deleteSession(activeSession.id);
+                void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
+              }
+            }}
+          >
+            <Trash2 size={16} /> لغو جلسهٔ قبلی و شروع این روز
+          </button>
+          <Link className="button button--ghost" to={`/workout/${activeSession.templateId}`}>
+            ادامهٔ جلسهٔ قبلی ({prevWorkoutName}) <ArrowRight size={16} />
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (!session || !activeTemplate) return null;
@@ -172,6 +208,38 @@ export function Workout() {
     };
     setSummary(completed);
     await saveSession(completed);
+  };
+
+  const handleExitClick = async () => {
+    if (!session) {
+      navigate('/');
+      return;
+    }
+    const hasAnySets = session.exercises.some((e) => e.sets.length > 0);
+    if (!hasAnySets) {
+      const discard = window.confirm('هنوز هیچ ستی برای این جلسه ثبت نشده است.\n\n• برای لغو و حذف این جلسه «تأیید / OK» را بزنید.\n• برای ذخیره پیش‌نویس بدون تغییر «انصراف / Cancel» را بزنید.');
+      if (discard) {
+        await deleteSession(session.id);
+      }
+      navigate('/');
+      return;
+    }
+    const choice = window.confirm(
+      'تمرین شما ثبت شده است.\n\n• برای اتمام قطعی جلسه و ثبت نهایی در پیشرفت و آمار: «تأیید / OK» را بزنید.\n• برای ذخیره موقت (ادامه در فرصتی دیگر): «انصراف / Cancel» را بزنید.'
+    );
+    if (choice) {
+      const completed: WorkoutSession = {
+        ...session,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        restTimer: undefined,
+        notes: notesDraft,
+      };
+      setSummary(completed);
+      await saveSession(completed);
+    } else {
+      navigate('/');
+    }
   };
 
   const handleLogSet = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -330,10 +398,25 @@ export function Workout() {
             return <div key={`${item.exerciseId}-${index}`} className={`queue-item${isCurrent ? ' is-current' : ''}${isDone ? ' is-done' : ''}`}><span className="queue-item__number">{isDone ? <Check size={14} /> : faDigits(String(index + 1).padStart(2, '0'))}</span><div><strong>{item.name}</strong><span>{faNumber(queueSession?.sets.length ?? 0)}/{faNumber(item.prescription.sets)} ست · {faNumber(item.prescription.minReps)}–{faNumber(item.prescription.maxReps)}</span></div>{isCurrent && <span className="queue-current-mark" />}</div>;
           })}</div></section>
           <section className="panel-card workout-coach-note"><span className="coach-note-icon"><Info size={16} /></span><div><span className="eyebrow">یادآوری پیشرفت تدریجی</span><p>ابتدا در همین بازه تکرارها را بیشتر کن. فقط وقتی همهٔ ست‌های برنامه‌ریزی‌شده با فرم خوب به بیشترین تکرار و مقدار هدفِ تکرار در ذخیره رسیدند، افزایش وزنه را بررسی کن.</p></div></section>
-          <button className="workout-exit-link" onClick={() => navigate('/')}>ذخیره و خروج از جلسه <ArrowLeft size={14} /></button>
+          <button className="workout-exit-link" onClick={() => void handleExitClick()}>ذخیره و خروج از جلسه <ArrowLeft size={14} /></button>
         </aside>
       </div>
-      <div className="workout-mobile-footer"><span>{faNumber(loggedSetCount)}/{faNumber(plannedSetCount)} ست</span><span>{timerStarted ? timerLabel(remainingSeconds) : 'تمرین در حال انجام'}</span></div>
+      <div className="workout-mobile-footer">
+        <div className="workout-mobile-footer__stats">
+          <span>{faNumber(loggedSetCount)}/{faNumber(plannedSetCount)} ست</span>
+          <span>{timerStarted ? timerLabel(remainingSeconds) : 'تمرین در حال انجام'}</span>
+        </div>
+        <div className="workout-mobile-footer__actions">
+          {loggedSetCount > 0 && (
+            <button type="button" className="button button--primary button--small" onClick={() => void handleFinishWorkout()}>
+              <CheckCircle2 size={14} /> اتمام جلسه
+            </button>
+          )}
+          <button type="button" className="button button--ghost button--small" onClick={() => void handleExitClick()}>
+            خروج
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

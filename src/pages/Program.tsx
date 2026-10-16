@@ -12,7 +12,7 @@ import { faDigits, faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
 
 export function Program() {
-  const { sessions } = useGym();
+  const { sessions, activeSession } = useGym();
   const navigate = useNavigate();
   const weeklyCount = getCompletedThisWeek(sessions);
   const workoutTemplates = useProgram();
@@ -240,8 +240,18 @@ export function Program() {
               <div className="program-day__index"><span>{faDigits(String(index + 1).padStart(2, '0'))}</span><span className="day-line" /></div>
               <div className="program-day__main">
                 <div className="program-day__heading">
-                  <div><div className="program-day__eyebrow"><span>{workout.dayLabel}</span>{workout.optional && <span className="optional-pill"><Sparkles size={12} /> اختیاری</span>}</div><h3>{workout.name}</h3><p>{workout.focus}</p></div>
-                  <Link to={`/workout/${workout.id}`} className={`button ${workout.optional ? 'button--secondary' : 'button--primary'} button--small`}>شروع جلسه <ArrowRight size={15} /></Link>
+                  <div>
+                    <div className="program-day__eyebrow">
+                      <span>{workout.dayLabel}</span>
+                      {activeSession?.templateId === workout.id && <span className="active-pulse" style={{ display: 'inline-block', width: 7, height: 7 }} title="جلسه در حال انجام" />}
+                      {workout.optional && <span className="optional-pill"><Sparkles size={12} /> اختیاری</span>}
+                    </div>
+                    <h3>{workout.name}</h3>
+                    <p>{workout.focus}</p>
+                  </div>
+                  <Link to={`/workout/${workout.id}`} className={`button ${activeSession?.templateId === workout.id ? 'button--primary' : workout.optional ? 'button--secondary' : 'button--primary'} button--small`}>
+                    {activeSession?.templateId === workout.id ? 'ادامهٔ جلسه' : 'شروع جلسه'} <ArrowRight size={15} />
+                  </Link>
                 </div>
                 <p className="program-day__description">{workout.description}</p>
                 <div className="program-day__meta"><span><Dumbbell size={14} /> {faNumber(exerciseCount)} حرکت · {faNumber(setCount)} ست</span><span><Clock3 size={14} /> حدود {faNumber(workout.durationMinutes)} دقیقه</span>{lastSession && <span className="program-day__last"><Check size={14} /> آخرین اجرا: {new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', { month: 'short', day: 'numeric' }).format(new Date(lastSession.startedAt))}</span>}</div>

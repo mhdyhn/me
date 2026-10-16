@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Sparkles, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Smartphone, Sparkles, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
+import { InstallAppModal } from './InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
@@ -55,6 +56,7 @@ export function Layout() {
   const { user, signOut } = useSession();
   const quote = useMotivationalQuote();
   const navigate = useNavigate();
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
   const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
@@ -86,6 +88,13 @@ export function Layout() {
             <span className="note-mark"><Zap size={15} fill="currentColor" /></span>
             <p><strong>{quote.title}</strong><br />{quote.subtitle}</p>
         </div>
+        <button
+          type="button"
+          className="sidebar-install-pill"
+          onClick={() => setShowInstallModal(true)}
+        >
+          <Smartphone size={16} /><span>نصب روی گوشی (APK)</span>
+        </button>
         <NavLink to="/settings" className={({ isActive }) => `nav-link settings-link${isActive ? ' is-active' : ''}`}>
           <Settings2 size={18} /><span>پروفایل و تنظیمات</span>
         </NavLink>
@@ -100,6 +109,14 @@ export function Layout() {
             {title && <h1>{title}</h1>}
           </div>
           <div className="topbar-actions">
+            <button
+              type="button"
+              className="install-topbar-pill"
+              onClick={() => setShowInstallModal(true)}
+              title="نصب اپلیکیشن روی گوشی (فایل نصبی و PWA)"
+            >
+              <Smartphone size={14} /> <span>نصب اپلیکیشن</span>
+            </button>
             {activeSession && location.pathname !== `/workout/${activeSession.templateId}` && (
               <NavLink className="resume-pill" to={`/workout/${activeSession.templateId}`}>
                 <span className="resume-dot" /> ادامهٔ تمرین
@@ -132,6 +149,8 @@ export function Layout() {
           </NavLink>
         ))}
       </nav>
+
+      <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 }

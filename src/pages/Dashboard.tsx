@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ArrowUpRight, CalendarCheck2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trophy, Weight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Download, Flame, HeartPulse, Plus, Smartphone, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
+import { InstallAppModal } from '../components/InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
@@ -11,11 +12,12 @@ import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate, kg } from '../lib/format';
 
 export function Dashboard() {
-  const { sessions, bodyweights, profile, activeSession } = useGym();
+  const { sessions, bodyweights, profile, activeSession, completeActiveSession, deleteSession } = useGym();
   const program = useProgram();
   const navigate = useNavigate();
   const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -68,14 +70,72 @@ export function Dashboard() {
           <h2>{greeting}<span className="accent-dot">.</span></h2>
           <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
         </div>
-        <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            onClick={() => setShowInstallModal(true)}
+          >
+            <Smartphone size={15} /> نصب اپلیکیشن
+          </button>
+          <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
+        </div>
+      </section>
+
+      {/* Mobile-first Install Callout Banner */}
+      <section className="app-install-banner">
+        <div className="install-banner-content">
+          <span className="brand-mark install-banner-icon"><Smartphone size={20} /></span>
+          <div>
+            <strong>نصب و دانلود اپلیکیشن میتی</strong>
+            <p>دانلود مستقیم فایل نصبی اندروید (APK)، وب‌اپ PWA و راهنمای آیفون</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="button button--primary button--small"
+          onClick={() => setShowInstallModal(true)}
+        >
+          <Download size={15} /> دریافت و نصب
+        </button>
       </section>
 
       {activeSession && (
         <section className="active-workout-banner">
           <div className="active-pulse" />
-          <div><p className="eyebrow">تمرین در حال انجام</p><strong>{activeWorkoutName}</strong><span> آخرین ست روی این دستگاه ذخیره شده است.</span></div>
-          <Link className="button button--small button--primary" to={`/workout/${activeSession.templateId}`}>ادامه <ArrowRight size={15} /></Link>
+          <div style={{ flex: 1 }}>
+            <p className="eyebrow">تمرین در حال انجام</p>
+            <strong>{activeWorkoutName}</strong>
+            <span> ست‌های ثبت‌شده ذخیره شده‌اند.</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Link className="button button--small button--primary" to={`/workout/${activeSession.templateId}`}>
+              ادامه <ArrowRight size={14} />
+            </Link>
+            <button
+              type="button"
+              className="button button--small button--secondary"
+              onClick={async () => {
+                if (window.confirm(`آیا تمرین «${activeWorkoutName}» پایان یافته و ثبت پیشرفت شود؟`)) {
+                  await completeActiveSession(activeSession.id);
+                }
+              }}
+            >
+              <CheckCircle2 size={14} /> اتمام جلسه
+            </button>
+            <button
+              type="button"
+              className="button button--small button--ghost"
+              onClick={async () => {
+                if (window.confirm(`آیا تمرین «${activeWorkoutName}» لغو و حذف شود؟ (با لغو تمرین، می‌توانید روز دیگری را شروع کنید)`)) {
+                  await deleteSession(activeSession.id);
+                }
+              }}
+              title="لغو این تمرین"
+            >
+              <Trash2 size={14} /> لغو
+            </button>
+          </div>
         </section>
       )}
 
@@ -104,9 +164,16 @@ export function Dashboard() {
             <span><Clock3 size={15} /> حدود {faNumber(nextWorkout?.durationMinutes ?? 0)} دقیقه</span>
           </div>
           <div className="next-workout-card__footer">
-            <button className="button button--primary button--large" onClick={() => void startOrResume()}>
-              {activeSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowRight size={17} />
-            </button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button className="button button--primary button--large" onClick={() => void startOrResume()}>
+                {activeSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowRight size={17} />
+              </button>
+              {activeSession && (
+                <Link to="/program" className="button button--secondary button--large">
+                  انتخاب روز دیگر <ArrowRight size={15} />
+                </Link>
+              )}
+            </div>
             <span className="quiet-note">عجله‌ای نیست؛ هر وقت آماده‌ای تمرین کن.</span>
           </div>
         </section>
@@ -232,6 +299,8 @@ export function Dashboard() {
       </section>
 
       {program.length === 0 && <p className="muted">هنوز برنامهٔ تمرینی‌ای در دسترس نیست.</p>}
+
+      <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 }
