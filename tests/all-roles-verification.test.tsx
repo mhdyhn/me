@@ -102,6 +102,7 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(within(nav).getByText('مربی')).toBeInTheDocument(); // Chat with coach link
     expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
     expect(within(nav).queryByText('مالی باشگاه')).not.toBeInTheDocument();
+    expect(document.title).toContain('میتی');
   });
 
   it('COACH: accesses coach panel /coach, sees student list, coach actions, and chat with admin', async () => {
@@ -117,6 +118,7 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     const nav = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
     expect(within(nav).getByText('شاگرد')).toBeInTheDocument();
     expect(within(nav).getByText('افزودن برنامه')).toBeInTheDocument();
+    expect(document.title).toContain('شاگردهای من');
   });
 
   it('ADMIN: accesses /coach and sees AdminHome with coach management and club overview', async () => {
@@ -133,5 +135,6 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(within(nav).getByText('مربی')).toBeInTheDocument();
     expect(within(nav).getByText('مالی باشگاه')).toBeInTheDocument();
     expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
+    expect(document.title).toContain('مدیریت باشگاه و مربی‌ها');
   });
 });

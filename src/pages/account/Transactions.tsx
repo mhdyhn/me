@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
 import { ApiError, api, type PaymentTransaction } from '../../lib/api';
@@ -57,8 +57,8 @@ function CoachTransactionsView() {
     }
   }
 
-  const paidTransactions = (transactions ?? []).filter((t) => t.status === 'paid');
-  const totalEarned = paidTransactions.reduce((sum, t) => sum + t.coachShareTomans, 0);
+  const paidTransactions = useMemo(() => (transactions ?? []).filter((t) => t.status === 'paid'), [transactions]);
+  const totalEarned = useMemo(() => paidTransactions.reduce((sum, t) => sum + t.coachShareTomans, 0), [paidTransactions]);
 
   return (
     <PanelPage title="تراکنش‌ها و درآمد مربی">
@@ -140,10 +140,10 @@ function AdminTransactionsView() {
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'تراکنش‌ها بارگذاری نشدند.'));
   }, []);
 
-  const paidTransactions = (transactions ?? []).filter((t) => t.status === 'paid');
-  const totalVolume = paidTransactions.reduce((sum, t) => sum + t.amountTomans, 0);
-  const totalAdminShare = paidTransactions.reduce((sum, t) => sum + t.adminShareTomans, 0);
-  const totalCoachShare = paidTransactions.reduce((sum, t) => sum + t.coachShareTomans, 0);
+  const paidTransactions = useMemo(() => (transactions ?? []).filter((t) => t.status === 'paid'), [transactions]);
+  const totalVolume = useMemo(() => paidTransactions.reduce((sum, t) => sum + t.amountTomans, 0), [paidTransactions]);
+  const totalAdminShare = useMemo(() => paidTransactions.reduce((sum, t) => sum + t.adminShareTomans, 0), [paidTransactions]);
+  const totalCoachShare = useMemo(() => paidTransactions.reduce((sum, t) => sum + t.coachShareTomans, 0), [paidTransactions]);
 
   return (
     <PanelPage title="تراکنش‌های کل باشگاه">
