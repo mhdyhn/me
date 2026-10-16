@@ -82,3 +82,20 @@ jobs:
             --notes "دانلود مستقیم فایل نصبی اندروید میتی (APK) نسخه ۱.۰" \
             --target main \
             --clobber || true
+
+      - name: Commit APK to repo for direct serving
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p public
+          cp android/app/build/outputs/apk/debug/app-debug.apk public/meety.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f public/meety.apk
+          if git diff --staged --quiet; then
+            echo "No change in APK binary"
+          else
+            git commit -m "chore: embed latest Android APK binary [skip ci]"
+            git push origin HEAD:main
+          fi

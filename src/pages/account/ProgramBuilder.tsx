@@ -13,6 +13,15 @@ const MAX_DAYS = 7;
 const MAX_EXERCISES = 15;
 const REPS_PATTERN = /^\d{1,2}(-\d{1,2})?$/;
 
+function normalizeReps(value: string): string {
+  let result = String(value ?? '')
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+  result = result.replace(/[\u2013\u2014\u2212]/g, '-');
+  result = result.replace(/\s*-\s*/g, '-').trim();
+  return result;
+}
+
 const muscleOptions = ['همه', ...new Set(catalog.flatMap((exercise) => exercise.primaryMuscles))];
 
 export function ProgramBuilder() {
@@ -45,17 +54,21 @@ function Builder() {
     let cancelled = false;
     (async () => {
       try {
-        const [list, programmeResult, biometricsResult] = await Promise.all([
-          api<{ students: PublicUser[] }>('GET', '/students'),
-          api<{ program: Programme | null }>('GET', `/students/${id}/program`),
+        const [progRes, biometricsResult] = await Promise.all([
+          api<{ program: Programme | null; student?: PublicUser }>('GET', `/students/${id}/program`),
           api<{ biometrics: { limitations?: string } }>('GET', `/students/${id}/ai-settings`).catch(() => ({ biometrics: { limitations: '' } })),
         ]);
         if (cancelled) return;
-        setStudent(list.students.find((candidate) => candidate.id === id) ?? null);
-        if (programmeResult.program) {
-          setTitle(programmeResult.program.title);
-          setPriceTomans(programmeResult.program.priceTomans ?? 0);
-          setDays(programmeResult.program.days);
+        if (progRes.student) {
+          setStudent(progRes.student);
+        } else {
+          const list = await api<{ students: PublicUser[] }>('GET', '/students').catch(() => ({ students: [] }));
+          setStudent(list.students.find((candidate) => candidate.id === id) ?? null);
+        }
+        if (progRes.program) {
+          setTitle(progRes.program.title);
+          setPriceTomans(progRes.program.priceTomans ?? 0);
+          setDays(progRes.program.days);
         }
         if (biometricsResult?.biometrics?.limitations) {
           setLimitations(biometricsResult.biometrics.limitations);
@@ -137,7 +150,8 @@ function Builder() {
     const day = days[activeDay];
     if (!day) return setSaveError('ابتدا یک روز اضافه کنید.');
     if (day.exercises.length >= MAX_EXERCISES) return setSaveError(`هر روز حداکثر ${MAX_EXERCISES} حرکت دارد.`);
-    const item: ProgramItem = { exerciseId: exercise.id, name: exercise.name, muscle, sets: 3, reps: '8-12', restSeconds: 90 };
+    const primaryMuscle = exercise.primaryMuscles[0] || (muscle !== 'همه' ? muscle : 'عمومی');
+    const item: ProgramItem = { exerciseId: exercise.id, name: exercise.name, muscle: primaryMuscle, sets: 3, reps: '8-12', restSeconds: 90 };
     updateDays(days.map((current, position) => (position === activeDay ? { ...current, exercises: [...current.exercises, item] } : current)));
   }
 
@@ -158,12 +172,16 @@ function Builder() {
   function validate(): string | null {
     if (title.trim().length < 2) return 'عنوان برنامه را وارد کنید.';
     if (days.length === 0) return 'حداقل یک روز اضافه کنید.';
-    for (const day of days) {
-      if (!day.name.trim()) return 'نام هر روز را وارد کنید.';
+    for (let d = 0; d < days.length; d++) {
+      const day = days[d];
+      if (!day) continue;
+      if (!day.name.trim()) return `نام روز ${faNumber(d + 1)} را وارد کنید.`;
+      if (day.name.trim().length > 80) return `نام روز ${faNumber(d + 1)} نباید بیشتر از ۸۰ نویسه باشد.`;
       if (day.exercises.length === 0) return `«${day.name}» هنوز حرکتی ندارد.`;
       for (const item of day.exercises) {
         if (!Number.isInteger(item.sets) || item.sets < 1 || item.sets > 10) return `تعداد ست «${item.name}» باید بین ۱ تا ۱۰ باشد.`;
-        if (!REPS_PATTERN.test(item.reps.trim())) return `تکرار «${item.name}» باید مثل ۸ یا ۸-۱۲ باشد.`;
+        const reps = normalizeReps(item.reps);
+        if (!REPS_PATTERN.test(reps)) return `تکرار «${item.name}» باید مثل ۸ یا ۸-۱۲ باشد.`;
         if (!Number.isInteger(item.restSeconds) || item.restSeconds < 0 || item.restSeconds > 600) return `استراحت «${item.name}» باید بین ۰ تا ۶۰۰ ثانیه باشد.`;
       }
     }
@@ -176,7 +194,17 @@ function Builder() {
     setSaving(true);
     setSaveError(null);
     try {
-      await api('PUT', `/students/${id}/program`, { title: title.trim(), days, priceTomans });
+      const cleanDays = days.map((day) => ({
+        ...day,
+        name: day.name.trim(),
+        exercises: day.exercises.map((item) => ({
+          ...item,
+          name: item.name.trim(),
+          muscle: item.muscle?.trim() || 'عمومی',
+          reps: normalizeReps(item.reps),
+        })),
+      }));
+      await api('PUT', `/students/${id}/program`, { title: title.trim(), days: cleanDays, priceTomans });
       setMessage('برنامه ذخیره شد. شاگرد همین حالا آن را می‌بیند.');
     } catch (caught) {
       setSaveError(caught instanceof ApiError ? caught.message : 'برنامه ذخیره نشد. دوباره تلاش کنید.');
@@ -294,7 +322,7 @@ function Builder() {
         {days[activeDay] && (
           <div className="day-editor">
             <div className="day-editor__head">
-              <input aria-label="نام روز" value={days[activeDay].name} maxLength={40} onChange={(event) => renameDay(activeDay, event.target.value)} />
+              <input aria-label="نام روز" value={days[activeDay].name} maxLength={80} onChange={(event) => renameDay(activeDay, event.target.value)} />
               <div className="order-buttons">
                 <button type="button" className="icon-button" aria-label="جابه‌جایی روز به بالا" disabled={activeDay === 0} onClick={() => moveDay(activeDay, -1)}>
                   <ArrowUp size={16} />
@@ -322,7 +350,7 @@ function Builder() {
                   </label>
                   <label className="mini-field">
                     <span>تکرار</span>
-                    <input dir="ltr" value={item.reps} maxLength={5} onChange={(event) => editItem(activeDay, itemIndex, { reps: event.target.value })} />
+                    <input dir="ltr" value={item.reps} maxLength={12} onChange={(event) => editItem(activeDay, itemIndex, { reps: event.target.value })} />
                   </label>
                   <label className="mini-field">
                     <span>استراحت (ثانیه)</span>

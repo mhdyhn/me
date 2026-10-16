@@ -26,6 +26,17 @@ const MAX_DAYS = 7;
 const MAX_EXERCISES_PER_DAY = 15;
 const EXERCISE_ID = /^[a-z0-9-]{1,64}$/;
 const REPS = /^\d{1,2}(-\d{1,2})?$/;
+const DAY_NAME_MAX = 80;
+
+/** Normalizes Persian/Arabic digits, various dash types, and surrounding spaces to standard format (e.g. "8-12"). */
+export function normalizeReps(value: string): string {
+  let result = String(value ?? '')
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
+  result = result.replace(/[\u2013\u2014\u2212]/g, '-');
+  result = result.replace(/\s*-\s*/g, '-').trim();
+  return result;
+}
 
 /** Checks the coach's programme. Anything the app could not display safely is rejected here. */
 export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> {
@@ -38,7 +49,7 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
   }
   const days = body.days.map((rawDay, dayIndex) => {
     const day = requireObject(rawDay);
-    const name = requireText(day, 'name', 1, 40, `نام روز ${dayIndex + 1}`);
+    const name = requireText(day, 'name', 1, DAY_NAME_MAX, `نام روز ${dayIndex + 1}`);
     if (!Array.isArray(day.exercises) || day.exercises.length < 1 || day.exercises.length > MAX_EXERCISES_PER_DAY) {
       throw new HttpError(400, `هر روز باید بین ۱ تا ${MAX_EXERCISES_PER_DAY} حرکت داشته باشد.`);
     }
@@ -46,9 +57,11 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
       const item = requireObject(rawItem);
       if (typeof item.exerciseId !== 'string' || !EXERCISE_ID.test(item.exerciseId)) throw new HttpError(400, 'شناسهٔ حرکت نامعتبر است.');
       const name = requireText(item, 'name', 1, 80, 'نام حرکت');
-      const muscle = requireText(item, 'muscle', 1, 40, 'گروه عضلانی');
+      const rawMuscle = typeof item.muscle === 'string' && item.muscle.trim() ? item.muscle.trim() : 'عمومی';
+      const muscle = rawMuscle.slice(0, 40);
       if (!Number.isInteger(item.sets) || (item.sets as number) < 1 || (item.sets as number) > 10) throw new HttpError(400, 'تعداد ست باید بین ۱ تا ۱۰ باشد.');
-      if (typeof item.reps !== 'string' || !REPS.test(item.reps.trim())) throw new HttpError(400, 'تکرار باید مثل ۸ یا ۸-۱۲ باشد.');
+      const reps = normalizeReps(typeof item.reps === 'string' ? item.reps : String(item.reps ?? ''));
+      if (!REPS.test(reps)) throw new HttpError(400, 'تکرار باید مثل ۸ یا ۸-۱۲ باشد.');
       if (!Number.isInteger(item.restSeconds) || (item.restSeconds as number) < 0 || (item.restSeconds as number) > 600) {
         throw new HttpError(400, 'استراحت باید بین ۰ تا ۶۰۰ ثانیه باشد.');
       }
@@ -57,7 +70,7 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
         name,
         muscle,
         sets: item.sets as number,
-        reps: (item.reps as string).trim(),
+        reps,
         restSeconds: item.restSeconds as number,
       };
     });

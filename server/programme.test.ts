@@ -97,6 +97,41 @@ describe('student programme', () => {
     expect(mine.json.program).toBeNull();
   });
 
+  it('accepts Persian digits, en-dash, and descriptive day names', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const persianProgramme = {
+      title: 'برنامهٔ پیشرفته',
+      days: [
+        {
+          name: 'روز ۱: پوش (سینه، سرشانه و پشت‌بازو)',
+          exercises: [
+            {
+              exerciseId: 'barbell-bench-press',
+              name: 'پرس سینه با هالتر',
+              muscle: 'سینه',
+              sets: 3,
+              reps: '۸-۱۲',
+              restSeconds: 90,
+            },
+            {
+              exerciseId: 'shoulder-press',
+              name: 'پرس سرشانه',
+              muscle: 'سرشانه',
+              sets: 3,
+              reps: '8–12', // en-dash
+              restSeconds: 90,
+            },
+          ],
+        },
+      ],
+    };
+    const res = await call('PUT', `/api/students/${pupil.id}/program`, persianProgramme, coachToken);
+    expect(res.status).toBe(200);
+    expect(res.json.program.days[0].exercises[0].reps).toBe('8-12');
+    expect(res.json.program.days[0].exercises[1].reps).toBe('8-12');
+  });
+
   it('rejects an invalid programme with a clear message', async () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);

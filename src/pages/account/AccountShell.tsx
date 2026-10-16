@@ -77,7 +77,7 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
 }
 
 /** Shows a new username and password exactly once. The password cannot be read again later. */
-export function CredentialsCard({ credentials, onDone }: { credentials: Credentials; onDone: () => void }) {
+export function CredentialsCard({ credentials, onDone, action }: { credentials: Credentials; onDone: () => void; action?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const text = `نام کاربری: ${credentials.username}\nرمز عبور: ${credentials.password}`;
 
@@ -103,7 +103,8 @@ export function CredentialsCard({ credentials, onDone }: { credentials: Credenti
         <button type="button" className="button button--ghost" onClick={() => void copy()}>
           <Copy size={16} /> {copied ? 'کپی شد' : 'کپی'}
         </button>
-        <button type="button" className="button button--primary" onClick={onDone}>
+        {action}
+        <button type="button" className="button button--ghost" onClick={onDone}>
           متوجه شدم
         </button>
       </div>
