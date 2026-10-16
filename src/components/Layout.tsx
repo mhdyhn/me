@@ -1,6 +1,24 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, CalendarDays, Dumbbell, House, ListPlus, MessageCircle, Receipt, Settings2, ShieldCheck, Smartphone, Sparkles, Users, Utensils, Zap, type LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarDays,
+  Dumbbell,
+  House,
+  ListPlus,
+  Menu,
+  MessageCircle,
+  Receipt,
+  Settings2,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  Users,
+  Utensils,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { InstallAppModal } from './InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
@@ -12,30 +30,36 @@ interface NavItem {
   to: string;
   icon: LucideIcon;
   end?: boolean;
+  desc?: string;
 }
 
-/** The whole personal app: every signed-in user has it. The offline single-file build has only this. */
-const personalNavigation: NavItem[] = [
+/** The 4 fixed core tabs on mobile bottom bar. */
+const primaryTabs: NavItem[] = [
   { label: 'خانه', to: '/', icon: House, end: true },
   { label: 'برنامه', to: '/program', icon: CalendarDays },
   { label: 'حرکت‌ها', to: '/exercises', icon: Dumbbell },
-  { label: 'هوش سلامتی', to: '/ai-hub', icon: Sparkles },
   { label: 'پیشرفت', to: '/progress', icon: BarChart3 },
-  { label: 'تغذیه', to: '/nutrition', icon: Utensils },
 ];
 
-/** Extra sections added to the same toolbar for each role. Students get one: the chat with their coach. */
+/** The whole personal app: every signed-in user has it. */
+const personalNavigation: NavItem[] = [
+  ...primaryTabs,
+  { label: 'هوش سلامتی', to: '/ai-hub', icon: Sparkles, desc: 'پایش آمادگی، ریکاوری و ضربان قلب' },
+  { label: 'تغذیه', to: '/nutrition', icon: Utensils, desc: 'اهداف کالری و دفتر خوراک روزانه' },
+];
+
+/** Extra sections added for each role. */
 const roleNavigation: Record<Role, NavItem[]> = {
-  student: [{ label: 'مربی', to: '/chat', icon: MessageCircle }],
+  student: [{ label: 'مربی', to: '/chat', icon: MessageCircle, desc: 'گفتگو و ارسال پیام به مربی' }],
   coach: [
-    { label: 'شاگرد', to: '/coach', icon: Users, end: true },
-    { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus },
-    { label: 'درآمدها', to: '/coach/transactions', icon: Receipt },
-    { label: 'مدیر', to: '/coach/chat', icon: MessageCircle },
+    { label: 'شاگرد', to: '/coach', icon: Users, end: true, desc: 'فهرست و ساخت شاگردهای من' },
+    { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus, desc: 'طراحی برنامه تمرینی جدید' },
+    { label: 'درآمدها', to: '/coach/transactions', icon: Receipt, desc: 'گزارش مالی و سهم مربی' },
+    { label: 'مدیر', to: '/coach/chat', icon: MessageCircle, desc: 'گفتگو با مدیر باشگاه' },
   ],
   admin: [
-    { label: 'مربی', to: '/coach', icon: ShieldCheck, end: true },
-    { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt },
+    { label: 'مربی', to: '/coach', icon: ShieldCheck, end: true, desc: 'فهرست و ایجاد حساب مربیان' },
+    { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt, desc: 'تراکنش‌های کلی باشگاه' },
   ],
 };
 
@@ -57,9 +81,26 @@ export function Layout() {
   const quote = useMotivationalQuote();
   const navigate = useNavigate();
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+
   const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
+  const roleItems = user ? roleNavigation[user.role] : [];
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
   const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
+
+  // Close more sheet automatically on route change
+  useEffect(() => {
+    setShowMoreSheet(false);
+  }, [location.pathname]);
+
+  // Handle Escape key to close more sheet
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowMoreSheet(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   async function signOutAndLeave() {
     await signOut();
@@ -67,6 +108,10 @@ export function Layout() {
   }
 
   const title = ownHeading ? null : personalTitles[location.pathname] ?? (location.pathname.startsWith('/exercise/') ? 'راهنمای حرکت' : 'تمرین در حال انجام');
+
+  // Check if current page is one of the secondary items inside "بیشتر"
+  const isPrimaryActive = primaryTabs.some((tab) => (tab.end ? location.pathname === tab.to : location.pathname.startsWith(tab.to)));
+  const isMoreActive = !isPrimaryActive && location.pathname !== '/workout';
 
   return (
     <div className="app-shell">
@@ -142,12 +187,139 @@ export function Layout() {
         <main className="page-content" id="main-content"><Outlet /></main>
       </div>
 
-      <nav className="mobile-nav" aria-label="ناوبری موبایل" style={{ '--nav-count': navigation.length } as CSSProperties}>
-        {navigation.map(({ label, to, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav__item${isActive ? ' is-active' : ''}`}>
-            <Icon size={19} strokeWidth={1.9} /><span>{label}</span>
-          </NavLink>
-        ))}
+      <nav className="mobile-nav" aria-label="ناوبری موبایل">
+        <div className="mobile-nav__bar">
+          {primaryTabs.map(({ label, to, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav__item${isActive ? ' is-active' : ''}`}>
+              <Icon size={20} strokeWidth={1.9} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+          <button
+            type="button"
+            className={`mobile-nav__item${isMoreActive ? ' is-active' : ''}`}
+            onClick={() => setShowMoreSheet(true)}
+            aria-expanded={showMoreSheet}
+            aria-label="سایر بخش‌ها و امکانات"
+          >
+            <Menu size={20} strokeWidth={1.9} />
+            <span>بیشتر</span>
+            {isMoreActive && <span className="mobile-nav__more-dot" />}
+          </button>
+        </div>
+
+        {/* Bottom Sheet Modal for secondary items */}
+        <div
+          className={`mobile-sheet-backdrop${showMoreSheet ? ' is-open' : ''}`}
+          onClick={() => setShowMoreSheet(false)}
+        />
+        <div
+          className={`mobile-sheet${showMoreSheet ? ' is-open' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="سایر بخش‌ها و امکانات میتی"
+        >
+          <div className="mobile-sheet__handle" onClick={() => setShowMoreSheet(false)} />
+          <div className="mobile-sheet__head">
+            <span className="mobile-sheet__title">سایر بخش‌ها و امکانات میتی</span>
+            <button
+              type="button"
+              className="mobile-sheet__close"
+              onClick={() => setShowMoreSheet(false)}
+              aria-label="بستن منو"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="mobile-sheet__body">
+            {roleItems.length > 0 && (
+              <div className="mobile-sheet__section">
+                <div className="mobile-sheet__group-label">
+                  {user?.role === 'coach' ? 'پنل مربیگری' : user?.role === 'admin' ? 'مدیریت باشگاه' : 'ارتباط با مربی'}
+                </div>
+                <div className="mobile-sheet__grid">
+                  {roleItems.map(({ label, to, icon: Icon, end, desc }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                      onClick={() => setShowMoreSheet(false)}
+                    >
+                      <span className="mobile-sheet__card-icon"><Icon size={20} /></span>
+                      <div className="mobile-sheet__card-info">
+                        <strong className="mobile-sheet__card-title">{label}</strong>
+                        {desc && <span className="mobile-sheet__card-desc">{desc}</span>}
+                      </div>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mobile-sheet__section">
+              <div className="mobile-sheet__group-label">سلامتی، هوش مصنوعی و تغذیه</div>
+              <div className="mobile-sheet__grid">
+                <NavLink
+                  to="/ai-hub"
+                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                  onClick={() => setShowMoreSheet(false)}
+                >
+                  <span className="mobile-sheet__card-icon"><Sparkles size={20} /></span>
+                  <div className="mobile-sheet__card-info">
+                    <strong className="mobile-sheet__card-title">هوش سلامتی</strong>
+                    <span className="mobile-sheet__card-desc">پایش آمادگی و ریکاوری</span>
+                  </div>
+                </NavLink>
+
+                <NavLink
+                  to="/nutrition"
+                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                  onClick={() => setShowMoreSheet(false)}
+                >
+                  <span className="mobile-sheet__card-icon"><Utensils size={20} /></span>
+                  <div className="mobile-sheet__card-info">
+                    <strong className="mobile-sheet__card-title">تغذیه</strong>
+                    <span className="mobile-sheet__card-desc">کالری و دفتر خوراک</span>
+                  </div>
+                </NavLink>
+              </div>
+            </div>
+
+            <div className="mobile-sheet__section">
+              <div className="mobile-sheet__group-label">تنظیمات و برنامه</div>
+              <div className="mobile-sheet__grid">
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                  onClick={() => setShowMoreSheet(false)}
+                >
+                  <span className="mobile-sheet__card-icon"><Settings2 size={20} /></span>
+                  <div className="mobile-sheet__card-info">
+                    <strong className="mobile-sheet__card-title">تنظیمات</strong>
+                    <span className="mobile-sheet__card-desc">پروفایل و شخصی‌سازی</span>
+                  </div>
+                </NavLink>
+
+                <button
+                  type="button"
+                  className="mobile-sheet__card"
+                  onClick={() => {
+                    setShowMoreSheet(false);
+                    setShowInstallModal(true);
+                  }}
+                >
+                  <span className="mobile-sheet__card-icon"><Smartphone size={20} /></span>
+                  <div className="mobile-sheet__card-info">
+                    <strong className="mobile-sheet__card-title">نصب اپلیکیشن</strong>
+                    <span className="mobile-sheet__card-desc">فایل نصبی و نسخه وب</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </nav>
 
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
