@@ -352,7 +352,7 @@ function Builder() {
                   </button>
                 ))}
               </div>
-              <input className="picker__search" placeholder="جست‌وجو با نام فارسی، انگلیسی یا حرکت (مثل اسکوات اسمیت)" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input className="picker__search" aria-label="جست‌وجوی حرکت با نام فارسی، انگلیسی یا نام حرکت" placeholder="جست‌وجو با نام فارسی، انگلیسی یا حرکت (مثل اسکوات اسمیت)" value={search} onChange={(event) => setSearch(event.target.value)} />
               <ul className="picker-list">
                 {visibleExercises.map((exercise) => (
                   <li key={exercise.id}>

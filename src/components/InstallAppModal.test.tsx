@@ -12,6 +12,7 @@ describe('InstallAppModal', () => {
     expect(screen.getByRole('button', { name: /فایل نصبی اندروید \(APK\)/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /وب‌اپ \(PWA\)/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /راهنمای آیفون \(iOS\)/ })).toBeInTheDocument();
+    expect(screen.queryByText(/فایل تک‌صفحه‌ای/)).not.toBeInTheDocument();
 
     const apkLink = screen.getByRole('link', { name: /دانلود مستقیم فایل نصبی اندروید \(meety\.apk\)/ });
     expect(apkLink).toBeInTheDocument();

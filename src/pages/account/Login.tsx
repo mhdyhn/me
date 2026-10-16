@@ -86,7 +86,7 @@ export function Login() {
             onClick={() => setShowInstallModal(true)}
             style={{ width: '100%', justifyContent: 'center' }}
           >
-            <Smartphone size={15} /> نصب اپلیکیشن روی گوشی (PWA / آفلاین)
+            <Smartphone size={15} /> نصب اپلیکیشن روی گوشی (فایل نصبی APK / وب‌اپ)
           </button>
         </div>
       </main>

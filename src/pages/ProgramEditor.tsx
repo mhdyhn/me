@@ -375,6 +375,7 @@ function CategorizedExercisePicker({ onAdd }: { onAdd: (exercise: WorkoutExercis
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <input
           className="picker__search"
+          aria-label="جست‌وجوی حرکت با نام فارسی، انگلیسی یا عضله"
           placeholder="جست‌وجوی حرکت با نام فارسی، انگلیسی (Bench, Squat, لت...) یا عضله"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
