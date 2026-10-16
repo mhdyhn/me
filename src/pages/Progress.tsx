@@ -48,15 +48,15 @@ export function Progress() {
       }
     }
   }, [defaultExerciseId, selectedExercise, sessions]);
-  const performances = getExercisePerformances(sessions, selectedExercise);
-  const chartPoints = [...performances].reverse().map((performance) => ({
+  const performances = useMemo(() => getExercisePerformances(sessions, selectedExercise), [sessions, selectedExercise]);
+  const chartPoints = useMemo(() => [...performances].reverse().map((performance) => ({
     label: formatDate(performance.session.startedAt, { month: 'short', day: 'numeric' }),
     value: selectedMetric === 'weight'
       ? Math.max(...performance.sets.map((set) => set.weightKg))
       : selectedMetric === 'reps'
         ? performance.sets.reduce((sum, set) => sum + set.reps, 0)
         : performance.sets.reduce((sum, set) => sum + set.weightKg * set.reps, 0),
-  }));
+  })), [performances, selectedMetric]);
   const selectedName = exercises.find((exercise) => exercise.id === selectedExercise)?.name ?? 'حرکت';
   const metricUnit = selectedMetric === 'weight' ? ' کیلوگرم' : selectedMetric === 'reps' ? ' تکرار' : ' کیلوگرم·تکرار';
   const metricDescription = selectedMetric === 'weight' ? 'سنگین‌ترین ست کاری ثبت‌شده در هر جلسهٔ کامل‌شده · کیلوگرم' : selectedMetric === 'reps' ? 'مجموع تکرارهای ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده' : 'وزنه × تکرار ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده';

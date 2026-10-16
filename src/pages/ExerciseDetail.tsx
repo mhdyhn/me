@@ -33,6 +33,13 @@ export function ExerciseDetail() {
     .map((item) => ({ workout, prescription: item.prescription })));
   const previous = getLastExercisePerformance(sessions, exerciseId);
 
+  // Update document title for SEO
+  useEffect(() => {
+    if (exercise) {
+      document.title = `${exercise.name}${exercise.englishName ? ` (${exercise.englishName})` : ''} | آموزش و فرم صحیح | میتی`;
+    }
+  }, [exercise]);
+
   // Step-by-step timeline replayer
   useEffect(() => {
     if (!replaying) return;

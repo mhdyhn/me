@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Dumbbell, Eye, EyeOff, KeyRound, LogIn, Smartphone, User } from 'lucide-react';
 import { ApiError } from '../../lib/api';
@@ -42,6 +42,10 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
+
+  useEffect(() => {
+    document.title = 'ورود به حساب کاربری | میتی — مربی تمرین شخصی';
+  }, []);
 
   if (status === 'signed-in' && user) {
     return <Navigate to={user.mustChangePassword ? '/account/change-password' : homeFor(user.role)} replace />;

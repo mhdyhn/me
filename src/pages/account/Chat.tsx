@@ -508,6 +508,10 @@ function ChatThread({
   const roleTitle = defaultRoleTitle ?? (user?.role === 'coach' ? 'شاگرد' : 'مربی');
   const messages = data?.messages ?? [];
 
+  useEffect(() => {
+    document.title = `${partner ? `گفتگو با ${partner}` : 'گفتگو'} | میتی`;
+  }, [partner]);
+
   return (
     <section className="chat-screen" aria-label="گفتگو">
       <header className="chat-header">

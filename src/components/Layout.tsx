@@ -93,6 +93,31 @@ export function Layout() {
     setShowMoreSheet(false);
   }, [location.pathname]);
 
+  // Update document title for SEO & usability
+  useEffect(() => {
+    const baseTitle = 'میتی — مربی تمرین باشگاه';
+    let pageTitle = personalTitles[location.pathname];
+    if (location.pathname.startsWith('/exercise/')) {
+      pageTitle = 'راهنمای حرکت';
+    } else if (location.pathname.startsWith('/coach/students/')) {
+      pageTitle = 'مدیریت شاگرد';
+    } else if (location.pathname === '/coach') {
+      pageTitle = user?.role === 'admin' ? 'مدیریت باشگاه و مربی‌ها' : 'شاگردهای من';
+    } else if (location.pathname === '/coach/programs/new') {
+      pageTitle = 'افزودن برنامه تمرینی';
+    } else if (location.pathname.includes('/transactions')) {
+      pageTitle = 'تراکنش‌ها و درآمدها';
+    } else if (location.pathname.startsWith('/workout/')) {
+      pageTitle = 'تمرین در حال انجام';
+    }
+
+    if (pageTitle) {
+      document.title = `${pageTitle} | ${baseTitle}`;
+    } else {
+      document.title = baseTitle;
+    }
+  }, [location.pathname, user?.role]);
+
   // Handle Escape key to close more sheet
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

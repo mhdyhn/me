@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
@@ -30,15 +30,15 @@ export function Dashboard() {
       mounted = false;
     };
   }, []);
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const hour = now.getHours();
   const greeting = hour < 12 ? 'صبح به‌خیر' : hour < 18 ? 'روز به‌خیر' : 'عصر به‌خیر';
-  const nextWorkout = getNextWorkout(sessions);
-  const weeklyCount = getCompletedThisWeek(sessions, now);
+  const nextWorkout = useMemo(() => getNextWorkout(sessions), [sessions]);
+  const weeklyCount = useMemo(() => getCompletedThisWeek(sessions, now), [sessions, now]);
   // The weekly target is the number of main days in the account's own programme (the coach's, for students).
-  const targetCount = program.filter((workout) => !workout.optional).length;
-  const streak = getCurrentStreak(sessions, now);
-  const recentPR = getRecentRecord(sessions);
+  const targetCount = useMemo(() => program.filter((workout) => !workout.optional).length, [program]);
+  const streak = useMemo(() => getCurrentStreak(sessions, now), [sessions, now]);
+  const recentPR = useMemo(() => getRecentRecord(sessions), [sessions]);
   const latestWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
   const weightIsLogged = Boolean(bodyweights[0]);
   const exerciseCount = nextWorkout?.exercises.length ?? 0;
@@ -53,12 +53,12 @@ export function Dashboard() {
     if (nextWorkout) navigate(`/workout/${nextWorkout.id}`);
   };
 
-  const recentCompleted = sessions.find((session) => session.status === 'completed');
+  const recentCompleted = useMemo(() => sessions.find((session) => session.status === 'completed'), [sessions]);
   const recentWorkoutName = recentCompleted ? getWorkoutTemplate(recentCompleted.templateId)?.name ?? recentCompleted.name : '';
 
-  const healthMetrics = getStoredHealthMetrics();
-  const readiness = calculateReadinessScore(healthMetrics, sessions, now);
-  const muscleRecoveries = calculateMuscleRecovery(sessions, now);
+  const healthMetrics = useMemo(() => getStoredHealthMetrics(), []);
+  const readiness = useMemo(() => calculateReadinessScore(healthMetrics, sessions, now), [healthMetrics, sessions, now]);
+  const muscleRecoveries = useMemo(() => calculateMuscleRecovery(sessions, now), [sessions, now]);
 
   return (
     <div className="page-stack dashboard-page">
