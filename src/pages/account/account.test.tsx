@@ -129,11 +129,12 @@ describe('coach screen', () => {
     await user.type(await screen.findByLabelText('نام شاگرد جدید'), 'شاگرد الف');
     await user.click(screen.getByRole('button', { name: /ساخت شاگرد/ }));
 
-    const card = await screen.findByText('رمز عبور');
-    expect(card.closest('section')).toHaveTextContent('abcd2345xy');
-    expect(card.closest('section')).toHaveTextContent('s200002');
+    const warning = await screen.findByText(/این مشخصات فقط همین یک بار نمایش داده می‌شود/);
+    const card = warning.closest('section')!;
+    expect(card).toHaveTextContent('abcd2345xy');
+    expect(card).toHaveTextContent('s200002');
 
-    await user.click(within(card.closest('section')!).getByRole('button', { name: 'متوجه شدم' }));
+    await user.click(within(card).getByRole('button', { name: 'متوجه شدم' }));
     expect(await screen.findByText('رمز موقت')).toBeInTheDocument();
   });
 });
