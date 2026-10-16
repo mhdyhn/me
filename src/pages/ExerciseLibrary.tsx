@@ -79,10 +79,12 @@ export function ExerciseLibrary() {
                   {hasExerciseFigure(exercise.id) && (
                     <img
                       src={exerciseFigureSrc(exercise.id, 'start')}
-                      alt=""
+                      alt={`آموزش حرکت ${exercise.name}`}
                       className="exercise-card__thumb"
                       loading="lazy"
                       decoding="async"
+                      width="160"
+                      height="160"
                     />
                   )}
                   <span className="exercise-card__number">{faDigits(String(index + 1).padStart(2, '0'))}</span>

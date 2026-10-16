@@ -1,0 +1,13 @@
+# robots.txt for Meety Personal Gym Coach
+User-agent: *
+Allow: /
+Allow: /exercises
+Allow: /program
+Allow: /nutrition
+Allow: /progress
+Allow: /ai-hub
+Allow: /login
+Disallow: /api/
+Disallow: /coach/students/
+
+Sitemap: https://meety-985n.onrender.com/sitemap.xml

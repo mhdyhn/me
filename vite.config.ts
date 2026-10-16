@@ -34,13 +34,24 @@ export default defineConfig(({ mode }) => {
                 globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
                 runtimeCaching: [
                   {
-                    urlPattern: /\/exercise-photos\/.*\.(?:jpg|jpeg|png)$/,
+                    urlPattern: /\/exercise-(?:photos|images)\/.*\.(?:jpg|jpeg|png|webp|svg)$/,
                     handler: 'StaleWhileRevalidate',
                     options: {
-                      cacheName: 'exercise-photos-cache',
+                      cacheName: 'exercise-media-cache',
                       expiration: {
-                        maxEntries: 100,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                        maxEntries: 250,
+                        maxAgeSeconds: 60 * 24 * 60 * 60,
+                      },
+                    },
+                  },
+                  {
+                    urlPattern: /\/icons\/.*\.(?:png|svg|ico)$/,
+                    handler: 'CacheFirst',
+                    options: {
+                      cacheName: 'app-icons-cache',
+                      expiration: {
+                        maxEntries: 30,
+                        maxAgeSeconds: 90 * 24 * 60 * 60,
                       },
                     },
                   },
@@ -64,6 +75,8 @@ export default defineConfig(({ mode }) => {
       proxy: { '/api': { target: process.env.API_URL ?? 'http://127.0.0.1:8787', changeOrigin: false } },
     },
     build: {
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 600,
       rolldownOptions: {
         output: offlineSingleFile
           ? { inlineDynamicImports: true }
@@ -71,6 +84,12 @@ export default defineConfig(({ mode }) => {
               manualChunks(id: string) {
                 if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
                   return 'vendor-react';
+                }
+                if (id.includes('node_modules/lucide-react')) {
+                  return 'vendor-icons';
+                }
+                if (id.includes('node_modules/dexie') || id.includes('node_modules/@electric-sql')) {
+                  return 'vendor-db';
                 }
               },
             },
