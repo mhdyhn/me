@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
 import { deletePersonalProgramme, deleteProgramme, loadPersonalProgramme, loadProgramme, savePersonalProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
@@ -164,6 +164,9 @@ export function createApp(options: AppOptions) {
           recordFailure(username);
           throw new HttpError(401, 'نام کاربری یا رمز عبور اشتباه است.');
         }
+        if (!user.isActive) {
+          throw new HttpError(403, 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
+        }
         failures.delete(username);
         const token = await createSession(db, user.id, now());
         return { status: 200, body: { token, user: toPublic(user) }, headers: { 'Set-Cookie': sessionCookie(token) } };
@@ -258,6 +261,32 @@ export function createApp(options: AppOptions) {
         await updatePassword(db, coach.id, hashPassword(password), true, encryptSecret(secretKey, password));
         await deleteSessionsForUser(db, coach.id);
         return { status: 200, body: { username: coach.username, password } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/coaches\/(\d+)\/active$/,
+      auth: ['admin'],
+      handler: async ({ params, body }) => {
+        const coach = await ownCoach(Number(params[0]));
+        const input = requireObject(body);
+        if (typeof input.active !== 'boolean') {
+          throw new HttpError(400, 'فیلد active باید بولین باشد.');
+        }
+        await setUserActive(db, coach.id, input.active);
+        return { status: 200, body: { ok: true, isActive: input.active, id: coach.id } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/coaches\/(\d+)\/students$/,
+      auth: ['admin'],
+      handler: async ({ params }) => {
+        const coach = await ownCoach(Number(params[0]));
+        const students = await listStudents(db, coach.id, secretKey);
+        return { status: 200, body: { coachName: coach.displayName, students } };
       },
     },
 
@@ -717,6 +746,21 @@ export function createApp(options: AppOptions) {
         return { status: 200, body: { username: student.username, password } };
       },
     },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/active$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const input = requireObject(body);
+        if (typeof input.active !== 'boolean') {
+          throw new HttpError(400, 'فیلد active باید بولین باشد.');
+        }
+        await setUserActive(db, student.id, input.active);
+        return { status: 200, body: { ok: true, isActive: input.active, id: student.id } };
+      },
+    },
   ];
 
   /** Accepts the bearer header or the session cookie. Reports which one was used, because cookie requests need a CSRF check. */
@@ -753,6 +797,10 @@ export function createApp(options: AppOptions) {
     }
     if (route.auth !== 'public') {
       if (!user) throw new HttpError(401, 'ابتدا وارد شوید.');
+      if (!user.isActive) {
+        if (token) await deleteSession(db, token);
+        throw new HttpError(403, 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
+      }
       if (Array.isArray(route.auth) && !route.auth.includes(user.role)) throw new HttpError(403, 'دسترسی به این بخش ندارید.');
       if (user.mustChangePassword && !ALWAYS_ALLOWED.has(url.pathname)) {
         throw new HttpError(403, 'ابتدا رمز عبور خود را تغییر دهید.');

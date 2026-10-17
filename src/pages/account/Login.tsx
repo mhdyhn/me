@@ -39,7 +39,20 @@ export function Login() {
   const [password, setPassword] = useState(() => savedCreds?.password ?? '');
   const [rememberMe, setRememberMe] = useState(() => savedCreds?.remember ?? true);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const msg = window.sessionStorage.getItem('meety:deactivated-message');
+        if (msg) {
+          window.sessionStorage.removeItem('meety:deactivated-message');
+          return msg;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    return null;
+  });
   const [busy, setBusy] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Apple, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus } from 'lucide-react';
+import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus } from 'lucide-react';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -67,6 +67,20 @@ function CoachStudents() {
     }
   }
 
+  async function toggleStudentActive(student: StudentView) {
+    const nextActive = student.isActive === false;
+    const promptText = nextActive
+      ? `شاگرد «${student.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
+      : `شاگرد «${student.displayName}» غیرفعال شود؟ پس از غیرفعال‌سازی، از حساب خود خارج شده و امکان ورود نخواهد داشت.`;
+    if (!window.confirm(promptText)) return;
+    try {
+      await api('PUT', `/students/${student.id}/active`, { active: nextActive });
+      await load();
+    } catch (caught) {
+      setLoadError(caught instanceof ApiError ? caught.message : 'تغییر وضعیت فعال‌سازی شاگرد انجام نشد.');
+    }
+  }
+
   async function resetPassword(student: PublicUser) {
     if (!window.confirm(`رمز ${student.displayName} دوباره ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`)) return;
     try {
@@ -124,6 +138,7 @@ function CoachStudents() {
                 password={student.password}
                 mustChangePassword={student.mustChangePassword}
                 roleLabel="شاگرد"
+                isActive={student.isActive !== false}
                 actions={
                   <>
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
@@ -141,6 +156,15 @@ function CoachStudents() {
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
                       <MessageCircle size={16} /> گفتگو
                     </Link>
+                    <button
+                      type="button"
+                      className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
+                      onClick={() => void toggleStudentActive(student)}
+                      title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
+                    >
+                      {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
+                      {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                    </button>
                     <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
                       <KeyRound size={16} /> رمز تازه
                     </button>

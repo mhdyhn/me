@@ -58,19 +58,49 @@ export function AccountShell({ title, children }: { title: string; children: Rea
 
 /** The whole app sits behind sign-in: nothing is shown until a session exists. */
 export function RequireSignIn({ children }: { children: ReactNode }) {
-  const { status, user } = useSession();
+  const { status, user, signOut } = useSession();
   const location = useLocation();
   if (status === 'loading') return <p className="account-muted account-loading">در حال بارگذاری…</p>;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (user.isActive === false) {
+    return (
+      <div className="account-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '80vh', padding: 20 }}>
+        <div className="panel-card" style={{ maxWidth: 420, textAlign: 'center', padding: 24, border: '1px solid #f87171' }} role="alert">
+          <h2 style={{ color: '#f87171', fontSize: 18, marginBottom: 12 }}>حساب کاربری شما غیرفعال شده است</h2>
+          <p className="account-muted" style={{ fontSize: 14, lineHeight: 1.8, marginBottom: 20 }}>
+            دسترسی شما به این حساب توسط مربی یا مدیریت باشگاه غیرفعال شده است. لطفاً برای بررسی وضعیت و فعال‌سازی مجدد با مربی یا پشتیبانی باشگاه تماس بگیرید.
+          </p>
+          <button type="button" className="button button--ghost" onClick={() => void signOut()} style={{ margin: '0 auto' }}>
+            <LogOut size={16} /> خروج از حساب
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (user.mustChangePassword) return <Navigate to="/account/change-password" replace />;
   return <>{children}</>;
 }
 
 /** Requires one of the roles. Students with a temporary password go to the change-password screen first. */
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
-  const { status, user } = useSession();
+  const { status, user, signOut } = useSession();
   if (status === 'loading') return <p className="account-muted">در حال بارگذاری…</p>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.isActive === false) {
+    return (
+      <div className="account-shell" style={{ display: 'grid', placeItems: 'center', minHeight: '80vh', padding: 20 }}>
+        <div className="panel-card" style={{ maxWidth: 420, textAlign: 'center', padding: 24, border: '1px solid #f87171' }} role="alert">
+          <h2 style={{ color: '#f87171', fontSize: 18, marginBottom: 12 }}>حساب کاربری شما غیرفعال شده است</h2>
+          <p className="account-muted" style={{ fontSize: 14, lineHeight: 1.8, marginBottom: 20 }}>
+            دسترسی شما به این حساب توسط مربی یا مدیریت باشگاه غیرفعال شده است. لطفاً برای بررسی وضعیت و فعال‌سازی مجدد با مربی یا پشتیبانی باشگاه تماس بگیرید.
+          </p>
+          <button type="button" className="button button--ghost" onClick={() => void signOut()} style={{ margin: '0 auto' }}>
+            <LogOut size={16} /> خروج از حساب
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (user.mustChangePassword) return <Navigate to="/account/change-password" replace />;
   if (!roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
   return <>{children}</>;
