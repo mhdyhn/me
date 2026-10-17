@@ -28,13 +28,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const { user: current } = await api<{ user: PublicUser }>('GET', '/me');
+      if (current.isActive === false) {
+        try {
+          window.sessionStorage.setItem('meety:deactivated-message', 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
+        } catch {
+          // Ignore
+        }
+        clearToken();
+        clearStoredUser();
+        setUser(null);
+        setStatus('signed-out');
+        return;
+      }
       setUser(current);
       setStoredUser(current);
       setStatus('signed-in');
     } catch (error) {
       // An expired or revoked session is a normal sign-out. A network failure or offline restart
       // keeps the stored session so the user remains signed in.
-      if (error instanceof ApiError && error.status === 401) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        if (error.status === 403 && error.message.includes('غیرفعال')) {
+          try {
+            window.sessionStorage.setItem('meety:deactivated-message', error.message);
+          } catch {
+            // Ignore
+          }
+        }
         clearToken();
         clearStoredUser();
         setUser(null);

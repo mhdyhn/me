@@ -19,6 +19,7 @@ export interface PublicUser {
   coachId: number | null;
   mustChangePassword: boolean;
   iban?: string | null;
+  isActive?: boolean;
 }
 
 export interface ProgramItem {
@@ -146,6 +147,14 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
   const json = (await response.json().catch(() => ({}))) as { error?: string } & T;
   // A rejected session anywhere in the app sends the user back to sign-in, instead of a dead screen.
   if (response.status === 401 && path !== '/auth/login') {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
+  if (response.status === 403 && path !== '/auth/login' && json.error?.includes('غیرفعال')) {
+    try {
+      window.sessionStorage.setItem('meety:deactivated-message', json.error);
+    } catch {
+      // Ignore
+    }
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   }
   if (!response.ok) {

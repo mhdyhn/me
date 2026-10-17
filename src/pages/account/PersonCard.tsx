@@ -7,30 +7,37 @@ interface PersonCardProps {
   /** The generated password when it is still the one in use; null once the person has chosen their own. */
   password: string | null;
   mustChangePassword: boolean;
-  /** Short role label shown under the name, e.g. «مربی» or «شاگرد». */
+  /** Short role label shown under the name, e.g. «مربی» یا «شاگرد». */
   roleLabel: string;
+  /** Whether the account is active. Defaults to true. */
+  isActive?: boolean;
   /** Extra badges on the header, e.g. the student count. */
   badges?: ReactNode;
   /** Buttons along the bottom of the card. */
   actions: ReactNode;
+  /** Extra content inside the card, such as the student list. */
+  children?: ReactNode;
 }
 
 /** One person's card: identity, sign-in details with copy buttons, and actions. Used for coaches (admin) and students (coach). */
-export function PersonCard({ name, username, password, mustChangePassword, roleLabel, badges, actions }: PersonCardProps) {
+export function PersonCard({ name, username, password, mustChangePassword, roleLabel, isActive = true, badges, actions, children }: PersonCardProps) {
   return (
-    <article className="person-card">
+    <article className={`person-card ${!isActive ? 'person-card--inactive' : ''}`}>
       <header className="person-card__head">
         <span className="person-card__avatar" aria-hidden="true">{name.trim().charAt(0) || '؟'}</span>
         <div className="person-card__identity">
           <strong>{name}</strong>
           <span className="person-card__role">{roleLabel}</span>
         </div>
-        {(badges || mustChangePassword) && (
-          <div className="person-card__badges">
-            {badges}
-            {mustChangePassword && <span className="badge">رمز موقت</span>}
-          </div>
-        )}
+        <div className="person-card__badges">
+          {!isActive ? (
+            <span className="badge badge--danger">غیرفعال</span>
+          ) : (
+            <span className="badge badge--success">فعال</span>
+          )}
+          {badges}
+          {mustChangePassword && <span className="badge">رمز موقت</span>}
+        </div>
       </header>
 
       <dl className="person-card__credentials">
@@ -46,6 +53,8 @@ export function PersonCard({ name, username, password, mustChangePassword, roleL
           </div>
         )}
       </dl>
+
+      {children}
 
       <footer className="person-card__actions">{actions}</footer>
     </article>

@@ -12,6 +12,7 @@ export interface PublicUser {
   coachId: number | null;
   mustChangePassword: boolean;
   iban?: string | null;
+  isActive: boolean;
 }
 
 interface UserRow {
@@ -24,6 +25,7 @@ interface UserRow {
   must_change_password: number;
   password_enc: string | null;
   iban?: string | null;
+  is_active?: number | null;
 }
 
 export interface StoredUser extends PublicUser {
@@ -43,6 +45,7 @@ function fromRow(row: UserRow): StoredUser {
     passwordHash: row.password_hash,
     passwordEnc: row.password_enc ?? null,
     iban: row.iban ?? null,
+    isActive: row.is_active === undefined || row.is_active === null ? true : Number(row.is_active) === 1,
   };
 }
 
@@ -98,6 +101,10 @@ export async function updatePassword(db: Db, id: number, passwordHash: string, m
 
 export async function updateCoachIban(db: Db, id: number, iban: string): Promise<void> {
   await db.query("UPDATE users SET iban = $1 WHERE id = $2 AND role = 'coach'", [iban, id]);
+}
+
+export async function setUserActive(db: Db, id: number, isActive: boolean): Promise<void> {
+  await db.query('UPDATE users SET is_active = $1 WHERE id = $2', [isActive ? 1 : 0, id]);
 }
 
 export async function listCoaches(db: Db): Promise<PublicUser[]> {

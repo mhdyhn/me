@@ -105,6 +105,7 @@ async function migrate(db: Db): Promise<void> {
       must_change_password INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       password_enc TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
       CHECK ((role = 'student') = (coach_id IS NOT NULL))
     );
 
@@ -141,4 +142,5 @@ async function migrate(db: Db): Promise<void> {
   await migratePayments(db);
   await migrateBiometrics(db);
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT;');
+  await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;');
 }
