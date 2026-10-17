@@ -8,6 +8,21 @@ import { adminPersonalProgram } from '../data/adminProgram';
 
 const PROGRAM_KEY = 'programTemplates';
 const BACKUP_KEY = 'programBackup';
+const ADMIN_SEED_KEY = 'adminPersonalProgramSeeded';
+
+async function hasAdminProgramSeedMarker(): Promise<boolean> {
+  if (!usesOwnerData() || import.meta.env.MODE === 'test') return true;
+  const record = await db.preferences.get(ADMIN_SEED_KEY);
+  return record?.value === true;
+}
+
+async function seedAdminPersonalProgram() {
+  const personalProgram = structuredClone(adminPersonalProgram);
+  await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
+  await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
+  setActiveProgram(personalProgram);
+  await api('PUT', '/me/personal-program', { program: personalProgram }).catch(() => {});
+}
 
 const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
   Array.isArray(value) && value.length > 0 && value.every((day) => day && typeof day === 'object' && Array.isArray((day as WorkoutTemplate).exercises));
@@ -28,11 +43,16 @@ export async function syncCloudProgram() {
         if (isProgramShape(res.program) && validateProgram(res.program).length === 0 && isLegacyOwnerDefault(res.program)) {
           const personalProgram = structuredClone(adminPersonalProgram);
           await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
+          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
           setActiveProgram(personalProgram);
           await api('PUT', '/me/personal-program', { program: personalProgram }).catch(() => {});
           return;
         }
         if (res.program.length === 0) {
+          if (usesOwnerData() && !(await hasAdminProgramSeedMarker())) {
+            await seedAdminPersonalProgram();
+            return;
+          }
           await db.preferences.put({ key: PROGRAM_KEY, value: [] });
           setActiveProgram([]);
           return;
@@ -63,6 +83,11 @@ export async function loadStoredProgram() {
     if (record !== undefined) {
       const value = record?.value;
       if (Array.isArray(value) && value.length === 0) {
+        if (usesOwnerData() && !(await hasAdminProgramSeedMarker())) {
+          await seedAdminPersonalProgram();
+          void syncCloudProgram();
+          return;
+        }
         setActiveProgram([]);
         void syncCloudProgram();
         return;
@@ -71,6 +96,7 @@ export async function loadStoredProgram() {
         if (isLegacyOwnerDefault(value)) {
           const personalProgram = structuredClone(adminPersonalProgram);
           await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
+          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
           setActiveProgram(personalProgram);
           void syncCloudProgram();
           return;
@@ -80,8 +106,12 @@ export async function loadStoredProgram() {
         return;
       }
     }
-    setActiveProgram(usesOwnerData() ? structuredClone(import.meta.env.MODE === 'test' ? originalProgramCopy() : adminPersonalProgram) : []);
-    void syncCloudProgram();
+    if (usesOwnerData() && import.meta.env.MODE !== 'test') {
+      await seedAdminPersonalProgram();
+    } else {
+      setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
+      void syncCloudProgram();
+    }
   } catch (error) {
     console.error('Meety could not read the saved programme.', error);
   }
@@ -96,6 +126,7 @@ export async function saveProgram(next: WorkoutTemplate[]) {
   if (errors.length) throw new Error(errors[0]);
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
   await db.preferences.put({ key: PROGRAM_KEY, value: next });
+  if (usesOwnerData() && import.meta.env.MODE !== 'test') await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
   setActiveProgram(next);
 
   // Sync to cloud in background
@@ -110,6 +141,7 @@ export async function saveProgram(next: WorkoutTemplate[]) {
 export async function clearProgram() {
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
   await db.preferences.put({ key: PROGRAM_KEY, value: [] });
+  if (usesOwnerData() && import.meta.env.MODE !== 'test') await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
   setActiveProgram([]);
 
   // Sync deletion to cloud in background
