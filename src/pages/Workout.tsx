@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
-import { exerciseById } from '../data/exercises';
+import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
 import { exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
 import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
@@ -44,7 +44,8 @@ export function Workout() {
   const activeTemplate = session ? getWorkoutTemplate(session.templateId) : template;
   const currentExerciseIndex = session?.currentExerciseIndex ?? 0;
   const currentWorkoutExercise = activeTemplate?.exercises[currentExerciseIndex];
-  const exercise = currentWorkoutExercise ? exerciseById(currentWorkoutExercise.exerciseId) : undefined;
+  const exercise = currentWorkoutExercise ? getExerciseGuide(currentWorkoutExercise.exerciseId) : undefined;
+  const visualExerciseId = currentWorkoutExercise ? getExerciseVisualId(currentWorkoutExercise.exerciseId) : '';
   const prescription = currentWorkoutExercise?.prescription;
   const sessionExercise = session?.exercises[currentExerciseIndex];
   const setNumber = (session?.currentSetIndex ?? 0) + 1;
@@ -158,7 +159,7 @@ export function Workout() {
         </div>
         <div className="workout-summary-grid">
           <section className="panel-card summary-breakdown"><div className="card-topline"><span className="eyebrow">خلاصهٔ جلسه</span><Dumbbell size={16} className="icon-accent" /></div><h3>{getWorkoutTemplate(completed.templateId)?.name ?? completed.name}</h3><p className="muted">{formatDate(completed.startedAt, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{programExerciseName(item.exerciseId) ?? exerciseById(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
+            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{programExerciseName(item.exerciseId) ?? getExerciseGuide(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
             <div className="volume-callout"><span>حجم کل تمرین</span><strong>{faNumber(Math.round(totals.volumeKg))} <small>کیلوگرم × تکرار</small></strong></div>
           </section>
           <section className="panel-card summary-notes"><div className="card-topline"><span className="eyebrow">یادداشت‌های جلسه</span><Info size={16} className="icon-muted" /></div><label htmlFor="workout-notes">نکته‌ای هست که بخواهی یادت بماند؟</label><textarea id="workout-notes" value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} onBlur={() => void saveSession({ ...completed, notes: notesDraft })} placeholder="انرژی، نکتهٔ فرم حرکت یا تنظیم وسیله…" rows={5} /><span className="field-hint">همراه این تمرین ذخیره می‌شود.</span>
@@ -339,15 +340,29 @@ export function Workout() {
       </div>
       <div className="workout-progress-line"><div><span>پیشرفت جلسه</span><strong>{faNumber(loggedSetCount)} <small>/ {faNumber(plannedSetCount)} ست</small></strong></div><span className="progress-track"><span style={{ width: `${progressPercent}%` }} /></span><small>{faNumber(completedExercises)} / {faNumber(activeTemplate.exercises.length)} حرکت</small></div>
 
+      {activeTemplate.description && <section className="panel-card" style={{ margin: '12px 0', padding: 14 }}><strong>پیش از شروع جلسه</strong><p className="muted" style={{ margin: '6px 0 0', lineHeight: 1.8 }}>{activeTemplate.description}</p></section>}
+
       <div className="workout-layout">
         <main className="workout-current-column">
-          <div className="current-exercise-heading"><div><span className="eyebrow">حرکت {faDigits(String(currentExerciseIndex + 1).padStart(2, '0'))} از {faDigits(String(activeTemplate.exercises.length).padStart(2, '0'))}</span><h1>{currentWorkoutExercise.name}</h1>{exercise && <p>{exercise.primaryMuscles.join(' · ')} <span>·</span> {exercise.equipment[0]}</p>}</div>{exercise ? <Link className="text-link" to={`/exercise/${exercise.id}`}>راهنمای اجرا <ChevronRight size={15} /></Link> : <span className="muted">راهنمای تصویری برای این حرکت هنوز اضافه نشده است.</span>}</div>
+          <div className="current-exercise-heading"><div><span className="eyebrow">حرکت {faDigits(String(currentExerciseIndex + 1).padStart(2, '0'))} از {faDigits(String(activeTemplate.exercises.length).padStart(2, '0'))}</span><h1>{currentWorkoutExercise.name}</h1>{exercise && <p>{exercise.primaryMuscles.join(' · ')} <span>·</span> {exercise.equipment[0]}</p>}</div>{exercise ? <Link className="text-link" to={`/exercise/${currentWorkoutExercise.exerciseId}`}>آموزش کامل و فرم صحیح <ChevronRight size={15} /></Link> : <span className="muted">راهنمای اجرا برای این حرکت موجود نیست.</span>}</div>
 
-          {exercise && hasExerciseFigure(exercise.id) && (
+          {exercise && (
+            <details className="panel-card" style={{ padding: 14 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>راهنمای سریع اجرای حرکت در باشگاه</summary>
+              <p><strong>آماده‌سازی:</strong> {exercise.setup}</p>
+              <p><strong>وضعیت شروع:</strong> {exercise.startPosition}</p>
+              <ol style={{ paddingInlineStart: 24, lineHeight: 1.8 }}>{exercise.execution.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}</ol>
+              <p><strong>تنفس و تمپو:</strong> {exercise.breathing} {exercise.tempo}</p>
+              <p><strong>ایمنی:</strong> {exercise.safetyCues[0]}</p>
+              <Link className="text-link" to={`/exercise/${currentWorkoutExercise.exerciseId}`}>باز کردن صفحهٔ کامل آموزش <ChevronRight size={15} /></Link>
+            </details>
+          )}
+
+          {exercise && hasExerciseFigure(visualExerciseId) && (
             <div className="workout-form-card">
               <div className="workout-form-card__visual">
                 <img
-                  src={exerciseFigureSrc(exercise.id, previewFrame)}
+                  src={exerciseFigureSrc(visualExerciseId, previewFrame)}
                   alt={exercise.name}
                   className="workout-form-card__img"
                   loading="eager"
