@@ -85,6 +85,24 @@ describe('aiHealthEngine', () => {
       }
     });
 
+    it('maps the admin five-day plan exercises to their trained muscle zones', () => {
+      const now = new Date('2026-10-14T12:00:00Z');
+      const session: WorkoutSession = {
+        id: 'admin-plan', templateId: 'admin-monday', name: 'دوشنبه: پا، کمر پایین و شکم',
+        startedAt: new Date(now.getTime() - 3 * 3600 * 1000).toISOString(),
+        completedAt: new Date(now.getTime() - 2 * 3600 * 1000).toISOString(),
+        status: 'completed', notes: '', currentExerciseIndex: 0, currentSetIndex: 0,
+        exercises: ['admin-leg-press', 'admin-leg-curl', 'admin-cable-woodchop'].map((exerciseId) => ({
+          exerciseId,
+          sets: [1, 2, 3].map((setNumber) => ({ setNumber, reps: 10, weightKg: 30, rir: 2, doneAt: now.toISOString() })),
+        })),
+      };
+      const recoveries = calculateMuscleRecovery([session], now);
+      expect(recoveries.find((item) => item.zoneKey === 'quads')?.setsLast3Days).toBeGreaterThan(0);
+      expect(recoveries.find((item) => item.zoneKey === 'hamstringsGlutes')?.setsLast3Days).toBeGreaterThan(0);
+      expect(recoveries.find((item) => item.zoneKey === 'core')?.setsLast3Days).toBeGreaterThan(0);
+    });
+
     it('calculates fatigue and recovery for chest after recent bench press', () => {
       const now = new Date('2026-10-14T12:00:00Z');
       const session: WorkoutSession = {

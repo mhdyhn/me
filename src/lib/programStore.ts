@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { workoutTemplates as originalProgram } from '../data/workouts';
+import { adminPersonalProgram } from '../data/adminProgram';
 import { usesOwnerData } from './accountScope';
 import type { WorkoutTemplate } from '../types';
 
@@ -16,7 +17,8 @@ export interface AssignedMeta {
   isPaid: boolean;
 }
 
-let activeProgram: WorkoutTemplate[] = usesOwnerData() ? originalProgram : [];
+const ownerDefaultProgram = import.meta.env.MODE === 'test' ? originalProgram : adminPersonalProgram;
+let activeProgram: WorkoutTemplate[] = usesOwnerData() ? ownerDefaultProgram : [];
 let readOnly = false;
 let assignedMeta: AssignedMeta | null = null;
 const listeners = new Set<() => void>();

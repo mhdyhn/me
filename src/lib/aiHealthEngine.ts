@@ -308,6 +308,38 @@ export const MUSCLE_ZONE_CONFIG: Record<MuscleZoneKey, { label: string; primaryT
  * Map exercise to muscle zone impacts
  */
 function getMuscleZoneImpact(exerciseId: string): { primary: MuscleZoneKey[]; secondary: MuscleZoneKey[] } {
+  // The manager's personal plan uses descriptive admin-* IDs instead of catalogue IDs.
+  // Keep those movements mapped to the same muscle groups so recovery analytics don't
+  // classify unknown exercises as core by default.
+  if (exerciseId.startsWith('admin-')) {
+    const id = exerciseId.slice('admin-'.length);
+    if (['incline-machine-press', 'chest-press', 'pec-deck', 'incline-press'].includes(id)) {
+      return { primary: ['chest'], secondary: ['shoulders', 'arms'] };
+    }
+    if (['machine-shoulder-press', 'lateral-raise', 'single-arm-lateral', 'dumbbell-lateral', 'face-pull', 'rear-delt-fly'].includes(id)) {
+      return { primary: ['shoulders'], secondary: ['arms'] };
+    }
+    if (['triceps-pushdown', 'overhead-triceps', 'preacher-curl', 'hammer-curl', 'reverse-curl', 'cable-curl', 'machine-dip'].includes(id)) {
+      return { primary: ['arms'], secondary: ['shoulders'] };
+    }
+    if (['lat-pulldown', 'neutral-pulldown', 'seated-row', 'tbar-row', 'cable-pullover', 'one-arm-row'].includes(id)) {
+      return { primary: ['back'], secondary: ['arms', 'shoulders'] };
+    }
+    if (['leg-press', 'leg-extension', 'hack-squat', 'smith-squat', 'lunge'].includes(id)) {
+      return { primary: ['quads'], secondary: ['hamstringsGlutes', 'core'] };
+    }
+    if (['leg-curl', 'seated-leg-curl', 'back-extension'].includes(id)) {
+      return { primary: ['hamstringsGlutes'], secondary: ['core'] };
+    }
+    if (['standing-calf-raise', 'seated-calf-raise'].includes(id)) {
+      return { primary: ['quads'], secondary: [] };
+    }
+    if (['hanging-leg-raise', 'cable-woodchop', 'woodchop', 'reverse-crunch', 'plank'].includes(id)) {
+      return { primary: ['core'], secondary: [] };
+    }
+    if (id === 'shrug') return { primary: ['back'], secondary: ['shoulders'] };
+  }
+
   const def = exercises.find((e) => e.id === exerciseId);
   if (!def) {
     // Fallback checks by ID naming

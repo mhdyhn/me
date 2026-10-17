@@ -10,9 +10,12 @@ import { clearProgram, resetProgram, saveProgram, syncCloudProgram } from '../li
 import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
+import { useSession } from '../context/SessionContext';
+import { adminProgramGuidelines } from '../data/adminProgram';
 
 export function Program() {
   const { sessions, activeSession } = useGym();
+  const { user } = useSession();
   const navigate = useNavigate();
   const weeklyCount = getCompletedThisWeek(sessions);
   const workoutTemplates = useProgram();
@@ -193,6 +196,15 @@ export function Program() {
           <span>میانگین زمان<br />هر جلسه</span>
         </div>
       </div>
+
+      {user?.role === 'admin' && (
+        <details className="panel-card" style={{ padding: 16 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700 }}>قوانین اجرا، تغذیه و ریکاوری برنامهٔ شخصی</summary>
+          <ul style={{ margin: '12px 0 0', paddingInlineStart: 24, lineHeight: 1.9 }}>
+            {adminProgramGuidelines.map((guideline) => <li key={guideline}>{guideline}</li>)}
+          </ul>
+        </details>
+      )}
 
       {workoutTemplates.length === 0 && (
         <div className="panel-card program-empty-card">

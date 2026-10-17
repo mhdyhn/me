@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useGym } from '../context/GymProvider';
+import { useSession } from '../context/SessionContext';
 import {
   calculateMuscleRecovery,
   calculateReadinessScore,
@@ -51,11 +52,20 @@ import {
   type StudentBiometricsData,
 } from '../lib/studentAiBiometrics';
 import { faNumber, formatDate } from '../lib/format';
+import { useProgram } from '../lib/programStore';
 
 type ActiveTab = 'recovery' | 'muscles' | 'hinge' | 'noom' | 'biometrics';
 
 export function AiHub() {
-  const { sessions } = useGym();
+  const { sessions, bodyweights, profile } = useGym();
+  const { user } = useSession();
+  const program = useProgram();
+  const weekdayNames = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+  const todayName = weekdayNames[new Date().getDay()];
+  const todayWorkout = program.find((workout) => workout.dayLabel === todayName || workout.dayLabel.startsWith(`${todayName}:`));
+  const adminOffDayLabel = user?.role === 'admin' && !todayWorkout
+    ? todayName === 'سه‌شنبه' ? 'روز استراحت برنامه' : todayName === 'جمعه' ? 'والیبال (فعالیت غیرِ وزنه‌ای)' : 'بدون جلسهٔ وزنه در برنامه'
+    : `امروز (${todayName}) جلسهٔ تمرینی ثبت‌شده‌ای ندارد`;
   const [activeTab, setActiveTab] = useState<ActiveTab>('recovery');
   const [metrics, setMetrics] = useState<HealthMetrics>(getStoredHealthMetrics);
   const [activeJoints, setActiveJoints] = useState<JointKey[]>(getStoredJointConcerns);
@@ -98,6 +108,25 @@ export function AiHub() {
 
   const readiness = calculateReadinessScore(metrics, sessions);
   const muscleRecoveries = calculateMuscleRecovery(sessions);
+  const focusText = todayWorkout?.focus ?? '';
+  const targetZones = new Set<string>();
+  if (focusText.includes('سینه')) targetZones.add('chest');
+  if (focusText.includes('پشت') || focusText.includes('زیربغل')) targetZones.add('back');
+  if (focusText.includes('سرشانه')) targetZones.add('shoulders');
+  if (focusText.includes('بازو') || focusText.includes('دوسر') || focusText.includes('سه‌سر')) targetZones.add('arms');
+  if (focusText.includes('پا')) {
+    targetZones.add('quads');
+    targetZones.add('hamstringsGlutes');
+  }
+  if (focusText.includes('شکم') || focusText.includes('کمر')) targetZones.add('core');
+  const plannedMuscleRecovery = muscleRecoveries.filter((status) => targetZones.has(status.zoneKey));
+  const lowestPlannedRecovery = plannedMuscleRecovery.length
+    ? Math.min(...plannedMuscleRecovery.map((status) => status.recoveryPercent))
+    : null;
+  const currentWeightKg = [...bodyweights]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weightKg ?? profile.weightKg ?? 77;
+  const proteinMinG = Math.round(currentWeightKg * 1.6);
+  const proteinMaxG = Math.round(currentWeightKg * 2.2);
 
   const handleSync = (source: HealthTrackerSource) => {
     const updated = simulateTrackerSync(source);
@@ -435,6 +464,28 @@ export function AiHub() {
               <span className="badge badge--neutral">موتور اختصاصی Fitbod</span>
             </div>
 
+            <div className="panel-card" style={{ margin: '12px 0', padding: 14 }}>
+              <strong>{todayWorkout ? `برنامهٔ امروز (${todayWorkout.dayLabel}): ${todayWorkout.name}` : adminOffDayLabel}</strong>
+              <p className="muted" style={{ margin: '6px 0 0' }}>
+                {todayWorkout
+                  ? `تمرکز: ${todayWorkout.focus} · ${faNumber(todayWorkout.exercises.length)} حرکت. وضعیت عضلات هدف از ست‌های واقعی ثبت‌شده در جلسات اخیر سنجیده می‌شود.`
+                  : user?.role === 'admin' && todayName === 'جمعه'
+                    ? 'والیبال در تقویم برنامه دیده می‌شود؛ چون ثبت خودکار بازی وجود ندارد، فشار والیبال فقط اگر در اپ ثبت شود وارد تحلیل آمادگی خواهد شد.'
+                    : 'تحلیل آمادگی و ریکاوری همچنان بر اساس داده‌های بدن و جلسه‌های ثبت‌شدهٔ اخیر انجام می‌شود.'}
+              </p>
+              {todayWorkout && plannedMuscleRecovery.length > 0 && (
+                <p role="status" style={{ margin: '8px 0 0', lineHeight: 1.8 }}>
+                  {lowestPlannedRecovery !== null && lowestPlannedRecovery < 55
+                    ? `توجه: یکی از عضلات هدف برنامه در وضعیت ریکاوری پایین است (${faNumber(lowestPlannedRecovery)}٪). شدت یا حجم را با احتیاط تنظیم کن؛ در صورت درد، تمرین را متوقف کن.`
+                    : lowestPlannedRecovery !== null && lowestPlannedRecovery < 80
+                      ? `ریکاوری عضلات هدف کامل نیست (کمترین شاخص ${faNumber(lowestPlannedRecovery)}٪). روی فرم صحیح تمرکز کن و برای افزایش وزنه عجله نکن.`
+                      : plannedMuscleRecovery.some((status) => status.setsLast3Days > 0)
+                        ? `عضلات هدف بر اساس آخرین لاگ‌ها در وضعیت مناسبی هستند (کمترین شاخص ${faNumber(lowestPlannedRecovery ?? 100)}٪). همچنان طبق بازهٔ تکرار و RIR برنامه پیش برو.`
+                        : 'هنوز ست ثبت‌شده‌ای برای عضلات هدف در بازهٔ تحلیل وجود ندارد؛ با ثبت تمرین‌ها، پیشنهاد ریکاوری شخصی‌تر می‌شود.'}
+                </p>
+              )}
+            </div>
+
             <div className="muscle-grid">
               {muscleRecoveries.map((m) => (
                 <div key={m.zoneKey} className="muscle-card">
@@ -506,6 +557,14 @@ export function AiHub() {
             </div>
 
             {/* Joint Selector Pills */}
+            {todayWorkout && (
+              <div className="panel-card" style={{ margin: '12px 0', padding: 14 }}>
+                <strong>بار تمرینی برنامهٔ امروز: {todayWorkout.focus}</strong>
+                <p className="muted" style={{ margin: '6px 0 0', lineHeight: 1.8 }}>
+                  این خلاصه از حرکات برنامه است، نه تشخیص آسیب. فقط مفصلی را انتخاب کن که واقعاً در آن درد یا محدودیت داری؛ در صورت درد حین حرکت تمرین را متوقف کن.
+                </p>
+              </div>
+            )}
             <div className="joint-pills">
               {(Object.keys(HINGE_JOINT_ROUTINES) as JointKey[]).map((key) => {
                 const routine = HINGE_JOINT_ROUTINES[key];
@@ -587,6 +646,15 @@ export function AiHub() {
                 </p>
               </div>
             </div>
+
+            {user?.role === 'admin' && (
+              <div className="panel-card" style={{ margin: '12px 0', padding: 14 }}>
+                <strong>هدف تغذیهٔ برنامهٔ شخصی</strong>
+                <p className="muted" style={{ margin: '6px 0 0', lineHeight: 1.8 }}>
+                  با وزن فعلی ثبت‌شدهٔ {faNumber(currentWeightKg)} کیلوگرم، بازهٔ پیشنهادی برنامه برای پروتئین حدود {faNumber(proteinMinG)} تا {faNumber(proteinMaxG)} گرم در روز است؛ برای افزایش وزن، مازاد حدود ۳۰۰ کیلوکالری نسبت به نگهدارنده در نظر گرفته شده. این بخش یادآور هدف است و به‌تنهایی کالری یا پروتئین مصرفی را محاسبه نمی‌کند.
+                </p>
+              </div>
+            )}
 
             {/* Noom 3 Colors Display */}
             <div className="noom-colors-grid">
