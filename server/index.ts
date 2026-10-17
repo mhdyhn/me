@@ -109,6 +109,7 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
       response.writeHead(200, {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Disposition': 'attachment; filename="meety.apk"',
+        'Cache-Control': 'no-cache',
         'Content-Length': stat.size,
       });
       createReadStream(localApk).pipe(response);
@@ -122,6 +123,7 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
     response.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
       'Content-Disposition': 'attachment; filename="meety.apk"',
+      'Cache-Control': 'no-cache',
       'Content-Length': stat.size,
     });
     createReadStream(publicApk).pipe(response);
@@ -143,6 +145,7 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
       response.writeHead(200, {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Disposition': 'attachment; filename="meety.apk"',
+        'Cache-Control': 'no-cache',
         ...(res.headers['content-length'] ? { 'Content-Length': res.headers['content-length'] } : {}),
       });
       res.pipe(response);

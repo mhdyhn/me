@@ -1,12 +1,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { existsSync, unlinkSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export default defineConfig(({ mode }) => {
   const offlineSingleFile = mode === 'offline';
   return {
     plugins: [
       react(),
+      {
+        name: 'exclude-apk-from-dist',
+        closeBundle() {
+          try {
+            const baseDir = import.meta.dirname ?? process.cwd();
+            const apkPath = resolve(baseDir, 'dist', 'meety.apk');
+            if (existsSync(apkPath)) {
+              unlinkSync(apkPath);
+            }
+          } catch {}
+        },
+      },
       ...(!offlineSingleFile
         ? [
             VitePWA({
