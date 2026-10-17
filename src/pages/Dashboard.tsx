@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
@@ -87,7 +88,13 @@ export function Dashboard() {
               type="button"
               className="button button--small button--secondary"
               onClick={async () => {
-                if (window.confirm(`آیا تمرین «${activeWorkoutName}» پایان یافته و ثبت پیشرفت شود؟`)) {
+                if (await confirmModal({
+                  title: 'اتمام جلسه تمرین',
+                  message: `آیا تمرین «${activeWorkoutName}» پایان یافته و ثبت پیشرفت شود؟`,
+                  confirmText: 'ثبت و اتمام',
+                  cancelText: 'ادامه تمرین',
+                  variant: 'primary',
+                })) {
                   await completeActiveSession(activeSession.id);
                 }
               }}
@@ -98,7 +105,13 @@ export function Dashboard() {
               type="button"
               className="button button--small button--ghost"
               onClick={async () => {
-                if (window.confirm(`آیا تمرین «${activeWorkoutName}» لغو و حذف شود؟ (با لغو تمرین، می‌توانید روز دیگری را شروع کنید)`)) {
+                if (await confirmModal({
+                  title: 'لغو و حذف جلسه تمرین',
+                  message: `آیا تمرین «${activeWorkoutName}» لغو و حذف شود؟ (با لغو تمرین، می‌توانید روز دیگری را شروع کنید)`,
+                  confirmText: 'لغو و حذف جلسه',
+                  cancelText: 'انصراف',
+                  variant: 'danger',
+                })) {
                   await deleteSession(activeSession.id);
                 }
               }}

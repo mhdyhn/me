@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowLeft, ArrowUp, Plus, RotateCcw, Save, Trash2, Undo2, Sparkles, X, ChevronLeft, Dumbbell, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { confirmModal } from '../components/ConfirmModal';
 import { SectionHeading } from '../components/SectionHeading';
 import { exercises } from '../data/exercises';
 import { hasExerciseFigure, exerciseFigureSrc } from '../data/exerciseFigures';
@@ -93,22 +94,45 @@ export function ProgramEditor() {
   const addExercise = (dayIndex: number, exercise: WorkoutExercise) =>
     update(draft.map((day, index) => (index === dayIndex ? { ...day, exercises: [...day.exercises, exercise] } : day)));
 
-  const removeExercise = (dayIndex: number, exerciseIndex: number) => {
+  const removeExercise = async (dayIndex: number, exerciseIndex: number) => {
     const day = draft[dayIndex];
     if (!day) return;
     const item = day.exercises[exerciseIndex];
-    if (!item || !window.confirm(`«${item.name}» از این روز حذف شود؟`)) return;
+    if (!item) return;
+    const ok = await confirmModal({
+      title: 'حذف حرکت از روز',
+      message: `«${item.name}» از این روز حذف شود؟`,
+      confirmText: 'حذف حرکت',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     update(draft.map((d, index) => (index === dayIndex ? { ...d, exercises: d.exercises.filter((_, i) => i !== exerciseIndex) } : d)));
   };
 
-  const deleteDay = (dayIndex: number) => {
+  const deleteDay = async (dayIndex: number) => {
     const day = draft[dayIndex];
-    if (!day || !window.confirm(`«${day.name || 'این روز'}» با همهٔ حرکت‌هایش حذف شود؟`)) return;
+    if (!day) return;
+    const ok = await confirmModal({
+      title: 'حذف روز تمرینی',
+      message: `«${day.name || 'این روز'}» با همهٔ حرکت‌هایش حذف شود؟`,
+      confirmText: 'حذف روز',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     update(draft.filter((_, index) => index !== dayIndex));
   };
 
-  const deleteAllDays = () => {
-    if (!window.confirm('همهٔ روزها و حرکت‌های این برنامه حذف شوند؟')) return;
+  const deleteAllDays = async () => {
+    const ok = await confirmModal({
+      title: 'حذف کل روزهای برنامه',
+      message: 'همهٔ روزها و حرکت‌های این برنامه حذف شوند؟',
+      confirmText: 'حذف همه روزها',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     update([]);
     setStatus('همهٔ روزها پاک شدند. با «افزودن روز» یا «الگوها و برنامه جدید» ادامه دهید.');
   };
@@ -163,7 +187,14 @@ export function ProgramEditor() {
   };
 
   const restoreOriginal = async () => {
-    if (!window.confirm('برنامهٔ فعلی با برنامهٔ اصلی RAGE جایگزین شود؟ نسخهٔ فعلی به‌عنوان پشتیبان نگه داشته می‌شود.')) return;
+    const ok = await confirmModal({
+      title: 'بازگردانی برنامه پیش‌فرض',
+      message: 'برنامهٔ فعلی با برنامهٔ اصلی RAGE جایگزین شود؟ نسخهٔ فعلی به‌عنوان پشتیبان نگه داشته می‌شود.',
+      confirmText: 'جایگزینی برنامه',
+      cancelText: 'انصراف',
+      variant: 'warning',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await resetProgram();

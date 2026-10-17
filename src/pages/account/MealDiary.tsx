@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Save } from 'lucide-react';
+import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api } from '../../lib/api';
 import { getLocalDateKey } from '../../lib/format';
 import { dayTotals, type Diary, type PlanMeal, type Targets } from '../../lib/nutrition';
@@ -42,9 +43,18 @@ export function MealDiary({ targets }: { targets: Targets }) {
   const dirty = meals !== null && JSON.stringify(meals) !== snapshot;
   const total = useMemo(() => (meals ? dayTotals({ name: day, meals }) : null), [meals, day]);
 
-  function changeDay(next: string) {
+  async function changeDay(next: string) {
     if (!next || next === day) return;
-    if (dirty && !window.confirm('تغییرات این روز ذخیره نشده‌اند. بدون ذخیره به روز دیگر بروید؟')) return;
+    if (dirty) {
+      const ok = await confirmModal({
+        title: 'تغییرات ذخیره‌نشده',
+        message: 'تغییرات این روز ذخیره نشده‌اند. بدون ذخیره به روز دیگر بروید؟',
+        confirmText: 'رفتن به روز دیگر',
+        cancelText: 'انصراف و ماندن',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
     setSaved(false);
     setSaveError(null);
     setDay(next);
