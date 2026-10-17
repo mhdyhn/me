@@ -13,7 +13,14 @@ import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib
 
 export function Progress() {
   const { sessions, bodyweights, profile, addBodyweight, deleteBodyweight, deleteSession } = useGym();
-  useProgram();
+  const program = useProgram();
+  const progressExercises = useMemo(() => {
+    const byId = new Map(exercises.map((exercise) => [exercise.id, { id: exercise.id, name: exercise.name }]));
+    for (const item of program.flatMap((day) => day.exercises)) {
+      byId.set(item.exerciseId, { id: item.exerciseId, name: item.name });
+    }
+    return [...byId.values()];
+  }, [program]);
 
   const completedSessions = useMemo(() => {
     return sessions
@@ -58,7 +65,7 @@ export function Progress() {
         ? performance.sets.reduce((sum, set) => sum + set.reps, 0)
         : performance.sets.reduce((sum, set) => sum + set.weightKg * set.reps, 0),
   })), [performances, selectedMetric]);
-  const selectedName = exercises.find((exercise) => exercise.id === selectedExercise)?.name ?? 'حرکت';
+  const selectedName = progressExercises.find((exercise) => exercise.id === selectedExercise)?.name ?? 'حرکت';
   const metricUnit = selectedMetric === 'weight' ? ' کیلوگرم' : selectedMetric === 'reps' ? ' تکرار' : ' کیلوگرم·تکرار';
   const metricDescription = selectedMetric === 'weight' ? 'سنگین‌ترین ست کاری ثبت‌شده در هر جلسهٔ کامل‌شده · کیلوگرم' : selectedMetric === 'reps' ? 'مجموع تکرارهای ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده' : 'وزنه × تکرار ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده';
   const metricName = selectedMetric === 'weight' ? 'وزنهٔ کاری' : selectedMetric === 'reps' ? 'مجموع تکرارها' : 'حجم تمرین';
@@ -70,7 +77,7 @@ export function Progress() {
   const recentWeights = bodyweights.filter((entry) => new Date(`${entry.date}T00:00:00`).getTime() >= new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate()).getTime());
   const weeklyAverage = recentWeights.length ? recentWeights.reduce((sum, entry) => sum + entry.weightKg, 0) / recentWeights.length : null;
   const weightPoints = [...bodyweights].reverse().map((entry) => ({ label: formatDate(`${entry.date}T00:00:00`, { month: 'short', day: 'numeric' }), value: entry.weightKg }));
-  const records = useMemo(() => exercises.map((exercise) => ({ exercise, best: getBestSet(sessions, exercise.id) })).filter((item) => item.best).slice(0, 6), [sessions]);
+  const records = useMemo(() => progressExercises.map((exercise) => ({ exercise, best: getBestSet(sessions, exercise.id) })).filter((item) => item.best).slice(0, 6), [progressExercises, sessions]);
   const weeklyTotals = useMemo(() => getWeeklyTotals(sessions, 6), [sessions]);
   const weekComparison = useMemo(() => getWeekComparison(weeklyTotals), [weeklyTotals]);
   const weeklyPoints = weeklyTotals.map((week) => ({
@@ -142,7 +149,7 @@ export function Progress() {
       </div>
 
       <section className="panel-card progression-panel">
-        <div className="progression-panel__header"><div><span className="eyebrow">سوابق حرکت</span><h2>یک حرکت را دنبال کن.</h2></div><div className="progression-panel__controls"><label className="select-with-icon"><span className="sr-only">انتخاب حرکت</span><select value={selectedExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select><ChevronDown size={15} /></label><label className="select-with-icon"><span className="sr-only">انتخاب معیار نمودار</span><select value={selectedMetric} onChange={(event) => setSelectedMetric(event.target.value as 'weight' | 'reps' | 'volume')}><option value="weight">وزنهٔ کاری</option><option value="reps">مجموع تکرارها</option><option value="volume">حجم تمرین</option></select><ChevronDown size={15} /></label></div></div>
+        <div className="progression-panel__header"><div><span className="eyebrow">سوابق حرکت</span><h2>یک حرکت را دنبال کن.</h2></div><div className="progression-panel__controls"><label className="select-with-icon"><span className="sr-only">انتخاب حرکت</span><select value={selectedExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{progressExercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select><ChevronDown size={15} /></label><label className="select-with-icon"><span className="sr-only">انتخاب معیار نمودار</span><select value={selectedMetric} onChange={(event) => setSelectedMetric(event.target.value as 'weight' | 'reps' | 'volume')}><option value="weight">وزنهٔ کاری</option><option value="reps">مجموع تکرارها</option><option value="volume">حجم تمرین</option></select><ChevronDown size={15} /></label></div></div>
         <p className="muted">{metricDescription}</p>
         <ProgressChart points={chartPoints} unit={metricUnit} label={`${selectedName} · ${metricName}`} />
         <div className="history-table-wrap">
@@ -236,7 +243,7 @@ export function Progress() {
                   <div className="session-history-detail">
                     {session.exercises.filter((item) => item.sets.length > 0).map((item) => (
                       <div className="session-history-exercise" key={item.exerciseId}>
-                        <strong>{programExerciseName(item.exerciseId) ?? exercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? item.exerciseId}</strong>
+                        <strong>{programExerciseName(item.exerciseId) ?? progressExercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? item.exerciseId}</strong>
                         <div>{item.sets.map((set) => <span key={set.setNumber}>ست {faNumber(set.setNumber)}: {kg(set.weightKg)} × {faNumber(set.reps)} · {faNumber(set.rir)} تکرار در ذخیره{set.notes ? ` · ${set.notes}` : ''}</span>)}</div>
                       </div>
                     ))}

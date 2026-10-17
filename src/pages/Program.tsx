@@ -3,7 +3,7 @@ import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, Pl
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
-import { exerciseById } from '../data/exercises';
+import { getExerciseGuide } from '../lib/exerciseGuide';
 import { getCompletedThisWeek } from '../lib/analytics';
 import { isProgramReadOnly, useAssignedMeta, useProgram } from '../lib/programStore';
 import { clearProgram, resetProgram, saveProgram, syncCloudProgram } from '../lib/programPersistence';
@@ -270,7 +270,7 @@ export function Program() {
                 <details className="program-exercise-details">
                   <summary>نمایش ترتیب حرکت‌ها <span>{faNumber(exerciseCount)} حرکت</span></summary>
                   <ol>{workout.exercises.map(({ exerciseId, name, prescription }, itemIndex) => {
-                    const exercise = exerciseById(exerciseId);
+                    const exercise = getExerciseGuide(exerciseId);
                     return <li key={`${exerciseId}-${itemIndex}`}>{exercise ? <Link to={`/exercise/${exerciseId}`}>{name}</Link> : <span>{name}</span>}<span>{faNumber(prescription.sets)} × {faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)}</span></li>;
                   })}</ol>
                 </details>

@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { SectionHeading } from '../components/SectionHeading';
 import { useGym } from '../context/GymProvider';
-import { exerciseById } from '../data/exercises';
+import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
 import { exercisePhotoIds, exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getProgressionAdvice } from '../lib/analytics';
@@ -13,7 +13,8 @@ import { faDigits, faNumber, formatDate, kg } from '../lib/format';
 
 export function ExerciseDetail() {
   const { exerciseId = '' } = useParams();
-  const exercise = exerciseById(exerciseId);
+  const exercise = getExerciseGuide(exerciseId);
+  const visualExerciseId = getExerciseVisualId(exerciseId);
   const navigate = useNavigate();
   const { sessions } = useGym();
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -57,7 +58,7 @@ export function ExerciseDetail() {
 
   // Lyfta-style animated visual loop player
   useEffect(() => {
-    if (!isPlayingLoop || viewMode !== 'loop' || !exercise || !hasExerciseFigure(exercise.id)) {
+    if (!isPlayingLoop || viewMode !== 'loop' || !exercise || !hasExerciseFigure(visualExerciseId)) {
       setLoopProgress(0);
       return;
     }
@@ -105,11 +106,11 @@ export function ExerciseDetail() {
     else navigate('/program');
   };
 
-  const hasFigure = hasExerciseFigure(exercise.id);
+  const hasFigure = hasExerciseFigure(visualExerciseId);
 
   return (
     <div className="page-stack exercise-detail-page">
-      <Link to="/exercises" className="back-link"><ArrowLeft size={16} /> کتابخانهٔ حرکت‌ها</Link>
+      <Link to={exerciseId.startsWith('admin-') ? '/program' : '/exercises'} className="back-link"><ArrowLeft size={16} /> {exerciseId.startsWith('admin-') ? 'بازگشت به برنامه' : 'کتابخانهٔ حرکت‌ها'}</Link>
       <section className="exercise-hero panel-card">
         <div className="exercise-hero__copy">
           <div className="tag-row"><span className={`category-tag category-tag--${exercise.category.toLowerCase()}`}>{categoryLabels[exercise.category]}</span><span className="difficulty-tag">{difficultyLabels[exercise.difficulty]}</span></div>
@@ -145,7 +146,7 @@ export function ExerciseDetail() {
                     <span>{activeFrame === 'start' ? 'وضعیت ۱: آماده‌سازی و شروع' : 'وضعیت ۲: اوج انقباض و اجرا'}</span>
                   </div>
                   <img
-                    src={exerciseFigureSrc(exercise.id, activeFrame)}
+                    src={exerciseFigureSrc(visualExerciseId, activeFrame)}
                     alt={`${exercise.name}: ${activeFrame === 'start' ? 'وضعیت شروع' : 'وضعیت انقباض'}`}
                     className="lyfta-player__img"
                     loading="eager"
@@ -159,11 +160,11 @@ export function ExerciseDetail() {
                 <div style={{ padding: '14px 14px 0' }}>
                   <figure className="exercise-figures" style={{ margin: 0 }}>
                     <div>
-                      <img src={exerciseFigureSrc(exercise.id, 'start')} alt={`${exercise.name}: وضعیت شروع`} loading="lazy" decoding="async" />
+                      <img src={exerciseFigureSrc(visualExerciseId, 'start')} alt={`${exercise.name}: وضعیت شروع`} loading="lazy" decoding="async" />
                       <figcaption>شروع</figcaption>
                     </div>
                     <div>
-                      <img src={exerciseFigureSrc(exercise.id, 'main')} alt={`${exercise.name}: وضعیت اجرا`} loading="lazy" decoding="async" />
+                      <img src={exerciseFigureSrc(visualExerciseId, 'main')} alt={`${exercise.name}: وضعیت اجرا`} loading="lazy" decoding="async" />
                       <figcaption>اجرا</figcaption>
                     </div>
                   </figure>
@@ -217,7 +218,7 @@ export function ExerciseDetail() {
 
           <section className="panel-card movement-card">
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>
-            {exercisePhotoIds.has(exercise.id) && <p className="figure-note">تصویرهای آموزشی منطبق بر الگوی حرکتی استاندارد و مفاصل هدف طراحی شده‌اند.</p>}
+            {exercisePhotoIds.has(visualExerciseId) && <p className="figure-note">تصویرهای آموزشی منطبق بر الگوی حرکتی استاندارد و مفاصل هدف طراحی شده‌اند.</p>}
             <p className="movement-hint">با انتخاب هر مرحله، متن آن مرحله نمایش داده می‌شود؛ برای دیدن کل چرخه «پخش دوبارهٔ مراحل» را بزن.</p>
             <div className="movement-timeline" role="tablist" aria-label="مراحل حرکت">
               {exercise.movementPhases.map((phase, index) => <button role="tab" aria-selected={phaseIndex === index} className={`movement-phase${phaseIndex === index ? ' is-active' : ''}`} key={phase.label} onClick={() => showStep(index)}><span>{faDigits(String(index + 1).padStart(2, '0'))}</span><strong>{phase.label}</strong></button>)}
@@ -263,7 +264,7 @@ export function ExerciseDetail() {
           </section>
 
           <section className="panel-card next-exercise-card"><span className="eyebrow">آمادهٔ تمرین هستی؟</span><h3>این نکته‌ها را در ست بعدی به‌کار ببر.</h3><p>وزنه، تکرار و میزان تلاش را ثبت کن تا جلسهٔ بعد بر پایهٔ دادهٔ واقعی باشد.</p><button className="button button--primary button--full" onClick={beginWorkout}>رفتن به تمرین <ArrowRight size={16} /></button></section>
-          <Link className="text-link aside-library-link" to="/exercises"><ArrowLeft size={14} /> بازگشت به همهٔ حرکت‌ها</Link>
+          <Link className="text-link aside-library-link" to={exerciseId.startsWith('admin-') ? '/program' : '/exercises'}><ArrowLeft size={14} /> {exerciseId.startsWith('admin-') ? 'بازگشت به برنامه' : 'بازگشت به همهٔ حرکت‌ها'}</Link>
         </aside>
       </div>
       <div className="exercise-mobile-footer"><button className="button button--primary button--large button--full" onClick={beginWorkout}>شروع تمرین <ArrowRight size={16} /></button></div>

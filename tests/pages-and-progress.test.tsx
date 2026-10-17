@@ -81,6 +81,7 @@ describe('primary routes', () => {
     ['/program', 'تقسیم‌بندی تمرین‌ها'],
     ['/exercises', 'آموزش حرکت‌ها'],
     ['/exercise/barbell-bench-press', 'شروع، حرکت، پایان.'],
+    ['/exercise/admin-pec-deck', 'شروع، حرکت، پایان.'],
     ['/progress', 'دادهٔ واقعی · پیشرفت پیوسته'],
     ['/nutrition', 'سوخت تمرین'],
     ['/settings', 'پروفایل شما · خصوصی از ابتدا'],
