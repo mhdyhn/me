@@ -80,7 +80,7 @@ export function ExerciseDetail() {
 
     progressTimerRef.current = interval;
     return () => window.clearInterval(interval);
-  }, [isPlayingLoop, viewMode, speed, exercise]);
+  }, [isPlayingLoop, viewMode, speed, exerciseId, visualExerciseId]);
 
   if (!exercise) {
     return <EmptyState title="حرکت پیدا نشد" detail="این حرکت در کتابخانهٔ فعلی وجود ندارد." action={<Link to="/exercises" className="button button--secondary">بازگشت به حرکت‌ها</Link>} />;
@@ -146,9 +146,18 @@ export function ExerciseDetail() {
                     <span>{activeFrame === 'start' ? 'وضعیت ۱: آماده‌سازی و شروع' : 'وضعیت ۲: اوج انقباض و اجرا'}</span>
                   </div>
                   <img
-                    src={exerciseFigureSrc(visualExerciseId, activeFrame)}
-                    alt={`${exercise.name}: ${activeFrame === 'start' ? 'وضعیت شروع' : 'وضعیت انقباض'}`}
-                    className="lyfta-player__img"
+                    src={exerciseFigureSrc(visualExerciseId, 'start')}
+                    alt={`${exercise.name}: وضعیت شروع`}
+                    className="lyfta-player__img lyfta-player__img--start"
+                    style={{ opacity: activeFrame === 'start' ? 1 - loopProgress / 100 : loopProgress / 100 }}
+                    loading="eager"
+                    decoding="async"
+                  />
+                  <img
+                    src={exerciseFigureSrc(visualExerciseId, 'main')}
+                    alt={`${exercise.name}: وضعیت انقباض`}
+                    className="lyfta-player__img lyfta-player__img--main"
+                    style={{ opacity: activeFrame === 'start' ? loopProgress / 100 : 1 - loopProgress / 100 }}
                     loading="eager"
                     decoding="async"
                   />

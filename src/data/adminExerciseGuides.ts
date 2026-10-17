@@ -15,7 +15,7 @@ const guide = (sourceId: string, overlay?: GuideOverlay): AdminGuideConfig => ({
 const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
   'admin-incline-machine-press': guide('incline-dumbbell-press', { setup: 'گزینهٔ دمبل: نیمکت را با شیب کم (حدود ۲۰ تا ۳۵ درجه) تنظیم کن. گزینهٔ دستگاه: صندلی را طوری بالا و پایین کن که دستگیره‌ها هم‌سطح بالاسینه باشند. در هر دو حالت بار سبک برای ست‌های آماده‌سازی انتخاب کن.' }),
   'admin-chest-press': guide('machine-chest-press'),
-  'admin-pec-deck': guide('cable-fly', {
+  'admin-pec-deck': guide('pec-deck', {
     category: 'Push', primaryMuscles: ['سینه'], secondaryMuscles: ['سرشانهٔ جلویی'], equipment: ['دستگاه پک‌دک'],
     setup: 'ارتفاع صندلی را طوری تنظیم کن که دسته‌ها یا پدها هم‌سطح میانهٔ سینه باشند. پشت و سر را به پشتی تکیه بده و وزنهٔ سبک انتخاب کن.',
     startPosition: 'بنشین، کف پاها روی زمین، آرنج‌ها کمی خم و هم‌سطح شانه؛ شانه‌ها را پایین و آرام نگه دار.',
@@ -26,14 +26,14 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
     safetyCues: ['دامنهٔ بدون درد را انتخاب کن و وزنه را آهسته رها کن.', 'اگر شانه درد تیز دارد، حرکت را متوقف کن.'],
     machineSetup: { title: 'تنظیم دستگاه', points: ['صندلی را طوری تنظیم کن که دسته‌ها روبه‌روی سینه باشند.', 'محور حرکت دستگاه را نزدیک خط مفصل شانه قرار بده.', 'پیش از شروع، مسیر وزنه و پین انتخاب وزنه را بررسی کن.'] },
   }),
-  'admin-machine-shoulder-press': guide('smith-shoulder-press', { setup: 'صندلی یا نیمکت دستگاه را طوری تنظیم کن که دستگیره‌ها در شروع کنار شانه باشند. اگر دستگاه اسمیت است، ضامن‌های ایمنی را قبل از شروع تنظیم کن.' }),
+  'admin-machine-shoulder-press': guide('machine-shoulder-press', { setup: 'صندلی یا نیمکت دستگاه را طوری تنظیم کن که دستگیره‌ها در شروع کنار شانه باشند. اگر دستگاه اسمیت است، ضامن‌های ایمنی را قبل از شروع تنظیم کن.' }),
   'admin-lateral-raise': guide('machine-lateral-raise', { setup: 'گزینهٔ دستگاه: صندلی را تنظیم کن تا محور دستگاه با شانه هم‌راستا باشد. گزینهٔ کابل: قرقره را پایین بگذار و کنار دستگاه بایست. در هر دو حالت وزنهٔ سبک بردار و آرنج را کمی خم نگه دار.' }),
   'admin-triceps-pushdown': guide('rope-triceps-pushdown'),
   'admin-overhead-triceps': guide('overhead-cable-triceps-extension'),
   'admin-lat-pulldown': guide('lat-pulldown'),
   'admin-seated-row': guide('seated-cable-row'),
   'admin-tbar-row': guide('machine-row', { setup: 'برای دستگاه تی‌بار یا روئینگ سینه‌تکیه‌دار، ارتفاع سینه‌تکیه‌گاه و جای پا را تنظیم کن؛ سینه با پد تماس داشته باشد. اگر دستگاه تکیه‌گاه ندارد، تنه را ثابت و ستون فقرات را خنثی نگه دار.' }),
-  'admin-cable-pullover': guide('lat-pulldown', {
+  'admin-cable-pullover': guide('cable-pullover', {
     category: 'Pull', primaryMuscles: ['زیربغل'], secondaryMuscles: ['عضلات مرکزی', 'پشت بازو'], equipment: ['سیم‌کش از بالا', 'میلهٔ صاف یا طناب'],
     setup: 'قرقره را در بالاترین نقطه بگذار و میلهٔ صاف یا طناب وصل کن. رو به دستگاه بایست و یک گام عقب برو تا کابل کشیده بماند.',
     startPosition: 'پاها به عرض لگن، زانو نرم، تنه کمی از مفصل لگن متمایل؛ دست‌ها جلو و بالاتر از سر با آرنج کمی خم.',
@@ -45,7 +45,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
   }),
   'admin-preacher-curl': guide('machine-preacher-curl'),
   'admin-hammer-curl': guide('hammer-curl', { setup: 'دمبل یا طناب سیم‌کش را با گرفتن خنثی (کف دست‌ها رو به هم) بگیر. کنار دستگاه بایست یا بنشین و آرنج‌ها را نزدیک پهلو نگه دار.' }),
-  'admin-reverse-curl': guide('ez-bar-curl', {
+  'admin-reverse-curl': guide('reverse-curl', {
     category: 'Pull', primaryMuscles: ['ساعد'], secondaryMuscles: ['بازو دوسر'], equipment: ['میلهٔ EZ یا هالتر سبک'],
     setup: 'میلهٔ EZ سبک را با گرفتن رو به پایین (کف دست به سمت زمین) بگیر؛ مچ‌ها صاف و آرنج‌ها کنار پهلو باشند.',
     startPosition: 'ایستاده، شکم کمی منقبض، بازوها کشیده و میله جلوی ران؛ مچ را در امتداد ساعد نگه دار.',
@@ -65,7 +65,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
   }),
   'admin-hack-squat': guide('smith-squat', { setup: 'اگر اسمیت را انتخاب می‌کنی، میله را در ارتفاع مناسب تنظیم و ضامن‌های ایمنی را حتماً قفل کن. اگر هاک‌اسکوات است، پشتی و جای پا را تنظیم کن و قفل‌های دستگاه را قبل از شروع بررسی کن.' }),
   'admin-standing-calf-raise': guide('standing-calf-raise'),
-  'admin-back-extension': guide('romanian-deadlift', {
+  'admin-back-extension': guide('back-extension', {
     category: 'Legs', primaryMuscles: ['فیلهٔ کمر', 'عضلات سرینی'], secondaryMuscles: ['همسترینگ'], equipment: ['دستگاه هایپراکستنشن'],
     setup: 'پد دستگاه را کمی پایین‌تر از چین لگن تنظیم کن تا لگن بتواند آزادانه خم شود. پاها را محکم زیر نگهدارنده قفل و ارتفاع را پیش از شروع بررسی کن.',
     startPosition: 'بدن در یک خط از سر تا لگن، شکم کمی منقبض و دست‌ها روی سینه یا کنار سر؛ گردن خنثی.',
@@ -76,7 +76,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
     safetyCues: ['ابتدا بدون وزنه یا با وزنهٔ بسیار سبک تمرین کن.', 'اگر درد تیرکشندهٔ کمر داری حرکت را انجام نده و ارزیابی تخصصی بگیر.'],
   }),
   'admin-hanging-leg-raise': guide('hanging-leg-raise'),
-  'admin-cable-woodchop': guide('cable-crunch', {
+  'admin-cable-woodchop': guide('cable-woodchop', {
     category: 'Core', primaryMuscles: ['عضلات مورب شکمی'], secondaryMuscles: ['عضلات مرکزی', 'سرینی'], equipment: ['سیم‌کش', 'دستگیرهٔ تکی'],
     setup: 'قرقره را در ارتفاع بالای شانه تنظیم کن و دستگیرهٔ تکی را وصل کن. کنار دستگاه بایست، پاها را ثابت و دستگیره را با هر دو دست بگیر.',
     startPosition: 'دست‌ها نزدیک شانهٔ دور از دستگاه، لگن و زانو کمی نرم، شکم منقبض و تنه بلند.',
@@ -97,7 +97,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
   }),
   'admin-single-arm-lateral': guide('cable-lateral-raise'),
   'admin-cable-curl': guide('cable-curl'),
-  'admin-machine-dip': guide('machine-triceps-extension', {
+  'admin-machine-dip': guide('machine-dip', {
     category: 'Push', primaryMuscles: ['پشت بازو'], secondaryMuscles: ['سینه', 'سرشانهٔ جلویی'], equipment: ['دستگاه دیپ نشسته'],
     setup: 'ارتفاع صندلی و دسته‌ها را تنظیم کن تا شانه‌ها راحت باشند. اگر دستگاه پد کمکی دارد، وزن کمک را طوری انتخاب کن که حرکت کنترل شود.',
     startPosition: 'بنشین و دستگیره‌ها را بگیر؛ آرنج‌ها خم و نزدیک بدن، سینه آرام و شانه‌ها پایین.',
@@ -107,7 +107,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
     commonMistakes: ['بازشدن آرنج‌ها به طرفین', 'بالاانداختن شانه‌ها', 'قفل‌کردن آرنج یا رهاکردن وزنه'],
     safetyCues: ['دامنهٔ بدون درد شانه را انتخاب کن.', 'اگر دستگاه از نوع دیپ با وزن بدن است، کمک یا وزنهٔ مناسب انتخاب کن و فقط در صورت کنترل کامل اجرا کن.'],
   }),
-  'admin-shrug': guide('machine-row', {
+  'admin-shrug': guide('machine-shrug', {
     category: 'Pull', primaryMuscles: ['ذوزنقه'], secondaryMuscles: ['سرشانهٔ پشتی'], equipment: ['دستگاه شراگ یا دمبل'],
     setup: 'دستگاه را با ارتفاع مناسب تنظیم کن یا دمبل‌های سبک بردار. پاها ثابت و گردن در امتداد ستون فقرات باشد.',
     startPosition: 'دست‌ها کنار بدن، بازوها تقریباً صاف و شانه‌ها رها؛ تنه بلند و بدون قوس.',
@@ -118,7 +118,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
     safetyCues: ['وزنه را طوری انتخاب کن که شانه‌ها مستقیم بالا و پایین بروند.', 'گردن را فشار نده و در صورت درد گردن حرکت را متوقف کن.'],
   }),
   'admin-smith-squat': guide('smith-squat'),
-  'admin-lunge': guide('bulgarian-split-squat', {
+  'admin-lunge': guide('dumbbell-lunge', {
     category: 'Legs', primaryMuscles: ['چهارسر ران', 'عضلات سرینی'], secondaryMuscles: ['همسترینگ', 'عضلات مرکزی'], equipment: ['دمبل یا وزن بدن', 'فضای آزاد'],
     setup: 'در فضای باز بایست و یک گام بلند به جلو بردار؛ برای دمبل، اول بدون وزنه تعادل را تمرین کن. گزینهٔ جایگزین: پرس پا تک‌پا، با صندلی و دامنهٔ راحت.',
     startPosition: 'پاها روی دو ریل موازی لگن، تنه بلند، شکم منقبض و وزن بدن بین دو پا متعادل.',
@@ -132,7 +132,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
   'admin-seated-calf-raise': guide('seated-calf-raise'),
   'admin-dumbbell-lateral': guide('lateral-raise'),
   'admin-rear-delt-fly': guide('reverse-fly'),
-  'admin-reverse-crunch': guide('hanging-leg-raise', {
+  'admin-reverse-crunch': guide('reverse-crunch', {
     category: 'Core', primaryMuscles: ['عضلات شکم'], secondaryMuscles: ['خم‌کننده‌های لگن'], equipment: ['نیمکت صاف'],
     setup: 'روی نیمکت دراز بکش و لبهٔ آن را پشت سر بگیر تا ثابت بمانی. اگر نیمکت نداری، روی زمین و روی تشک اجرا کن.',
     startPosition: 'زانوها خم و پاها کنار هم؛ کمر را آرام به نیمکت نزدیک کن و شکم را منقبض نگه دار.',
@@ -143,7 +143,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
     safetyCues: ['دامنه را طوری تنظیم کن که کمر کنترل شود.', 'اگر درد کمر داری حرکت را متوقف کن.'],
   }),
   'admin-woodchop': guide('cable-crunch'),
-  'admin-plank': guide('hollow-hold', {
+  'admin-plank': guide('plank', {
     category: 'Core', primaryMuscles: ['عضلات مرکزی'], secondaryMuscles: ['سرینی', 'سرشانه'], equipment: ['تشک تمرین'],
     setup: 'روی تشک قرار بگیر. برای پلانک ساعدی، آرنج‌ها را زیر شانه بگذار؛ گزینهٔ آسان‌تر پلانک روی دست یا زانو است.',
     startPosition: 'پاها را عقب ببر و بدن را از سر تا پاشنه در یک خط نگه دار؛ شکم و باسن را منقبض کن.',
@@ -156,7 +156,7 @@ const ADMIN_GUIDES: Record<string, AdminGuideConfig> = {
 };
 
 // Both plan days perform the same cable woodchop technique.
-ADMIN_GUIDES['admin-woodchop'] = ADMIN_GUIDES['admin-cable-woodchop']!;
+ADMIN_GUIDES['admin-woodchop'] = { ...ADMIN_GUIDES['admin-cable-woodchop']!, sourceId: 'cable-woodchop' };
 
 export function getAdminExerciseGuide(
   exerciseId: string,
@@ -184,6 +184,21 @@ export function getAdminExerciseGuide(
   return merged;
 }
 
-export const adminExerciseVisualId = (exerciseId: string): string | undefined => ADMIN_GUIDES[exerciseId]?.sourceId;
+export const adminExerciseCatalogId = (exerciseId: string): string | undefined => ADMIN_GUIDES[exerciseId]?.sourceId;
+
+const ADMIN_VISUAL_IDS: Record<string, string> = {
+  'admin-pec-deck': 'cable-fly',
+  'admin-machine-shoulder-press': 'smith-shoulder-press',
+  'admin-cable-pullover': 'lat-pulldown',
+  'admin-reverse-curl': 'ez-bar-curl',
+  'admin-back-extension': 'romanian-deadlift',
+  'admin-cable-woodchop': 'cable-crunch',
+  'admin-woodchop': 'cable-crunch',
+  'admin-machine-dip': 'machine-triceps-extension',
+  'admin-shrug': 'machine-row',
+  'admin-lunge': 'bulgarian-split-squat',
+};
+
+export const adminExerciseVisualId = (exerciseId: string): string | undefined => ADMIN_VISUAL_IDS[exerciseId] ?? adminExerciseCatalogId(exerciseId);
 
 export const adminProgramExerciseIds = (): string[] => [...new Set(adminPersonalProgram.flatMap((day) => day.exercises.map((item) => item.exerciseId)))];

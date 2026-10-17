@@ -1280,7 +1280,9 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 /* Lyfta-style loop / animated exercise player */
 .lyfta-player { position: relative; background: #0c0f0d; border: 1px solid rgba(217,246,111,.22); border-radius: 18px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
 .lyfta-player__screen { position: relative; width: 100%; height: 320px; max-height: 50vh; background: radial-gradient(circle at center, #18221d 0%, #0a0d0c 100%); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.lyfta-player__img { width: 100%; height: 100%; object-fit: contain; transition: opacity .25s ease-in-out, transform .3s ease-out; }
+.lyfta-player__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 80ms linear; will-change: opacity; }
+.lyfta-player__img--start { z-index: 1; }
+.lyfta-player__img--main { z-index: 2; }
 .lyfta-player__badge { position: absolute; top: 12px; right: 12px; padding: 5px 12px; border-radius: 999px; background: rgba(14,18,16,.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.1); color: var(--text); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; z-index: 3; }
 .lyfta-player__badge-dot { width: 8px; height: 8px; border-radius: 50%; }
 .lyfta-player__badge-dot--start { background: #4ade80; box-shadow: 0 0 8px #4ade80; }

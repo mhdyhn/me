@@ -91,16 +91,30 @@ export const exercisePhotoIds = new Set<string>([
   'goblet-squat',
 ]);
 
-/** True when the exercise has either a photo pair or an SVG pair. */
+const exerciseFigureAliases: Record<string, string> = {
+  'pec-deck': 'cable-fly',
+  'machine-shoulder-press': 'smith-shoulder-press',
+  'cable-pullover': 'lat-pulldown',
+  'reverse-curl': 'ez-bar-curl',
+  'back-extension': 'romanian-deadlift',
+  'cable-woodchop': 'cable-crunch',
+  'machine-dip': 'machine-triceps-extension',
+  'machine-shrug': 'machine-row',
+  'dumbbell-lunge': 'bulgarian-split-squat',
+};
+
+/** True when the exercise has either a photo pair or an SVG pair, including visual stand-ins. */
 export function hasExerciseFigure(exerciseId: string): boolean {
-  return exerciseFigureIds.has(exerciseId) || exercisePhotoIds.has(exerciseId);
+  const visualId = exerciseFigureAliases[exerciseId] ?? exerciseId;
+  return exerciseFigureIds.has(visualId) || exercisePhotoIds.has(visualId);
 }
 
 export type FigureState = 'start' | 'main';
 
 export function exerciseFigureSrc(exerciseId: string, state: FigureState): string {
   const base = import.meta.env.BASE_URL;
-  return exercisePhotoIds.has(exerciseId)
-    ? `${base}exercise-photos/${exerciseId}-${state}.jpg`
-    : `${base}exercise-images/${exerciseId}-${state}.svg`;
+  const visualId = exerciseFigureAliases[exerciseId] ?? exerciseId;
+  return exercisePhotoIds.has(visualId)
+    ? `${base}exercise-photos/${visualId}-${state}.jpg`
+    : `${base}exercise-images/${visualId}-${state}.svg`;
 }

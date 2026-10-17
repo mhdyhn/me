@@ -24,6 +24,26 @@ async function seedAdminPersonalProgram() {
   await api('PUT', '/me/personal-program', { program: personalProgram }).catch(() => {});
 }
 
+/** Update labels in an existing admin programme without replacing its prescriptions or edits. */
+export function normalizeAdminProgramNames(
+  program: WorkoutTemplate[],
+  enabled = usesOwnerData() && import.meta.env.MODE !== 'test',
+): { program: WorkoutTemplate[]; changed: boolean } {
+  if (!enabled) return { program, changed: false };
+  const namesById = new Map(adminPersonalProgram.flatMap((workout) => workout.exercises.map(({ exerciseId, name }) => [exerciseId, name] as const)));
+  let changed = false;
+  const normalized = program.map((workout) => ({
+    ...workout,
+    exercises: workout.exercises.map((item) => {
+      const name = namesById.get(item.exerciseId);
+      if (!name || item.name === name) return item;
+      changed = true;
+      return { ...item, name };
+    }),
+  }));
+  return { program: changed ? normalized : program, changed };
+}
+
 const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
   Array.isArray(value) && value.length > 0 && value.every((day) => day && typeof day === 'object' && Array.isArray((day as WorkoutTemplate).exercises));
 
@@ -58,8 +78,11 @@ export async function syncCloudProgram() {
           return;
         }
         if (isProgramShape(res.program) && validateProgram(res.program).length === 0) {
-          await db.preferences.put({ key: PROGRAM_KEY, value: res.program });
-          setActiveProgram(res.program);
+          const { program, changed } = normalizeAdminProgramNames(res.program);
+          await db.preferences.put({ key: PROGRAM_KEY, value: program });
+          if (usesOwnerData() && changed) await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
+          setActiveProgram(program);
+          if (changed) await api('PUT', '/me/personal-program', { program }).catch(() => {});
           return;
         }
       }
@@ -101,7 +124,12 @@ export async function loadStoredProgram() {
           void syncCloudProgram();
           return;
         }
-        setActiveProgram(value);
+        const { program, changed } = normalizeAdminProgramNames(value);
+        if (changed) {
+          await db.preferences.put({ key: PROGRAM_KEY, value: program });
+          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
+        }
+        setActiveProgram(program);
         void syncCloudProgram();
         return;
       }
@@ -122,16 +150,17 @@ export async function loadStoredProgram() {
  * before it is replaced, so a bad edit can be recovered. Also syncs to cloud if connected.
  */
 export async function saveProgram(next: WorkoutTemplate[]) {
-  const errors = validateProgram(next);
+  const { program } = normalizeAdminProgramNames(next);
+  const errors = validateProgram(program);
   if (errors.length) throw new Error(errors[0]);
   await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
-  await db.preferences.put({ key: PROGRAM_KEY, value: next });
+  await db.preferences.put({ key: PROGRAM_KEY, value: program });
   if (usesOwnerData() && import.meta.env.MODE !== 'test') await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-  setActiveProgram(next);
+  setActiveProgram(program);
 
   // Sync to cloud in background
   try {
-    await api('PUT', '/me/personal-program', { program: next });
+    await api('PUT', '/me/personal-program', { program });
   } catch (err) {
     console.warn('Personal programme cloud sync deferred (offline or guest):', err);
   }
