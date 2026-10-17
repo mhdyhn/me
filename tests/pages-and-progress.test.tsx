@@ -15,6 +15,8 @@ import { db } from '../src/lib/db';
 import { getLocalDateKey } from '../src/lib/format';
 import { getWeekComparison, getWeeklyTotals } from '../src/lib/analytics';
 import { exerciseNames } from '../src/data/exerciseNames';
+import { adminPersonalProgram } from '../src/data/adminProgram';
+import { adminExerciseCatalogId } from '../src/data/adminExerciseGuides';
 import { exercises } from '../src/data/exercises';
 import type { WorkoutSession } from '../src/types';
 
@@ -72,6 +74,17 @@ describe('exercise name map', () => {
   it('matches the catalogue it stands in for', () => {
     expect(Object.keys(exerciseNames).sort()).toEqual(exercises.map((exercise) => exercise.id).sort());
     exercises.forEach((exercise) => expect(exerciseNames[exercise.id]).toBe(exercise.name));
+  });
+
+  it('uses the matching catalogue name for every admin-program movement', () => {
+    for (const workout of adminPersonalProgram) {
+      for (const item of workout.exercises) {
+        const catalogId = adminExerciseCatalogId(item.exerciseId);
+        const catalogExercise = exercises.find((exercise) => exercise.id === catalogId);
+        expect(catalogExercise, item.exerciseId).toBeDefined();
+        expect(item.name, item.exerciseId).toBe(catalogExercise?.name);
+      }
+    }
   });
 });
 
