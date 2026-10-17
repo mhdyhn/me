@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
+import { confirmModal } from '../../components/ConfirmModal';
 import { exercises as catalog } from '../../data/exercises';
 import { exerciseSearchText } from '../../data/exerciseCategories';
 import { matchesPersianSearch } from '../../lib/labels';
@@ -114,10 +115,17 @@ function Builder() {
     setActiveDay(days.length);
   }
 
-  function removeDay(index: number) {
+  async function removeDay(index: number) {
     const target = days[index];
     if (!target) return;
-    if (!window.confirm(`«${target.name}» و همهٔ حرکت‌هایش از برنامه حذف شوند؟`)) return;
+    const ok = await confirmModal({
+      title: 'حذف روز از برنامه',
+      message: `«${target.name}» و همهٔ حرکت‌هایش از برنامه حذف شوند؟`,
+      confirmText: 'حذف روز',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     updateDays(days.filter((_, position) => position !== index));
     setActiveDay(0);
   }
@@ -214,7 +222,15 @@ function Builder() {
   }
 
   async function deleteProgram() {
-    if (!window.confirm(`برنامهٔ ${student ? student.displayName : 'این شاگرد'} به طور کامل حذف شود؟ این کار قابل بازگشت نیست.`)) return;
+    const studentName = student ? student.displayName : 'این شاگرد';
+    const ok = await confirmModal({
+      title: 'حذف کل برنامه تمرینی',
+      message: `برنامهٔ ${studentName} به طور کامل حذف شود؟ این کار قابل بازگشت نیست.`,
+      confirmText: 'حذف کامل برنامه',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setSaving(true);
     setSaveError(null);
     try {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, CheckCircle, ChevronDown, ChevronUp, KeyRound, MessageCircle, Receipt, Sparkles, Trash2, UserPlus, Users } from 'lucide-react';
+import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
@@ -63,10 +64,16 @@ function AdminCoaches() {
 
   async function toggleCoachActive(coach: CoachSummary) {
     const nextActive = coach.isActive === false;
-    const promptText = nextActive
-      ? `مربی «${coach.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
-      : `مربی «${coach.displayName}» غیرفعال شود؟ حساب مربی مسدود شده و از سیستم خارج می‌شود.`;
-    if (!window.confirm(promptText)) return;
+    const ok = await confirmModal({
+      title: nextActive ? 'فعال‌سازی مربی' : 'غیرفعال‌سازی مربی',
+      message: nextActive
+        ? `مربی «${coach.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
+        : `مربی «${coach.displayName}» غیرفعال شود؟ حساب مربی مسدود شده و از سیستم خارج می‌شود.`,
+      confirmText: nextActive ? 'فعال‌سازی' : 'غیرفعال‌سازی',
+      cancelText: 'انصراف',
+      variant: nextActive ? 'primary' : 'danger',
+    });
+    if (!ok) return;
     try {
       await api('PUT', `/coaches/${coach.id}/active`, { active: nextActive });
       await load();
@@ -104,10 +111,16 @@ function AdminCoaches() {
 
   async function toggleStudentActiveFromAdmin(coachId: number, student: PublicUser) {
     const nextActive = student.isActive === false;
-    const promptText = nextActive
-      ? `شاگرد «${student.displayName}» دوباره فعال شود؟`
-      : `شاگرد «${student.displayName}» غیرفعال شود؟ حساب شاگرد مسدود شده و از سیستم خارج می‌شود.`;
-    if (!window.confirm(promptText)) return;
+    const ok = await confirmModal({
+      title: nextActive ? 'فعال‌سازی شاگرد' : 'غیرفعال‌سازی شاگرد',
+      message: nextActive
+        ? `شاگرد «${student.displayName}» دوباره فعال شود؟`
+        : `شاگرد «${student.displayName}» غیرفعال شود؟ حساب شاگرد مسدود شده و از سیستم خارج می‌شود.`,
+      confirmText: nextActive ? 'فعال‌سازی' : 'غیرفعال‌سازی',
+      cancelText: 'انصراف',
+      variant: nextActive ? 'primary' : 'danger',
+    });
+    if (!ok) return;
     try {
       await api('PUT', `/students/${student.id}/active`, { active: nextActive });
       await fetchCoachStudents(coachId);
@@ -117,7 +130,14 @@ function AdminCoaches() {
   }
 
   async function resetPassword(coach: PublicUser) {
-    if (!window.confirm(`رمز ${coach.displayName} دوباره ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`)) return;
+    const ok = await confirmModal({
+      title: 'ساخت مجدد رمز عبور مربی',
+      message: `رمز جدید برای «${coach.displayName}» دوباره ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`,
+      confirmText: 'ساخت رمز جدید',
+      cancelText: 'انصراف',
+      variant: 'warning',
+    });
+    if (!ok) return;
     try {
       const result = await api<{ username: string; password: string }>('POST', `/coaches/${coach.id}/reset-password`, {});
       setCredentials({ user: coach, username: result.username, password: result.password });
@@ -127,7 +147,14 @@ function AdminCoaches() {
   }
 
   async function deleteCoach(coach: CoachSummary) {
-    if (!window.confirm(`مربی ${coach.displayName} حذف شود؟ این کار برگشت ندارد.`)) return;
+    const ok = await confirmModal({
+      title: 'حذف مربی',
+      message: `مربی «${coach.displayName}» حذف شود؟ این کار برگشت ندارد.`,
+      confirmText: 'حذف مربی',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api('DELETE', `/coaches/${coach.id}`, {});
       await load();

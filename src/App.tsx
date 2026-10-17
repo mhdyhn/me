@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
 import { GymProvider } from './context/GymProvider';
 import { isProgramReadOnly } from './lib/programStore';
+import { ConfirmProvider } from './components/ConfirmModal';
 import { SessionProvider } from './context/SessionContext';
 import { SessionSync } from './components/SessionSync';
 import { ForRoles, RequireSignIn } from './pages/account/AccountShell';
@@ -80,6 +81,7 @@ export function App() {
     <ErrorBoundary>
       <GymProvider>
         <SessionProvider>
+        <ConfirmProvider>
         <SessionSync />
         <BrowserRouter>
           <Suspense fallback={<RouteLoading />}>
@@ -119,6 +121,7 @@ export function App() {
           </Routes>
           </Suspense>
         </BrowserRouter>
+        </ConfirmProvider>
         </SessionProvider>
       </GymProvider>
     </ErrorBoundary>

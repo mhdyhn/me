@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { confirmModal } from '../../components/ConfirmModal';
 import { faNumber } from '../../lib/format';
 import {
   FOODS_BY_ID,
@@ -46,9 +47,17 @@ export function MealsEditor({ meals, onChange }: { meals: PlanMeal[]; onChange: 
     onChange(meals.map((meal, i) => (i === mealIndex ? { ...meal, name } : meal)));
   }
 
-  function removeMeal(mealIndex: number) {
+  async function removeMeal(mealIndex: number) {
     const meal = meals[mealIndex];
-    if (!meal || !window.confirm(`وعدهٔ «${meal.name}» و همهٔ موادش حذف شود؟`)) return;
+    if (!meal) return;
+    const ok = await confirmModal({
+      title: 'حذف وعده غذایی',
+      message: `وعدهٔ «${meal.name}» و همهٔ موادش حذف شود؟`,
+      confirmText: 'حذف وعده',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     onChange(meals.filter((_, i) => i !== mealIndex));
     setOpenSearch(null);
   }
@@ -76,9 +85,18 @@ export function MealsEditor({ meals, onChange }: { meals: PlanMeal[]; onChange: 
     );
   }
 
-  function removeItem(mealIndex: number, itemIndex: number) {
+  async function removeItem(mealIndex: number, itemIndex: number) {
     const food = meals[mealIndex]?.items[itemIndex];
-    if (!food || !window.confirm(`«${FOODS_BY_ID.get(food.foodId)?.name ?? 'این ماده'}» از این وعده حذف شود؟`)) return;
+    if (!food) return;
+    const foodName = FOODS_BY_ID.get(food.foodId)?.name ?? 'این ماده';
+    const ok = await confirmModal({
+      title: 'حذف ماده غذایی',
+      message: `«${foodName}» از این وعده حذف شود؟`,
+      confirmText: 'حذف ماده',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     onChange(meals.map((meal, i) => (i === mealIndex ? { ...meal, items: meal.items.filter((_, j) => j !== itemIndex) } : meal)));
   }
 

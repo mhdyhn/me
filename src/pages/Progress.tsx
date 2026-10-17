@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, Plus, Trash2, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
 import { SectionHeading } from '../components/SectionHeading';
@@ -91,12 +92,24 @@ export function Progress() {
   };
 
   const handleDeleteWeight = async (id: string, weightKg: number) => {
-    if (!window.confirm(`ثبت وزن ${kg(weightKg)} حذف شود؟`)) return;
+    if (!await confirmModal({
+      title: 'حذف ثبت وزن',
+      message: `ثبت وزن ${kg(weightKg)} حذف شود؟`,
+      confirmText: 'حذف',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    })) return;
     await deleteBodyweight(id);
   };
 
   const handleDeleteSession = async (id: string, name: string) => {
-    if (!window.confirm(`جلسهٔ «${name}» از سوابق تمرین حذف شود؟ این کار قابل بازگشت نیست.`)) return;
+    if (!await confirmModal({
+      title: 'حذف جلسه تمرین',
+      message: `جلسهٔ «${name}» از سوابق تمرین حذف شود؟ این کار قابل بازگشت نیست.`,
+      confirmText: 'حذف جلسه',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    })) return;
     await deleteSession(id);
   };
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Dumbbell, Info, Minus, Pause, Play, Plus, Trash2, Trophy } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { exerciseById } from '../data/exercises';
@@ -116,7 +117,13 @@ export function Workout() {
             type="button"
             className="button button--secondary"
             onClick={async () => {
-              if (window.confirm(`آیا جلسهٔ قبلی (${prevWorkoutName}) لغو شود و تمرین امروز آغاز گردد؟`)) {
+              if (await confirmModal({
+                title: 'لغو جلسه قبلی',
+                message: `آیا جلسهٔ قبلی (${prevWorkoutName}) لغو شود و تمرین امروز آغاز گردد؟`,
+                confirmText: 'لغو جلسه و شروع',
+                cancelText: 'انصراف',
+                variant: 'danger',
+              })) {
                 await deleteSession(activeSession.id);
                 void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
               }
@@ -192,12 +199,24 @@ export function Workout() {
     if (!session) return;
     const hasAnySets = session.exercises.some((e) => e.sets.length > 0);
     if (!hasAnySets) {
-      if (window.confirm('هنوز هیچ ستی در این جلسه ثبت نکرده‌اید. مایلید بدون ثبت تمرین خارج شوید؟')) {
+      if (await confirmModal({
+        title: 'خروج بدون ثبت ست',
+        message: 'هنوز هیچ ستی در این جلسه ثبت نکرده‌اید. مایلید بدون ثبت تمرین خارج شوید؟',
+        confirmText: 'خروج از تمرین',
+        cancelText: 'ادامه تمرین',
+        variant: 'warning',
+      })) {
         navigate('/');
       }
       return;
     }
-    const confirmed = window.confirm('آیا تمرین امروز شما به پایان رسیده است؟ جلسه به‌عنوان «کامل‌شده» ذخیره می‌شود و در نمودار پیشرفت اعمال خواهد شد.');
+    const confirmed = await confirmModal({
+      title: 'اتمام جلسه تمرین',
+      message: 'آیا تمرین امروز شما به پایان رسیده است؟ جلسه به‌عنوان «کامل‌شده» ذخیره می‌شود و در نمودار پیشرفت اعمال خواهد شد.',
+      confirmText: 'ثبت و پایان تمرین',
+      cancelText: 'ادامه تمرین',
+      variant: 'primary',
+    });
     if (!confirmed) return;
     const completed: WorkoutSession = {
       ...session,
@@ -217,16 +236,26 @@ export function Workout() {
     }
     const hasAnySets = session.exercises.some((e) => e.sets.length > 0);
     if (!hasAnySets) {
-      const discard = window.confirm('هنوز هیچ ستی برای این جلسه ثبت نشده است.\n\n• برای لغو و حذف این جلسه «تأیید / OK» را بزنید.\n• برای ذخیره پیش‌نویس بدون تغییر «انصراف / Cancel» را بزنید.');
+      const discard = await confirmModal({
+        title: 'لغو جلسه تمرین',
+        message: 'هنوز هیچ ستی برای این جلسه ثبت نشده است.\n\n• برای لغو و حذف این جلسه «لغو و حذف» را بزنید.\n• برای ذخیره پیش‌نویس بدون تغییر «انصراف» را بزنید.',
+        confirmText: 'لغو و حذف جلسه',
+        cancelText: 'انصراف و حفظ پیش‌نویس',
+        variant: 'danger',
+      });
       if (discard) {
         await deleteSession(session.id);
       }
       navigate('/');
       return;
     }
-    const choice = window.confirm(
-      'تمرین شما ثبت شده است.\n\n• برای اتمام قطعی جلسه و ثبت نهایی در پیشرفت و آمار: «تأیید / OK» را بزنید.\n• برای ذخیره موقت (ادامه در فرصتی دیگر): «انصراف / Cancel» را بزنید.'
-    );
+    const choice = await confirmModal({
+      title: 'خروج از تمرین',
+      message: 'تمرین شما ثبت شده است.\n\n• برای اتمام قطعی جلسه و ثبت نهایی در پیشرفت و آمار: «اتمام قطعی» را بزنید.\n• برای ذخیره موقت (ادامه در فرصتی دیگر): «ادامه در فرصتی دیگر» را بزنید.',
+      confirmText: 'اتمام قطعی جلسه',
+      cancelText: 'ذخیره موقت و خروج',
+      variant: 'primary',
+    });
     if (choice) {
       const completed: WorkoutSession = {
         ...session,

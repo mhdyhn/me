@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus } from 'lucide-react';
+import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
@@ -58,7 +59,14 @@ function CoachStudents() {
   }
 
   async function deleteStudent(student: PublicUser) {
-    if (!window.confirm(`شاگرد ${student.displayName} و برنامهٔ او حذف شود؟ این کار برگشت ندارد.`)) return;
+    const ok = await confirmModal({
+      title: 'حذف شاگرد',
+      message: `شاگرد «${student.displayName}» و برنامهٔ او حذف شود؟ این کار برگشت ندارد.`,
+      confirmText: 'حذف شاگرد',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await api('DELETE', `/students/${student.id}`, {});
       await load();
@@ -69,10 +77,16 @@ function CoachStudents() {
 
   async function toggleStudentActive(student: StudentView) {
     const nextActive = student.isActive === false;
-    const promptText = nextActive
-      ? `شاگرد «${student.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
-      : `شاگرد «${student.displayName}» غیرفعال شود؟ پس از غیرفعال‌سازی، از حساب خود خارج شده و امکان ورود نخواهد داشت.`;
-    if (!window.confirm(promptText)) return;
+    const ok = await confirmModal({
+      title: nextActive ? 'فعال‌سازی شاگرد' : 'غیرفعال‌سازی شاگرد',
+      message: nextActive
+        ? `شاگرد «${student.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
+        : `شاگرد «${student.displayName}» غیرفعال شود؟ پس از غیرفعال‌سازی، از حساب خود خارج شده و امکان ورود نخواهد داشت.`,
+      confirmText: nextActive ? 'فعال‌سازی' : 'غیرفعال‌سازی',
+      cancelText: 'انصراف',
+      variant: nextActive ? 'primary' : 'danger',
+    });
+    if (!ok) return;
     try {
       await api('PUT', `/students/${student.id}/active`, { active: nextActive });
       await load();
@@ -82,7 +96,14 @@ function CoachStudents() {
   }
 
   async function resetPassword(student: PublicUser) {
-    if (!window.confirm(`رمز ${student.displayName} دوباره ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`)) return;
+    const ok = await confirmModal({
+      title: 'ساخت مجدد رمز عبور',
+      message: `رمز جدید برای «${student.displayName}» ساخته شود؟ با رمز قبلی دیگر نمی‌تواند وارد شود.`,
+      confirmText: 'ساخت رمز جدید',
+      cancelText: 'انصراف',
+      variant: 'warning',
+    });
+    if (!ok) return;
     try {
       const result = await api<{ username: string; password: string }>('POST', `/students/${student.id}/reset-password`, {});
       setCredentials({ user: student, username: result.username, password: result.password });

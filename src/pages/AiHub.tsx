@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { confirmModal } from '../components/ConfirmModal';
 import {
   Activity,
   AlertCircle,
@@ -146,8 +147,14 @@ export function AiHub() {
     setLastLoggedFeedback(MINDFUL_INSIGHTS[selectedTrigger].advice);
   };
 
-  const handleDeleteMindfulLog = (id: string, foodName: string) => {
-    if (!window.confirm(`ثبت «${foodName}» حذف شود؟`)) return;
+  const handleDeleteMindfulLog = async (id: string, foodName: string) => {
+    if (!await confirmModal({
+      title: 'حذف ثبت تغذیه',
+      message: `ثبت «${foodName}» حذف شود؟`,
+      confirmText: 'حذف',
+      cancelText: 'انصراف',
+      variant: 'danger',
+    })) return;
     const remaining = deleteMindfulLog(id);
     setMindfulLogs(remaining);
   };
