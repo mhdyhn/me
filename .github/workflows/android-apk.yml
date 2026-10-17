@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Check out the code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,7 +38,9 @@ jobs:
           VITE_API_BASE: https://meety-985n.onrender.com
         run: |
           npm run build
+          rm -f dist/meety.apk dist/*.apk
           npx cap sync android
+          rm -f android/app/src/main/assets/public/meety.apk android/app/src/main/assets/public/*.apk
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -121,5 +126,7 @@ jobs:
             echo "No change in APK binary"
           else
             git commit -m "chore: embed latest Android release APK binary [skip ci]"
-            git push origin HEAD:main
+            git fetch origin main
+            git rebase origin/main || true
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main || git push origin HEAD:main
           fi
