@@ -2118,3 +2118,7 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .settings-sync-retry { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .settings-sync-retry p { margin: 0; }
 @media (max-width: 640px) { .coach-student-filters { grid-template-columns: 1fr; } .coach-student-filters .account-muted { margin: 0; } .student-progress-filters { align-items: stretch; flex-direction: column; } }
+
+.student-nutrition-load-error, .coach-student-load-error, .student-ai-load-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid rgba(242, 143, 130, .22); border-radius: 12px; background: rgba(242, 143, 130, .05); }
+.student-nutrition-load-error p, .coach-student-load-error p, .student-ai-load-error p { margin: 0; color: #ffad9f; font-size: 12px; }
+@media (max-width: 560px) { .student-nutrition-load-error, .coach-student-load-error, .student-ai-load-error { align-items: flex-start; flex-direction: column; } }

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { db } from '../src/lib/db';
@@ -102,7 +102,7 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(within(nav).getByText('مربی')).toBeInTheDocument(); // Chat with coach link
     expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
     expect(within(nav).queryByText('مالی باشگاه')).not.toBeInTheDocument();
-    expect(document.title).toContain('میتی');
+    await waitFor(() => expect(document.title).toContain('میتی'));
   });
 
   it('COACH: accesses coach panel /coach, sees student list, coach actions, and chat with admin', async () => {

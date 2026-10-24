@@ -25,6 +25,16 @@ describe('coach student list filters', () => {
   });
   afterEach(() => cleanup());
 
+  it('retries loading the student list after a network error', async () => {
+    mocks.api.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ students });
+    render(<MemoryRouter><CoachHome /></MemoryRouter>);
+
+    expect(await screen.findByText('فهرست شاگردها بارگذاری نشد.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری شاگردها' }));
+    expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
+    expect(mocks.api).toHaveBeenCalledTimes(2);
+  });
+
   it('searches name and username, filters account status, and clears filters', async () => {
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
     expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();

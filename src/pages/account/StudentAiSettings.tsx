@@ -43,6 +43,8 @@ function StudentAiSettingsScreen() {
 
   const [studentName, setStudentName] = useState<string>('شاگرد');
   const [loading, setLoading] = useState(true);
+  const [biometricsLoaded, setBiometricsLoaded] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -64,8 +66,11 @@ function StudentAiSettingsScreen() {
     async function loadData() {
       try {
         setLoading(true);
+        setBiometricsLoaded(false);
+        setErrorMessage(null);
         const data = await getStudentBiometrics(id);
         if (!mounted) return;
+        setBiometricsLoaded(true);
         setEnabledModules(data.enabledModules || [...ALL_AI_MODULES]);
         setAge(data.age ? String(data.age) : '');
         setRestingHr(data.restingHr ? String(data.restingHr) : '');
@@ -101,7 +106,7 @@ function StudentAiSettingsScreen() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, loadAttempt]);
 
   const numAge = age ? parseInt(age, 10) : null;
   const numRhr = restingHr ? parseInt(restingHr, 10) : null;
@@ -171,7 +176,20 @@ function StudentAiSettingsScreen() {
   if (loading) {
     return (
       <PanelPage title="تنظیمات هوش مصنوعی و بیومتریک">
-        <p className="account-muted">در حال بارگذاری اطلاعات شاگرد…</p>
+        <p className="account-muted" role="status">در حال بارگذاری اطلاعات شاگرد…</p>
+      </PanelPage>
+    );
+  }
+
+  if (!biometricsLoaded) {
+    return (
+      <PanelPage title="تنظیمات هوش مصنوعی و بیومتریک">
+        <div className="student-ai-load-error" role="alert">
+          <p>{errorMessage ?? 'اطلاعات بیومتریک شاگرد بارگذاری نشد.'}</p>
+          <button type="button" className="button button--secondary button--small" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+            تلاش دوباره برای بارگذاری
+          </button>
+        </div>
       </PanelPage>
     );
   }
@@ -420,7 +438,7 @@ function StudentAiSettingsScreen() {
         <button
           type="button"
           onClick={() => void handleSave()}
-          disabled={saving}
+          disabled={!biometricsLoaded || saving}
           className="button button--primary"
           style={{ width: '100%', padding: '12px', fontSize: '15px' }}
         >

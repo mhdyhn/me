@@ -24,6 +24,7 @@ export function CoachHome() {
 function CoachStudents() {
   const [students, setStudents] = useState<StudentView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [studentStatus, setStudentStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [name, setName] = useState('');
@@ -32,12 +33,15 @@ function CoachStudents() {
   const [credentials, setCredentials] = useState<Credentials | null>(null);
 
   async function load() {
+    setLoadingStudents(true);
+    setLoadError(null);
     try {
       const result = await api<{ students: StudentView[] }>('GET', '/students');
       setStudents(result.students);
-      setLoadError(null);
     } catch (caught) {
       setLoadError(caught instanceof ApiError ? caught.message : 'فهرست شاگردها بارگذاری نشد.');
+    } finally {
+      setLoadingStudents(false);
     }
   }
 
@@ -158,8 +162,15 @@ function CoachStudents() {
         </form>
       )}
 
-      {loadError && <p className="form-error" role="alert">{loadError}</p>}
-      {students === null && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
+      {loadError && (
+        <div className="coach-student-load-error" role="alert">
+          <p className="form-error">{loadError}</p>
+          <button type="button" className="button button--secondary button--small" disabled={loadingStudents} onClick={() => void load()}>
+            تلاش دوباره برای بارگذاری شاگردها
+          </button>
+        </div>
+      )}
+      {students === null && !loadError && <p className="account-muted" role="status">در حال بارگذاری…</p>}
       {students?.length === 0 && <p className="account-muted">هنوز شاگردی ندارید. بالا یک شاگرد بسازید.</p>}
 
       {students && students.length > 0 && (
