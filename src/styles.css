@@ -2246,3 +2246,140 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .login-screen { padding: 16px; }
   .login-card { padding: 24px 20px 20px; border-radius: 16px; }
 }
+
+/* Unified sports-luxury palette: warm ivory surfaces, racing green actions, restrained champagne detail. */
+:root {
+  color: #17231e;
+  background: #f4f5f1;
+  color-scheme: light;
+  --bg: #f4f5f1;
+  --surface: #ffffff;
+  --surface-soft: #f8f9f6;
+  --surface-raised: #e9eee9;
+  --line: #dce3dd;
+  --line-soft: rgba(23, 35, 30, .11);
+  --text: #17231e;
+  --muted: #65726a;
+  --subtle: #879189;
+  --accent: #14513b;
+  --accent-ink: #ffffff;
+  --blue: #456c80;
+  --red: #b44e49;
+  --luxury: #b69a63;
+  --radius: 14px;
+  --shadow: 0 8px 26px rgba(23, 35, 30, .065);
+}
+
+body { color: var(--text); background: var(--bg); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline-color: var(--accent); }
+::selection { color: #fff; background: var(--accent); }
+.sidebar { border-color: var(--line); background: rgba(255, 255, 255, .97); }
+.brand-mark, .button--primary, .login-submit { color: #fff; background: var(--accent); }
+.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { background: #0e402f; }
+.brand-lockup small, .sidebar-label, .sidebar-footer, .eyebrow { color: var(--muted); }
+.nav-link { color: #526159; }
+.nav-link:hover { color: var(--text); background: #f2f4f0; }
+.nav-link.is-active { border-color: #cddbd1; color: var(--accent); background: #eaf0eb; }
+.sidebar-coach-note { border-color: #dce5dd; background: #f7f8f5; }
+.sidebar-coach-note strong { color: #304239; }
+.note-mark, .profile-avatar { border-color: #e2d8c0; color: var(--luxury); background: #f7f4eb; }
+.status-dot, .resume-dot, .live-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(20, 81, 59, .1); }
+.topbar { border-color: var(--line); background: rgba(244, 245, 241, .96); }
+.topbar-title h1, .section-heading h2, .empty-state h3 { color: var(--text); }
+.profile-button, .back-link { color: #526159; }
+.resume-pill { border-color: #d6c8a7; color: #806b3f; background: #f7f4eb; }
+.panel-card { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
+.button--secondary, .button--ghost { border-color: #d6ded8; color: #34463c; background: #fff; }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: #a9bdb0; background: #f5f8f5; }
+.button--quiet { border-color: var(--line); color: #526159; background: transparent; }
+.button--quiet:hover:not(:disabled) { color: var(--text); background: #edf1ed; }
+.text-link, .inline-link, .text-button, .back-link:hover, .icon-accent, .accent-dot { color: var(--accent); }
+.text-link:hover, .inline-link:hover { color: #0e402f; }
+.section-description, .muted { color: var(--muted); }
+
+/* Keep the dashboard on one light surface system; no isolated dark hero card. */
+.next-workout-card {
+  border-color: #dce3dd;
+  color: var(--text);
+  background: linear-gradient(135deg, #ffffff 0%, #f3f6f1 100%);
+  box-shadow: var(--shadow);
+}
+.next-workout-card h3 { color: #17231e; }
+.workout-focus { color: #806b3f; }
+.next-workout-description { color: #65726a; }
+.workout-outline { color: #14513b; }
+.workout-outline > svg { filter: none; }
+.day-chip { border-color: #e2d8c0; color: #806b3f; background: #f7f4eb; }
+.workout-meta-row { border-color: var(--line); color: #526159; }
+.workout-meta-row svg, .next-workout-card__footer svg { color: var(--luxury); }
+.week-progress span { background: #e3e8e3; }
+.week-progress span.is-done { background: var(--accent); box-shadow: none; }
+.week-badge, .profile-summary__number { border-color: #e2d8c0; color: #806b3f; background: #f7f4eb; }
+.recent-session-icon, .subtle-icon { border-color: #dce5dd; color: var(--accent); background: #f2f5f1; }
+.recent-session-empty { border-color: var(--line); color: var(--muted); background: #fff; }
+.explore-strip { border-color: #dce5dd; background: #f7f9f6; }
+.explore-strip strong { color: var(--text); }
+.explore-strip small { color: var(--muted); }
+.active-workout-banner { border-color: #cddbd1; background: #edf3ee; }
+.active-workout-banner strong { color: var(--text); }
+.profile-sync-status { border-color: var(--line); color: var(--muted); background: #fff; }
+.profile-sync-status--ok { border-color: #cddbd1; color: var(--accent); background: #edf3ee; }
+.profile-sync-status--error { border-color: #ecd3d0; color: #9e3f3a; background: #fff5f3; }
+
+/* Shared forms and exercise/program surfaces use the same neutral canvas. */
+.field-control input, .field-control select, .field-control textarea,
+.workout-notes-disclosure textarea, .summary-notes textarea,
+.select-with-icon select, .chat-composer textarea,
+.nutrition-item__grams input, .nutrition-search input,
+.meal-diary__day input[type="date"], .search-field {
+  border-color: #d6ded8;
+  color: #17231e;
+  background: #fff;
+}
+.field-control select, .select-with-icon select { color: #34463c; }
+.field-control input::placeholder, .field-control textarea::placeholder,
+.search-field input::placeholder { color: #879189; }
+.field-control input:focus, .field-control select:focus, .field-control textarea:focus,
+.chat-composer textarea:focus { border-color: #6b947d; }
+.search-field { color: #65726a; }
+.filter-tab { border-color: #dce3dd; color: #526159; }
+.filter-tab.is-active { border-color: #b9cdbf; color: var(--accent); background: #edf3ee; }
+.exercise-card { border-color: var(--line); background: #fff; }
+.exercise-card__visual, .exercise-card__visual--pull, .exercise-card__visual--legs, .exercise-card__visual--core {
+  background: linear-gradient(135deg, #f4f6f2, #eaf0eb);
+}
+.exercise-card__number, .exercise-card__category { color: #65726a; }
+.exercise-card__body h3 { color: var(--text); }
+.exercise-card__body > p, .exercise-card__footer { color: var(--muted); }
+.program-day__index { color: #65726a; }
+.program-day__index > span:first-child { border-color: #dce3dd; background: #f4f6f2; }
+.day-line { background: linear-gradient(#cdd8cf, transparent); }
+.program-day__heading h3, .program-overview__main strong { color: var(--text); }
+.program-day__eyebrow, .program-day__heading p, .program-day__description,
+.program-day__meta, .program-overview__stat > span { color: var(--muted); }
+.program-day__meta svg { color: var(--luxury); }
+.program-day--optional { border-color: #dce5dd; background: #f8f9f6; }
+.program-rest-note { border-color: #dce5dd; background: #f7f9f6; }
+.program-rest-note p { color: #526159; }
+.program-rest-note strong { color: var(--text); }
+.category-tag--legs { color: #806b3f; background: #f7f4eb; }
+.category-tag--core { color: #675477; background: #f3eff6; }
+.form-success { color: var(--accent); background: #edf3ee; }
+.account-load-error, .student-nutrition-load-error, .coach-student-load-error, .student-ai-load-error {
+  border-color: #ecd3d0;
+  background: #fff5f3;
+}
+.account-load-error p, .student-nutrition-load-error p, .coach-student-load-error p, .student-ai-load-error p { color: #9e3f3a; }
+
+/* The login route follows the same palette as authenticated screens. */
+.login-screen { background: linear-gradient(180deg, #edf1eb 0%, #f4f5f1 38%, #f4f5f1 100%); }
+.login-glow { background: radial-gradient(circle, rgba(182, 154, 99, .08), transparent 68%); }
+.login-card { border-color: var(--line); background: #fff; box-shadow: 0 18px 50px rgba(23, 35, 30, .09); }
+.login-brand strong, .login-card h1, .login-input input { color: var(--text); }
+.login-brand small, .login-sub, .login-help { color: var(--muted); }
+.login-field > span { color: #526159; }
+.login-input { border-color: #d6ded8; background: #fff; color: var(--muted); }
+.login-input:focus-within { border-color: #6b947d; box-shadow: 0 0 0 3px rgba(20, 81, 59, .12); color: var(--accent); }
+.login-submit { background: var(--accent); color: #fff; }
+.login-submit:not(:disabled):hover { background: #0e402f; }
+.login-error { border-color: #ecd3d0; background: #fff5f3; color: #9e3f3a; }
