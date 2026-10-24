@@ -65,7 +65,7 @@ describe('Coach and Admin Activation UI', () => {
     );
 
     expect(await screen.findByText('شاگرد آزمایشی')).toBeInTheDocument();
-    expect(screen.getByText('فعال')).toBeInTheDocument();
+    expect(screen.getByText('فعال', { selector: '.badge--success' })).toBeInTheDocument();
 
     const deactBtn = screen.getByRole('button', { name: /غیرفعال‌سازی/i });
     fireEvent.click(deactBtn);
