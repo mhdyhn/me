@@ -2090,4 +2090,19 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .student-profile-item span { color: var(--muted); font-size: 10px; }
 .student-profile-item strong { overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; }
 .student-profile-note { margin: 14px 0 0; }
-@media (max-width: 560px) { .student-profile-grid { grid-template-columns: 1fr; } .student-profile-item--wide { grid-column: auto; } }
+.student-profile-sharing-status { display: grid; gap: 7px; padding: 12px 15px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-soft); }
+.student-profile-sharing-status.is-shared { border-color: rgba(217, 246, 111, .22); background: rgba(217, 246, 111, .045); }
+.student-profile-sharing-status.is-private { border-color: rgba(242, 143, 130, .22); background: rgba(242, 143, 130, .04); }
+.student-profile-sharing-status__label, .student-profile-sharing-status__detail { display: flex; align-items: center; gap: 7px; }
+.student-profile-sharing-status__label { color: var(--text); font-size: 12px; }
+.student-profile-sharing-status.is-shared .student-profile-sharing-status__label { color: var(--accent); }
+.student-profile-sharing-status.is-private .student-profile-sharing-status__label { color: #ffad9f; }
+.student-profile-sharing-status__detail { justify-content: space-between; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+.student-profile-refresh { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--line-soft); border-radius: 8px; color: var(--text); background: var(--surface); font: inherit; cursor: pointer; }
+.student-profile-refresh:disabled { opacity: .65; cursor: wait; }
+.student-profile-refresh .is-spinning { animation: profile-refresh-spin .9s linear infinite; }
+@keyframes profile-refresh-spin { to { transform: rotate(360deg); } }
+.student-profile-load-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; color: #ffad9f; background: rgba(242, 143, 130, .08); font-size: 12px; }
+.student-profile-load-error p { margin: 0; }
+.student-profile-note { display: flex; align-items: flex-start; gap: 6px; }
+@media (max-width: 560px) { .student-profile-grid { grid-template-columns: 1fr; } .student-profile-item--wide { grid-column: auto; } .student-profile-sharing-status__detail { align-items: flex-start; flex-direction: column; } .student-profile-load-error { align-items: flex-start; flex-direction: column; } }
