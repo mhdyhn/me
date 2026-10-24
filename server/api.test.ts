@@ -50,6 +50,47 @@ async function coachSession() {
   return { token, id: created.json.user.id as number, username: created.json.username as string };
 }
 
+describe('student profile sharing', () => {
+  async function createStudentAccount(coachToken: string) {
+    const created = await call('POST', '/api/students', { displayName: 'شاگرد پروفایل' }, coachToken);
+    const loginResult = await login(created.json.username, created.json.password);
+    const token = loginResult.json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
+    return { id: created.json.user.id as number, token };
+  }
+
+  const profile = {
+    age: 28, sex: 'زن', heightCm: 168, weightKg: 64, primaryGoal: 'بهبود آمادگی', secondaryGoal: '',
+    trainingExperience: 'تازه‌کار', trainingDays: 3, sessionMinutes: 45, dailyActivity: 'فعالیت سبک',
+    sleepHours: '۷ ساعت', stressLevel: 0, injuries: 'بدون محدودیت', equipment: 'باشگاه کامل', workingWeightReferences: [],
+  };
+
+  it('syncs only with explicit consent and limits the profile to the owning coach', async () => {
+    const owner = await coachSession();
+    const other = await coachSession();
+    const student = await createStudentAccount(owner.token);
+
+    expect((await call('GET', '/api/me/profile', undefined, student.token)).json.stored).toBeNull();
+    const privateSave = await call('PUT', '/api/me/profile', { profile, shareWithCoach: false }, student.token);
+    expect(privateSave.status).toBe(200);
+    const privateView = await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token);
+    expect(privateView.json).toMatchObject({ shared: false, profile: null });
+
+    const sharedSave = await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
+    expect(sharedSave.json.stored).toMatchObject({ shareWithCoach: true, profile });
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(profile);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, other.token)).status).toBe(404);
+
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, admin)).status).toBe(403);
+    expect((await call('GET', '/api/me/profile', undefined, owner.token)).status).toBe(403);
+
+    const revoked = await call('POST', '/api/me/profile/sharing', { shareWithCoach: false }, student.token);
+    expect(revoked.json.shareWithCoach).toBe(false);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toBeNull();
+  });
+});
+
 describe('authentication', () => {
   it('logs the admin in and returns the current user', async () => {
     const res = await login('owner', 'owner-pass-123');

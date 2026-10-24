@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus } from 'lucide-react';
+import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
@@ -170,6 +170,9 @@ function CoachStudents() {
                     </Link>
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/progress`}>
                       <TrendingUp size={16} /> پیشرفت
+                    </Link>
+                    <Link className="button button--ghost" to={`/coach/students/${student.id}/profile`}>
+                      <UserRound size={16} /> پروفایل
                     </Link>
                     <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
                       <Sparkles size={16} /> هوش و پایش

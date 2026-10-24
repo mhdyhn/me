@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, Dumbbell, HeartPulse, UserRound } from 'lucide-react';
+import { ApiError, api } from '../lib/api';
 import { useGym } from '../context/GymProvider';
 import type { UserProfile } from '../types';
 
@@ -34,6 +35,7 @@ export function StudentOnboarding({ onDismiss }: { onDismiss: () => void }) {
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [shareWithCoach, setShareWithCoach] = useState(false);
   const update = <K extends keyof UserProfile,>(key: K, value: UserProfile[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
   const finish = async (event: FormEvent<HTMLFormElement>) => {
@@ -48,6 +50,14 @@ export function StudentOnboarding({ onDismiss }: { onDismiss: () => void }) {
     if (!Number.isFinite(draft.weightKg) || draft.weightKg < 30 || draft.weightKg > 300) { setError('وزن را بین ۳۰ تا ۳۰۰ کیلوگرم وارد کن.'); return; }
     setSaving(true);
     try {
+      if (shareWithCoach) {
+        try {
+          await api('PUT', '/me/profile', { profile: draft, shareWithCoach: true });
+        } catch (caught) {
+          setError(caught instanceof ApiError ? `${caught.message} می‌توانی اشتراک با مربی را خاموش کنی و فقط روی همین دستگاه ذخیره کنی.` : 'همگام‌سازی با حساب انجام نشد. اتصال را بررسی کن یا اشتراک با مربی را خاموش کن تا محلی ذخیره شود.');
+          return;
+        }
+      }
       await saveProfile(draft);
       onDismiss();
     } finally {
@@ -90,6 +100,10 @@ export function StudentOnboarding({ onDismiss }: { onDismiss: () => void }) {
               <Field label="میزان خواب معمول"><input value={draft.sleepHours} maxLength={40} onChange={(event) => update('sleepHours', event.target.value)} placeholder="مثلاً ۷ تا ۸ ساعت" /></Field>
               <Field label="آسیب‌دیدگی یا محدودیت · اختیاری"><textarea rows={3} value={draft.injuries} maxLength={500} onChange={(event) => update('injuries', event.target.value)} placeholder="اگر موردی هست بنویس؛ در صورت درد یا نگرانی با متخصص مشورت کن." /></Field>
             </div>
+            <label className="student-onboarding__consent">
+              <input type="checkbox" checked={shareWithCoach} onChange={(event) => setShareWithCoach(event.target.checked)} />
+              <span><strong>همگام‌سازی با حساب و اشتراک با مربی</strong><small>با انتخاب این گزینه، پروفایل برای همگام‌سازی به سرور می‌رود و فقط مربی فعلی‌ات می‌تواند آن را ببیند. در غیر این صورت فقط روی همین دستگاه می‌ماند.</small></span>
+            </label>
           </>}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="student-onboarding__actions">
@@ -99,7 +113,7 @@ export function StudentOnboarding({ onDismiss }: { onDismiss: () => void }) {
             </button>
             <button type="button" className="student-onboarding__skip" onClick={onDismiss}>بعداً تکمیل می‌کنم</button>
           </div>
-          <p className="student-onboarding__privacy">اطلاعات پروفایل در فضای محلی همین دستگاه ذخیره می‌شود و از این صفحه برای مربی ارسال نمی‌شود.</p>
+          <p className="student-onboarding__privacy">بدون رضایت بالا، پروفایل فقط در فضای محلی همین دستگاه ذخیره می‌شود و برای مربی ارسال نمی‌شود.</p>
         </form>
       </StepFrame>
     </div>

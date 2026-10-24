@@ -5,6 +5,7 @@ import { migrateNutrition } from './nutrition.ts';
 import { migrateSessions } from './sessions.ts';
 import { migratePayments } from './payments.ts';
 import { migrateBiometrics } from './biometrics.ts';
+import { migrateStudentProfiles } from './studentProfile.ts';
 
 /**
  * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
@@ -141,6 +142,7 @@ async function migrate(db: Db): Promise<void> {
   await migrateSessions(db);
   await migratePayments(db);
   await migrateBiometrics(db);
+  await migrateStudentProfiles(db);
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT;');
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;');
 }

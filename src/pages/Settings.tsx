@@ -5,17 +5,38 @@ import { InstallAppModal } from '../components/InstallAppModal';
 import { useGym } from '../context/GymProvider';
 import { db } from '../lib/db';
 import { faNumber } from '../lib/format';
+import { ApiError, api } from '../lib/api';
+import { useSession } from '../context/SessionContext';
 import type { UserProfile } from '../types';
 
 export function Settings() {
   const { profile, sessions, bodyweights, nutritionDays, nutritionGoals, saveProfile } = useGym();
+  const { user } = useSession();
   const [draft, setDraft] = useState<UserProfile>(profile);
+  const [shareWithCoach, setShareWithCoach] = useState(false);
+  const [cloudProfileExists, setCloudProfileExists] = useState(false);
+  const [sharingLoaded, setSharingLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [backupError, setBackupError] = useState('');
   const [showInstallModal, setShowInstallModal] = useState(false);
 
   useEffect(() => setDraft(profile), [profile]);
+
+  useEffect(() => {
+    let active = true;
+    if (user?.role !== 'student') { setSharingLoaded(true); return () => { active = false; }; }
+    setSharingLoaded(false);
+    api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
+      .then(({ stored }) => {
+        if (!active) return;
+        setCloudProfileExists(Boolean(stored));
+        setShareWithCoach(stored?.shareWithCoach ?? false);
+      })
+      .catch(() => { if (active) setError('وضعیت همگام‌سازی با سرور بارگذاری نشد.'); })
+      .finally(() => { if (active) setSharingLoaded(true); });
+    return () => { active = false; };
+  }, [user?.id, user?.role]);
 
   const update = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -24,8 +45,19 @@ export function Settings() {
     if (!Number.isFinite(draft.age) || draft.age < 13 || draft.age > 100) { setError('سن را بین ۱۳ تا ۱۰۰ وارد کن.'); return; }
     if (!Number.isFinite(draft.heightCm) || draft.heightCm < 100 || draft.heightCm > 250) { setError('قد باید بین ۱۰۰ تا ۲۵۰ سانتی‌متر باشد.'); return; }
     if (!Number.isFinite(draft.weightKg) || draft.weightKg < 30 || draft.weightKg > 300) { setError('وزن پروفایل باید بین ۳۰ تا ۳۰۰ کیلوگرم باشد.'); return; }
-    await saveProfile(draft);
-    setError(''); setSaved(true); window.setTimeout(() => setSaved(false), 1800);
+    try {
+      if (user?.role === 'student' && shareWithCoach) {
+        await api('PUT', '/me/profile', { profile: draft, shareWithCoach: true });
+        setCloudProfileExists(true);
+      } else if (user?.role === 'student' && cloudProfileExists) {
+        await api('POST', '/me/profile/sharing', { shareWithCoach: false });
+        setCloudProfileExists(false);
+      }
+      await saveProfile(draft);
+      setError(''); setSaved(true); window.setTimeout(() => setSaved(false), 1800);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'ذخیره یا همگام‌سازی پروفایل انجام نشد. اتصال را بررسی کن.');
+    }
   };
 
   const exportBackup = async () => {
@@ -48,7 +80,7 @@ export function Settings() {
 
   return (
     <div className="page-stack settings-page">
-      <SectionHeading eyebrow="پروفایل شما · خصوصی از ابتدا" title="برنامه را برای خودت تنظیم کن." description="این اطلاعات به تناسب برنامهٔ تمرینی کمک می‌کند. داده‌ها در همین مرورگر ذخیره می‌شوند." />
+      <SectionHeading eyebrow="پروفایل شما · خصوصی از ابتدا" title="برنامه را برای خودت تنظیم کن." description="این اطلاعات به شناخت شرایط تمرین کمک می‌کند. همگام‌سازی و اشتراک با مربی فقط با انتخاب خودت فعال می‌شود." />
       <div className="settings-layout">
         <form className="settings-form panel-card" onSubmit={(event) => void submit(event)}>
           <div className="card-topline"><div><span className="eyebrow">پروفایل تمرینی</span><h2>دربارهٔ تو.</h2></div><UserRound size={18} className="icon-accent" /></div>
@@ -67,6 +99,12 @@ export function Settings() {
             <label className="field-control"><span>سطح استرس <small>۱ تا ۱۰</small></span><input type="number" min="1" max="10" value={draft.stressLevel} onChange={(event) => update('stressLevel', Number(event.target.value))} /></label>
             <label className="field-control field-control--wide"><span>آسیب‌دیدگی یا محدودیت</span><textarea rows={3} value={draft.injuries} onChange={(event) => update('injuries', event.target.value)} /></label>
           </div>
+          {user?.role === 'student' && (
+            <label className="student-onboarding__consent settings-profile-consent">
+              <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded} onChange={(event) => setShareWithCoach(event.target.checked)} />
+              <span><strong>همگام‌سازی پروفایل با حساب و اشتراک با مربی</strong><small>{sharingLoaded ? 'با فعال‌کردن، پروفایل به حساب همگام می‌شود و فقط مربی فعلی‌ات آن را می‌بیند. با خاموش‌کردن و ذخیره، دسترسی مربی قطع می‌شود.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
+            </label>
+          )}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="settings-save-row"><span className="field-hint">تغییرات، ست‌های ثبت‌شدهٔ قبلی را عوض نمی‌کنند.</span><button className="button button--primary" type="submit">{saved ? <><Check size={16} /> ذخیره شد</> : <><Save size={16} /> ذخیرهٔ پروفایل</>}</button></div>
         </form>
@@ -93,7 +131,7 @@ export function Settings() {
           </section>
 
           <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>
-          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">ذخیره‌سازی محلی</span><h3>داده‌ها همین‌جا می‌مانند.</h3><p>ست‌ها، سوابق تمرین، وزن‌کشی و یادداشت‌های تغذیه در IndexedDB همین مرورگر ذخیره می‌شوند. پاک‌کردن داده‌های مرورگر ممکن است آن‌ها را حذف کند.</p><div className="privacy-points"><span><ShieldCheck size={14} /> حساب کاربری یا همگام‌سازی ابری تنظیم نشده است</span><span><ShieldCheck size={14} /> بدون آمارگیری یا ردیابی شخص ثالث</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">یک فایل JSON از پروفایل و گزارش‌ها دریافت می‌کنی.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
+          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>اشتراک با انتخاب تو.</h3><p>پروفایل به‌طور پیش‌فرض در IndexedDB همین مرورگر ذخیره می‌شود. فقط اگر گزینهٔ همگام‌سازی را فعال کنی، پروفایل به حساب می‌رود و مربی فعلی‌ات به آن دسترسی پیدا می‌کند. پاک‌کردن داده‌های مرورگر ممکن است نسخهٔ محلی را حذف کند.</p><div className="privacy-points"><span><ShieldCheck size={14} /> رضایت را هر زمان از همین صفحه پس بگیر</span><span><ShieldCheck size={14} /> بدون آمارگیری یا ردیابی شخص ثالث</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">یک فایل JSON از پروفایل و گزارش‌ها دریافت می‌کنی.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>
