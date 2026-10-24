@@ -80,7 +80,7 @@ export function Settings() {
 
   return (
     <div className="page-stack settings-page">
-      <SectionHeading eyebrow="پروفایل شما · خصوصی از ابتدا" title="برنامه را برای خودت تنظیم کن." description="این اطلاعات به شناخت شرایط تمرین کمک می‌کند. همگام‌سازی و اشتراک با مربی فقط با انتخاب خودت فعال می‌شود." />
+      <SectionHeading eyebrow="پروفایل تمرینی" title="برنامه را برای خودت تنظیم کن." description="پس از تکمیل پروفایل، اطلاعات برای مربی فعلی‌ات قابل مشاهده است. از اینجا می‌توانی اشتراک را مدیریت یا قطع کنی." />
       <div className="settings-layout">
         <form className="settings-form panel-card" onSubmit={(event) => void submit(event)}>
           <div className="card-topline"><div><span className="eyebrow">پروفایل تمرینی</span><h2>دربارهٔ تو.</h2></div><UserRound size={18} className="icon-accent" /></div>
@@ -102,7 +102,7 @@ export function Settings() {
           {user?.role === 'student' && (
             <label className="student-onboarding__consent settings-profile-consent">
               <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded} onChange={(event) => setShareWithCoach(event.target.checked)} />
-              <span><strong>همگام‌سازی پروفایل با حساب و اشتراک با مربی</strong><small>{sharingLoaded ? 'با فعال‌کردن، پروفایل به حساب همگام می‌شود و فقط مربی فعلی‌ات آن را می‌بیند. با خاموش‌کردن و ذخیره، دسترسی مربی قطع می‌شود.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
+              <span><strong>نمایش پروفایل به مربی</strong><small>{sharingLoaded ? 'این گزینه به‌صورت پیش‌فرض روشن است. با خاموش‌کردن و ذخیره، دسترسی مربی قطع می‌شود؛ با روشن‌کردن دوباره، پروفایل همگام خواهد شد.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
             </label>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
@@ -131,7 +131,7 @@ export function Settings() {
           </section>
 
           <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>
-          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>اشتراک با انتخاب تو.</h3><p>پروفایل به‌طور پیش‌فرض در IndexedDB همین مرورگر ذخیره می‌شود. فقط اگر گزینهٔ همگام‌سازی را فعال کنی، پروفایل به حساب می‌رود و مربی فعلی‌ات به آن دسترسی پیدا می‌کند. پاک‌کردن داده‌های مرورگر ممکن است نسخهٔ محلی را حذف کند.</p><div className="privacy-points"><span><ShieldCheck size={14} /> رضایت را هر زمان از همین صفحه پس بگیر</span><span><ShieldCheck size={14} /> بدون آمارگیری یا ردیابی شخص ثالث</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">یک فایل JSON از پروفایل و گزارش‌ها دریافت می‌کنی.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
+          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>پروفایل برای مربی فعلی.</h3><p>پس از تکمیل، پروفایل به حساب همگام می‌شود تا مربی فعلی‌ات آن را ببیند. هر زمان خواستی از گزینهٔ بالا دسترسی مربی را قطع کن. پاک‌کردن داده‌های مرورگر، دادهٔ ذخیره‌شده در حساب را حذف نمی‌کند.</p><div className="privacy-points"><span><ShieldCheck size={14} /> دسترسی مربی را هر زمان از همین صفحه قطع کن</span><span><ShieldCheck size={14} /> بدون آمارگیری یا ردیابی شخص ثالث</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">یک فایل JSON از پروفایل و گزارش‌ها دریافت می‌کنی.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>

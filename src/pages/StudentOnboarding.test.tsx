@@ -5,6 +5,8 @@ import { blankProfile } from '../data/profile';
 import type { UserProfile } from '../types';
 
 const saveProfile = vi.fn<(_: UserProfile) => Promise<void>>();
+const api = vi.hoisted(() => vi.fn());
+vi.mock('../lib/api', () => ({ api }));
 vi.mock('../context/GymProvider', () => ({
   useGym: () => ({ profile: blankProfile, saveProfile }),
 }));
@@ -14,6 +16,7 @@ import { StudentOnboarding } from './StudentOnboarding';
 describe('student onboarding', () => {
   beforeEach(() => {
     saveProfile.mockReset().mockResolvedValue(undefined);
+    api.mockReset().mockResolvedValue({});
   });
 
   it('collects the existing profile data over three steps and saves it', async () => {
@@ -39,6 +42,10 @@ describe('student onboarding', () => {
     await user.type(screen.getByLabelText('آسیب‌دیدگی یا محدودیت · اختیاری'), 'بدون محدودیت');
     await user.click(screen.getByRole('button', { name: /ذخیره و ادامه/ }));
 
+    expect(api).toHaveBeenCalledWith('PUT', '/me/profile', {
+      profile: expect.objectContaining({ age: 28 }),
+      shareWithCoach: true,
+    });
     expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({
       age: 28,
       sex: 'زن',

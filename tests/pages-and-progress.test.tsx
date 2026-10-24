@@ -97,7 +97,7 @@ describe('primary routes', () => {
     ['/exercise/admin-pec-deck', 'شروع، حرکت، پایان.'],
     ['/progress', 'دادهٔ واقعی · پیشرفت پیوسته'],
     ['/nutrition', 'سوخت تمرین'],
-    ['/settings', 'پروفایل شما · خصوصی از ابتدا'],
+    ['/settings', 'برنامه را برای خودت تنظیم کن.'],
   ])('renders %s without a blank page', async (path, content) => {
     renderPage(path);
     expect(await screen.findByText(content)).toBeInTheDocument();
