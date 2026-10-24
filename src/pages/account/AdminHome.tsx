@@ -23,6 +23,8 @@ export function AdminHome() {
 
 function AdminCoaches() {
   const [coaches, setCoaches] = useState<CoachSummary[] | null>(null);
+  const [coachesLoadError, setCoachesLoadError] = useState<string | null>(null);
+  const [loadingCoaches, setLoadingCoaches] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -33,12 +35,16 @@ function AdminCoaches() {
   const [loadingCoachStudents, setLoadingCoachStudents] = useState<Record<number, boolean>>({});
 
   async function load() {
+    setLoadingCoaches(true);
+    setCoachesLoadError(null);
     try {
       const result = await api<{ coaches: CoachSummary[] }>('GET', '/coaches');
       setCoaches(result.coaches);
       setLoadError(null);
     } catch (caught) {
-      setLoadError(caught instanceof ApiError ? caught.message : 'فهرست مربی‌ها بارگذاری نشد.');
+      setCoachesLoadError(caught instanceof ApiError ? caught.message : 'فهرست مربی‌ها بارگذاری نشد.');
+    } finally {
+      setLoadingCoaches(false);
     }
   }
 
@@ -212,7 +218,15 @@ function AdminCoaches() {
       )}
 
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
-      {coaches === null && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
+      {coachesLoadError && (
+        <div className="account-load-error" role="alert">
+          <p>{coachesLoadError}</p>
+          <button type="button" className="button button--secondary button--small" disabled={loadingCoaches} onClick={() => void load()}>
+            تلاش دوباره برای بارگذاری فهرست مربی‌ها
+          </button>
+        </div>
+      )}
+      {coaches === null && !coachesLoadError && <p className="account-muted" role="status">در حال بارگذاری…</p>}
       {coaches?.length === 0 && <p className="account-muted">هنوز مربی‌ای ساخته نشده است. بالا یکی بسازید.</p>}
 
       {coaches && coaches.length > 0 && (

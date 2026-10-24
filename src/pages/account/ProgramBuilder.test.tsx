@@ -15,8 +15,9 @@ interface Sent {
   body: unknown;
 }
 
-function mockApi(program: unknown = null) {
+function mockApi(program: unknown = null, failProgramLoads = 0) {
   const sent: Sent[] = [];
+  let remainingProgramLoadFailures = failProgramLoads;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => {
@@ -27,7 +28,14 @@ function mockApi(program: unknown = null) {
       let status = 404;
       if (method === 'GET' && input === '/api/me') [json, status] = [{ user: coachUser }, 200];
       if (method === 'GET' && input === '/api/students') [json, status] = [{ students: [student] }, 200];
-      if (method === 'GET' && input === '/api/students/3/program') [json, status] = [{ program }, 200];
+      if (method === 'GET' && input === '/api/students/3/program') {
+        if (remainingProgramLoadFailures > 0) {
+          remainingProgramLoadFailures -= 1;
+          [json, status] = [{ error: 'temporary network error' }, 503];
+        } else {
+          [json, status] = [{ program }, 200];
+        }
+      }
       if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), updatedAt: 'now' } }, 200];
       if (method === 'DELETE' && input === '/api/students/3/program') [json, status] = [{ ok: true }, 200];
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
@@ -58,6 +66,18 @@ afterEach(() => {
 });
 
 describe('coach programme builder', () => {
+  it('retries a failed program load without exposing an empty editable builder', async () => {
+    const sent = mockApi(null, 1);
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'تلاش دوباره برای بارگذاری برنامه' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('عنوان برنامه')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری برنامه' }));
+
+    expect(await screen.findByLabelText('عنوان برنامه')).toBeInTheDocument();
+    expect(sent.filter((call) => call.method === 'GET' && call.path === '/api/students/3/program')).toHaveLength(2);
+  });
+
   it('builds a day from the catalogue and saves it for the student', async () => {
     const sent = mockApi();
     renderBuilder();
