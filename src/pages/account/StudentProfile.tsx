@@ -36,7 +36,7 @@ function StudentProfileScreen() {
       {data && !data.shared && (
         <div className="student-profile-private" role="status">
           <h3>پروفایل با شما به‌اشتراک گذاشته نشده است.</h3>
-          <p>شاگرد می‌تواند در تنظیمات حساب، همگام‌سازی و اشتراک پروفایل را با رضایت خودش فعال کند.</p>
+          <p>پس از تکمیل پروفایل، شاگرد می‌تواند نمایش آن را از تنظیمات مدیریت یا متوقف کند.</p>
           <Link className="button button--ghost" to={`/coach/students/${studentId}/chat`}>پیام به شاگرد</Link>
         </div>
       )}

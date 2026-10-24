@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2, Clock3, Dumbbell, Flame, HeartPulse, Plus, Sparkles, Trash2, Trophy, Weight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
@@ -27,6 +27,8 @@ const profileNeedsSetup = (profile: UserProfile): boolean => !profile.age || !pr
 
 export function Dashboard() {
   const { sessions, bodyweights, profile, loading, saveProfile, activeSession, completeActiveSession, deleteSession } = useGym();
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
   const { user } = useSession();
   const [cloudProfileChecked, setCloudProfileChecked] = useState(false);
   const program = useProgram();
@@ -47,8 +49,14 @@ export function Dashboard() {
     let active = true;
     setCloudProfileChecked(false);
     void api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
-      .then(({ stored }) => {
-        if (active && stored?.shareWithCoach) void saveProfile(stored.profile);
+      .then(async ({ stored }) => {
+        if (!active) return;
+        if (stored?.shareWithCoach) {
+          await saveProfile(stored.profile);
+        } else if (!stored && !profileNeedsSetup(profileRef.current)) {
+          // Existing students with a complete local profile are synced automatically too.
+          await api('PUT', '/me/profile', { profile: profileRef.current, shareWithCoach: true });
+        }
       })
       .catch(() => {})
       .finally(() => { if (active) setCloudProfileChecked(true); });
