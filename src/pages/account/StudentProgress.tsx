@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, HeartPulse, Search, Sparkles } from 'lucide-react';
 import { ApiError, api } from '../../lib/api';
@@ -57,6 +57,7 @@ function StudentProgressScreen() {
   const { studentId } = useParams();
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<'7d' | '30d' | 'all'>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +74,14 @@ function StudentProgressScreen() {
     };
   }, [studentId]);
 
-  const mappedSessions: WorkoutSession[] = (data?.sessions ?? []).map((s) => ({
+  const visibleSessions = useMemo(() => {
+    if (!data || period === 'all') return data?.sessions ?? [];
+    const days = period === '7d' ? 7 : 30;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return data.sessions.filter((session) => new Date(session.startedAt).getTime() >= cutoff);
+  }, [data, period]);
+
+  const mappedSessions: WorkoutSession[] = visibleSessions.map((s) => ({
     id: s.id,
     templateId: '',
     name: s.name,
@@ -98,7 +106,7 @@ function StudentProgressScreen() {
 
   const studentReadiness = calculateReadinessScore(DEFAULT_HEALTH_METRICS, mappedSessions);
   const studentMuscles = calculateMuscleRecovery(mappedSessions);
-  const diagnostic = runStudentDiagnostic(data?.sessions ?? []);
+  const diagnostic = runStudentDiagnostic(visibleSessions);
 
   return (
     <PanelPage title={data ? `پیشرفت ${data.studentName}` : 'پیشرفت شاگرد'}>
@@ -111,9 +119,23 @@ function StudentProgressScreen() {
 
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!data && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
-      {data && data.sessions.length === 0 && <p className="account-muted">هنوز جلسه‌ای ثبت نشده است.</p>}
-
       {data && data.sessions.length > 0 && (
+        <section className="student-progress-filters" aria-label="بازهٔ زمانی پیشرفت">
+          <label className="field">
+            <span>نمایش سوابق</span>
+            <select aria-label="بازهٔ زمانی" value={period} onChange={(event) => setPeriod(event.target.value as '7d' | '30d' | 'all')}>
+              <option value="7d">۷ روز اخیر</option>
+              <option value="30d">۳۰ روز اخیر</option>
+              <option value="all">همهٔ سوابق</option>
+            </select>
+          </label>
+          <p className="account-muted" role="status">{faNumber(visibleSessions.length)} جلسه در این بازه از {faNumber(data.sessions.length)} جلسهٔ ثبت‌شده</p>
+        </section>
+      )}
+      {data && data.sessions.length === 0 && <p className="account-muted">هنوز جلسه‌ای ثبت نشده است.</p>}
+      {data && data.sessions.length > 0 && visibleSessions.length === 0 && <p className="account-muted" role="status">در بازهٔ انتخاب‌شده جلسه‌ای ثبت نشده است.</p>}
+
+      {data && visibleSessions.length > 0 && (
         <>
           {/* Coach AI Co-Pilot Summary Card */}
           <section className="coach-ai-panel">
@@ -182,7 +204,7 @@ function StudentProgressScreen() {
           </section>
 
           <ol className="progress-sessions" aria-label="جلسه‌های تمرین">
-          {data.sessions.map((session) => (
+          {visibleSessions.map((session) => (
             <li key={session.id} className="progress-session">
               <div className="progress-session__head">
                 <div>

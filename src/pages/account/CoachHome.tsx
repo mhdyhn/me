@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
+import { faNumber } from '../../lib/format';
 import { useSession } from '../../context/SessionContext';
 import { AdminHome } from './AdminHome';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
@@ -23,6 +24,8 @@ export function CoachHome() {
 function CoachStudents() {
   const [students, setStudents] = useState<StudentView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentStatus, setStudentStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,6 +44,16 @@ function CoachStudents() {
   useEffect(() => {
     void load();
   }, []);
+
+  const normalizedQuery = studentSearch.trim().toLocaleLowerCase();
+  const visibleStudents = students?.filter((student) => {
+    const matchesQuery = !normalizedQuery
+      || student.displayName.toLocaleLowerCase().includes(normalizedQuery)
+      || student.username.toLocaleLowerCase().includes(normalizedQuery);
+    const active = student.isActive !== false;
+    const matchesStatus = studentStatus === 'all' || (studentStatus === 'active' ? active : !active);
+    return matchesQuery && matchesStatus;
+  }) ?? [];
 
   async function addStudent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,57 +163,81 @@ function CoachStudents() {
       {students?.length === 0 && <p className="account-muted">هنوز شاگردی ندارید. بالا یک شاگرد بسازید.</p>}
 
       {students && students.length > 0 && (
-        <ul className="person-card-grid">
-          {students.map((student) => (
-            <li key={student.id}>
-              <PersonCard
-                name={student.displayName}
-                username={student.username}
-                password={student.password}
-                mustChangePassword={student.mustChangePassword}
-                roleLabel="شاگرد"
-                isActive={student.isActive !== false}
-                actions={
-                  <>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
-                      <ListChecks size={16} /> برنامه
-                    </Link>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/nutrition`}>
-                      <Apple size={16} /> تغذیه
-                    </Link>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/progress`}>
-                      <TrendingUp size={16} /> پیشرفت
-                    </Link>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/profile`}>
-                      <UserRound size={16} /> پروفایل
-                    </Link>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
-                      <Sparkles size={16} /> هوش و پایش
-                    </Link>
-                    <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
-                      <MessageCircle size={16} /> گفتگو
-                    </Link>
-                    <button
-                      type="button"
-                      className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
-                      onClick={() => void toggleStudentActive(student)}
-                      title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
-                    >
-                      {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
-                      {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
-                    </button>
-                    <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
-                      <KeyRound size={16} /> رمز تازه
-                    </button>
-                    <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
-                      <Trash2 size={16} /> حذف
-                    </button>
-                  </>
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <section className="coach-student-filters" aria-label="جست‌وجو و فیلتر شاگردها">
+            <label className="field">
+              <span>جست‌وجوی نام یا نام کاربری</span>
+              <input value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="نام یا نام کاربری" />
+            </label>
+            <label className="field">
+              <span>وضعیت حساب</span>
+              <select aria-label="وضعیت حساب" value={studentStatus} onChange={(event) => setStudentStatus(event.target.value as 'all' | 'active' | 'inactive')}>
+                <option value="all">همهٔ شاگردها</option>
+                <option value="active">فعال</option>
+                <option value="inactive">غیرفعال</option>
+              </select>
+            </label>
+            <p className="account-muted" role="status">نمایش {faNumber(visibleStudents.length)} از {faNumber(students.length)} شاگرد</p>
+          </section>
+          {visibleStudents.length === 0 ? (
+            <div className="coach-student-empty">
+              <p className="account-muted">شاگردی با این جست‌وجو و فیلتر پیدا نشد.</p>
+              <button type="button" className="button button--ghost button--small" onClick={() => { setStudentSearch(''); setStudentStatus('all'); }}>پاک‌کردن فیلترها</button>
+            </div>
+          ) : (
+            <ul className="person-card-grid">
+              {visibleStudents.map((student) => (
+                <li key={student.id}>
+                  <PersonCard
+                    name={student.displayName}
+                    username={student.username}
+                    password={student.password}
+                    mustChangePassword={student.mustChangePassword}
+                    roleLabel="شاگرد"
+                    isActive={student.isActive !== false}
+                    actions={
+                      <>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
+                          <ListChecks size={16} /> برنامه
+                        </Link>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/nutrition`}>
+                          <Apple size={16} /> تغذیه
+                        </Link>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/progress`}>
+                          <TrendingUp size={16} /> پیشرفت
+                        </Link>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/profile`}>
+                          <UserRound size={16} /> پروفایل
+                        </Link>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
+                          <Sparkles size={16} /> هوش و پایش
+                        </Link>
+                        <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
+                          <MessageCircle size={16} /> گفتگو
+                        </Link>
+                        <button
+                          type="button"
+                          className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
+                          onClick={() => void toggleStudentActive(student)}
+                          title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
+                        >
+                          {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
+                          {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                        </button>
+                        <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
+                          <KeyRound size={16} /> رمز تازه
+                        </button>
+                        <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
+                          <Trash2 size={16} /> حذف
+                        </button>
+                      </>
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </PanelPage>
   );

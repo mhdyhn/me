@@ -16,6 +16,8 @@ export function Settings() {
   const [shareWithCoach, setShareWithCoach] = useState(false);
   const [cloudProfileExists, setCloudProfileExists] = useState(false);
   const [sharingLoaded, setSharingLoaded] = useState(false);
+  const [sharingLoadError, setSharingLoadError] = useState('');
+  const [sharingReload, setSharingReload] = useState(0);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [backupError, setBackupError] = useState('');
@@ -27,21 +29,25 @@ export function Settings() {
     let active = true;
     if (user?.role !== 'student') { setSharingLoaded(true); return () => { active = false; }; }
     setSharingLoaded(false);
+    setSharingLoadError('');
     api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
       .then(({ stored }) => {
         if (!active) return;
         setCloudProfileExists(Boolean(stored));
         setShareWithCoach(stored?.shareWithCoach ?? false);
       })
-      .catch(() => { if (active) setError('وضعیت همگام‌سازی با سرور بارگذاری نشد.'); })
+      .catch((caught) => {
+        if (active) setSharingLoadError(caught instanceof ApiError ? caught.message : 'وضعیت همگام‌سازی با سرور بارگذاری نشد.');
+      })
       .finally(() => { if (active) setSharingLoaded(true); });
     return () => { active = false; };
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, sharingReload]);
 
   const update = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (user?.role === 'student' && (!sharingLoaded || sharingLoadError)) { setError('برای ذخیرهٔ پروفایل، ابتدا وضعیت اشتراک را بارگذاری کن یا دوباره تلاش کن.'); return; }
     if (!Number.isFinite(draft.age) || draft.age < 13 || draft.age > 100) { setError('سن را بین ۱۳ تا ۱۰۰ وارد کن.'); return; }
     if (!Number.isFinite(draft.heightCm) || draft.heightCm < 100 || draft.heightCm > 250) { setError('قد باید بین ۱۰۰ تا ۲۵۰ سانتی‌متر باشد.'); return; }
     if (!Number.isFinite(draft.weightKg) || draft.weightKg < 30 || draft.weightKg > 300) { setError('وزن پروفایل باید بین ۳۰ تا ۳۰۰ کیلوگرم باشد.'); return; }
@@ -101,9 +107,17 @@ export function Settings() {
           </div>
           {user?.role === 'student' && (
             <label className="student-onboarding__consent settings-profile-consent">
-              <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded} onChange={(event) => setShareWithCoach(event.target.checked)} />
-              <span><strong>نمایش پروفایل به مربی</strong><small>{sharingLoaded ? 'این گزینه به‌صورت پیش‌فرض روشن است. با خاموش‌کردن و ذخیره، دسترسی مربی قطع می‌شود؛ با روشن‌کردن دوباره، پروفایل همگام خواهد شد.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
+              <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded || Boolean(sharingLoadError)} onChange={(event) => setShareWithCoach(event.target.checked)} />
+              <span><strong>نمایش پروفایل به مربی</strong><small>{sharingLoadError ? 'تا دریافت وضعیت معتبر، تغییر اشتراک غیرفعال است.' : sharingLoaded ? 'این گزینه به‌صورت پیش‌فرض روشن است. با خاموش‌کردن و ذخیره، دسترسی مربی قطع می‌شود؛ با روشن‌کردن دوباره، پروفایل همگام خواهد شد.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
             </label>
+          )}
+          {user?.role === 'student' && sharingLoadError && (
+            <div className="settings-sync-retry" role="alert">
+              <p className="form-error">{sharingLoadError}</p>
+              <button type="button" className="button button--secondary button--small" onClick={() => setSharingReload((attempt) => attempt + 1)}>
+                تلاش دوباره برای بارگذاری
+              </button>
+            </div>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="settings-save-row"><span className="field-hint">تغییرات، ست‌های ثبت‌شدهٔ قبلی را عوض نمی‌کنند.</span><button className="button button--primary" type="submit">{saved ? <><Check size={16} /> ذخیره شد</> : <><Save size={16} /> ذخیرهٔ پروفایل</>}</button></div>
