@@ -21,13 +21,22 @@ interface StudentPlanResponse {
 export function StudentNutritionPlan() {
   const [data, setData] = useState<StudentPlanResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [dayIndex, setDayIndex] = useState(todayDayIndex());
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError(null);
     api<StudentPlanResponse>('GET', '/me/nutrition')
-      .then(setData)
-      .catch((caught) => setLoadError(caught instanceof ApiError ? caught.message : 'برنامهٔ غذایی بارگذاری نشد.'));
-  }, []);
+      .then((result) => { if (active) setData(result); })
+      .catch((caught) => {
+        if (active) setLoadError(caught instanceof ApiError ? caught.message : 'برنامهٔ غذایی بارگذاری نشد.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [retryCount]);
 
   return (
     <section className="panel-card student-nutrition" aria-label="برنامهٔ غذایی مربی">
@@ -39,8 +48,15 @@ export function StudentNutritionPlan() {
         {data?.coachName && <span className="today-pill">{data.coachName}</span>}
       </div>
 
-      {loadError && <p className="form-error" role="alert">{loadError}</p>}
-      {!loadError && data === null && <p className="account-muted">در حال بارگذاری…</p>}
+      {loading && <p className="account-muted" role="status">در حال بارگذاری…</p>}
+      {loadError && (
+        <div className="student-nutrition-load-error" role="alert">
+          <p>{loadError}</p>
+          <button type="button" className="button button--secondary button--small" disabled={loading} onClick={() => setRetryCount((count) => count + 1)}>
+            تلاش دوباره برای بارگذاری برنامه
+          </button>
+        </div>
+      )}
       {data && !data.plan && <p className="muted">مربی هنوز برنامهٔ غذایی شما را تعریف نکرده است.</p>}
 
       {data?.plan && (
