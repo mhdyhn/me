@@ -45,6 +45,7 @@ function Builder() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -53,6 +54,8 @@ function Builder() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     (async () => {
       try {
         const [progRes, biometricsResult] = await Promise.all([
@@ -83,7 +86,7 @@ function Builder() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, loadAttempt]);
 
   const visibleExercises = useMemo(() => {
     const query = search.trim();
@@ -256,7 +259,16 @@ function Builder() {
   }
 
   if (loading) return <PanelPage title="ساخت برنامه"><p className="account-muted">در حال بارگذاری…</p></PanelPage>;
-  if (loadError) return <PanelPage title="ساخت برنامه"><p className="form-error" role="alert">{loadError}</p></PanelPage>;
+  if (loadError) return (
+    <PanelPage title="ساخت برنامه">
+      <div className="account-load-error" role="alert">
+        <p>{loadError}</p>
+        <button type="button" className="button button--secondary button--small" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          تلاش دوباره برای بارگذاری برنامه
+        </button>
+      </div>
+    </PanelPage>
+  );
 
   return (
     <PanelPage title={student ? `برنامهٔ ${student.displayName}` : 'برنامه'}>

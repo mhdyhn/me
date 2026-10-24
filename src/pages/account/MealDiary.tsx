@@ -17,12 +17,15 @@ export function MealDiary({ targets }: { targets: Targets }) {
   const [meals, setMeals] = useState<PlanMeal[] | null>(null);
   const [snapshot, setSnapshot] = useState('[]');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     setMeals(null);
     setLoadError(null);
     (async () => {
@@ -33,12 +36,14 @@ export function MealDiary({ targets }: { targets: Targets }) {
         setSnapshot(JSON.stringify(result.diary.meals));
       } catch (caught) {
         if (!cancelled) setLoadError(caught instanceof ApiError ? caught.message : 'دفترچهٔ غذایی بارگذاری نشد.');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [day]);
+  }, [day, loadAttempt]);
 
   const dirty = meals !== null && JSON.stringify(meals) !== snapshot;
   const total = useMemo(() => (meals ? dayTotals({ name: day, meals }) : null), [meals, day]);
@@ -57,6 +62,9 @@ export function MealDiary({ targets }: { targets: Targets }) {
     }
     setSaved(false);
     setSaveError(null);
+    setMeals(null);
+    setLoadError(null);
+    setLoading(true);
     setDay(next);
   }
 
@@ -93,8 +101,15 @@ export function MealDiary({ targets }: { targets: Targets }) {
         </div>
       </div>
 
-      {loadError && <p className="form-error" role="alert">{loadError}</p>}
-      {!meals && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
+      {loadError && (
+        <div className="account-load-error" role="alert">
+          <p>{loadError}</p>
+          <button type="button" className="button button--secondary button--small" disabled={loading} onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+            تلاش دوباره برای بارگذاری این روز
+          </button>
+        </div>
+      )}
+      {loading && <p className="account-muted" role="status">در حال بارگذاری…</p>}
 
       {meals && total && (
         <>
