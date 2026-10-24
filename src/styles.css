@@ -2193,3 +2193,56 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .select-with-icon select { color: #33483a; }
 .account-load-error { border-color: #efd6d2; background: #fff8f7; }
 .account-load-error p { color: #9c3d3d; }
+
+/* Sign-in experience on the public web entry point. */
+.login-screen {
+  background: linear-gradient(180deg, #edf3ee 0%, #f5f7f4 34%, #f5f7f4 100%);
+}
+.login-glow {
+  width: min(520px, 90vw);
+  height: min(520px, 90vw);
+  background: radial-gradient(circle, rgba(40, 99, 69, .07), transparent 68%);
+}
+.login-card {
+  width: min(440px, 100%);
+  padding: 30px 28px 24px;
+  border-color: #dce5dd;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 18px 55px rgba(35, 55, 42, .1);
+  backdrop-filter: none;
+}
+.login-brand { margin-bottom: 24px; }
+.login-brand strong { color: #243229; }
+.login-brand small { color: #64736a; }
+.login-card h1 { color: #243229; font-size: 26px; }
+.login-sub { margin-bottom: 24px; color: #64736a; }
+.login-field > span { color: #52645a; font-weight: 600; }
+.login-input {
+  height: 50px;
+  border-color: #d3ded5;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #64736a;
+}
+.login-input:focus-within {
+  border-color: #6f9a7b;
+  box-shadow: 0 0 0 3px rgba(40, 99, 69, .12);
+  color: #286345;
+}
+.login-input input { color: #243229; }
+.login-eye { width: 38px; height: 38px; }
+.login-submit {
+  height: 48px;
+  border-radius: 11px;
+  background: #286345;
+  color: #ffffff;
+}
+.login-submit:not(:disabled):hover { background: #205238; filter: none; }
+.login-error { border-color: #efd6d2; background: #fff5f3; color: #9c3d3d; }
+.login-help { color: #64736a; }
+.login-remember-row { color: #52645a; }
+@media (max-width: 480px) {
+  .login-screen { padding: 16px; }
+  .login-card { padding: 24px 20px 20px; border-radius: 16px; }
+}

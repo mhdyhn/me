@@ -185,7 +185,7 @@ export function Login() {
                 gap: 8,
                 cursor: 'pointer',
                 userSelect: 'none',
-                color: 'var(--text-soft, #cfd8d3)',
+                color: 'var(--muted)',
               }}
             >
               <input
