@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
+import { useSession } from '../context/SessionContext';
+import { StudentOnboarding } from './StudentOnboarding';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
@@ -11,10 +13,25 @@ import { ALL_AI_MODULES, getMyAiSettings, type AiModuleKey } from '../lib/studen
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate, kg } from '../lib/format';
 
+const isStudentOnboardingDismissed = (key: string | null): boolean => {
+  try { return Boolean(key && window.localStorage.getItem(key) === 'true'); } catch { return false; }
+};
+
+const dismissStudentOnboarding = (key: string | null): void => {
+  try { if (key) window.localStorage.setItem(key, 'true'); } catch { /* Keep the current session usable when storage is blocked. */ }
+};
+
 export function Dashboard() {
-  const { sessions, bodyweights, profile, activeSession, completeActiveSession, deleteSession } = useGym();
+  const { sessions, bodyweights, profile, loading, activeSession, completeActiveSession, deleteSession } = useGym();
+  const { user } = useSession();
   const program = useProgram();
   const navigate = useNavigate();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const onboardingKey = user ? `meety:student-onboarding-skipped:${user.id}` : null;
+
+  useEffect(() => {
+    setOnboardingDismissed(isStudentOnboardingDismissed(onboardingKey));
+  }, [onboardingKey]);
   const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
 
@@ -60,6 +77,15 @@ export function Dashboard() {
   const healthMetrics = useMemo(() => getStoredHealthMetrics(), []);
   const readiness = useMemo(() => calculateReadinessScore(healthMetrics, sessions, now), [healthMetrics, sessions, now]);
   const muscleRecoveries = useMemo(() => calculateMuscleRecovery(sessions, now), [sessions, now]);
+  const profileNeedsSetup = !profile.age || !profile.heightCm || !profile.weightKg || !profile.primaryGoal || !profile.trainingDays || !profile.sessionMinutes;
+
+  if (loading) return null;
+  if (user?.role === 'student' && profileNeedsSetup && !onboardingDismissed) {
+    return <StudentOnboarding onDismiss={() => {
+      dismissStudentOnboarding(onboardingKey);
+      setOnboardingDismissed(true);
+    }} />;
+  }
 
   return (
     <div className="page-stack dashboard-page">
