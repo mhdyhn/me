@@ -11,6 +11,8 @@ import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
 import { ALL_AI_MODULES, getMyAiSettings, type AiModuleKey } from '../lib/studentAiBiometrics';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
+import { api } from '../lib/api';
+import type { UserProfile } from '../types';
 import { faNumber, formatDate, kg } from '../lib/format';
 
 const isStudentOnboardingDismissed = (key: string | null): boolean => {
@@ -21,9 +23,12 @@ const dismissStudentOnboarding = (key: string | null): void => {
   try { if (key) window.localStorage.setItem(key, 'true'); } catch { /* Keep the current session usable when storage is blocked. */ }
 };
 
+const profileNeedsSetup = (profile: UserProfile): boolean => !profile.age || !profile.heightCm || !profile.weightKg || !profile.primaryGoal || !profile.trainingDays || !profile.sessionMinutes;
+
 export function Dashboard() {
-  const { sessions, bodyweights, profile, loading, activeSession, completeActiveSession, deleteSession } = useGym();
+  const { sessions, bodyweights, profile, loading, saveProfile, activeSession, completeActiveSession, deleteSession } = useGym();
   const { user } = useSession();
+  const [cloudProfileChecked, setCloudProfileChecked] = useState(false);
   const program = useProgram();
   const navigate = useNavigate();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -32,6 +37,24 @@ export function Dashboard() {
   useEffect(() => {
     setOnboardingDismissed(isStudentOnboardingDismissed(onboardingKey));
   }, [onboardingKey]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user?.role !== 'student' || import.meta.env.MODE === 'offline') {
+      setCloudProfileChecked(true);
+      return;
+    }
+    let active = true;
+    setCloudProfileChecked(false);
+    void api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
+      .then(({ stored }) => {
+        if (active && stored?.shareWithCoach) void saveProfile(stored.profile);
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setCloudProfileChecked(true); });
+    return () => { active = false; };
+  }, [user?.id, user?.role, loading, saveProfile]);
+
   const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
 
@@ -77,10 +100,10 @@ export function Dashboard() {
   const healthMetrics = useMemo(() => getStoredHealthMetrics(), []);
   const readiness = useMemo(() => calculateReadinessScore(healthMetrics, sessions, now), [healthMetrics, sessions, now]);
   const muscleRecoveries = useMemo(() => calculateMuscleRecovery(sessions, now), [sessions, now]);
-  const profileNeedsSetup = !profile.age || !profile.heightCm || !profile.weightKg || !profile.primaryGoal || !profile.trainingDays || !profile.sessionMinutes;
+  const needsSetup = profileNeedsSetup(profile);
 
-  if (loading) return null;
-  if (user?.role === 'student' && profileNeedsSetup && !onboardingDismissed) {
+  if (loading || !cloudProfileChecked) return null;
+  if (user?.role === 'student' && needsSetup && !onboardingDismissed) {
     return <StudentOnboarding onDismiss={() => {
       dismissStudentOnboarding(onboardingKey);
       setOnboardingDismissed(true);

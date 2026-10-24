@@ -10,6 +10,7 @@ import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 import { loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
+import { loadStudentProfile, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
 
 export interface AppOptions {
   db: Db;
@@ -202,6 +203,49 @@ export function createApp(options: AppOptions) {
         if (next === current) throw new HttpError(400, 'رمز جدید باید با رمز فعلی فرق داشته باشد.');
         await updatePassword(db, user!.id, hashPassword(next), false, null);
         return { status: 200, body: { ok: true } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/profile$/,
+      auth: ['student'],
+      handler: async ({ user }) => ({ status: 200, body: { stored: await loadStudentProfile(db, user!.id) } }),
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/me\/profile$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'انتخاب اشتراک پروفایل با مربی الزامی است.');
+        const profile = validateStudentProfile(body);
+        const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString());
+        return { status: 200, body: { stored } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/me\/profile\/sharing$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'فیلد shareWithCoach باید بولین باشد.');
+        const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString());
+        return { status: 200, body: { shareWithCoach: input.shareWithCoach && exists } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/profile$/,
+      auth: ['coach'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const stored = await loadStudentProfile(db, student.id);
+        return { status: 200, body: { studentName: student.displayName, profile: stored?.shareWithCoach ? stored.profile : null, updatedAt: stored?.shareWithCoach ? stored.updatedAt : null, shared: stored?.shareWithCoach ?? false } };
       },
     },
 
