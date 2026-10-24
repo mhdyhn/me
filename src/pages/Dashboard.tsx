@@ -11,7 +11,7 @@ import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
 import { ALL_AI_MODULES, getMyAiSettings, type AiModuleKey } from '../lib/studentAiBiometrics';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
-import { api } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 import type { UserProfile } from '../types';
 import { faNumber, formatDate, kg } from '../lib/format';
 
@@ -31,6 +31,9 @@ export function Dashboard() {
   profileRef.current = profile;
   const { user } = useSession();
   const [cloudProfileChecked, setCloudProfileChecked] = useState(false);
+  const [profileSyncStatus, setProfileSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'disabled' | 'error' | 'not-needed'>('idle');
+  const [profileSyncError, setProfileSyncError] = useState('');
+  const [syncAttempt, setSyncAttempt] = useState(0);
   const program = useProgram();
   const navigate = useNavigate();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -43,25 +46,39 @@ export function Dashboard() {
   useEffect(() => {
     if (loading) return;
     if (user?.role !== 'student' || import.meta.env.MODE === 'offline') {
+      setProfileSyncStatus('not-needed');
       setCloudProfileChecked(true);
       return;
     }
     let active = true;
     setCloudProfileChecked(false);
+    setProfileSyncStatus('syncing');
+    setProfileSyncError('');
     void api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
       .then(async ({ stored }) => {
         if (!active) return;
         if (stored?.shareWithCoach) {
           await saveProfile(stored.profile);
-        } else if (!stored && !profileNeedsSetup(profileRef.current)) {
+          if (active) setProfileSyncStatus('synced');
+        } else if (stored) {
+          // Never let an automatic retry undo a deliberate sharing opt-out.
+          setProfileSyncStatus('disabled');
+        } else if (!profileNeedsSetup(profileRef.current)) {
           // Existing students with a complete local profile are synced automatically too.
           await api('PUT', '/me/profile', { profile: profileRef.current, shareWithCoach: true });
+          if (active) setProfileSyncStatus('synced');
+        } else {
+          setProfileSyncStatus('not-needed');
         }
       })
-      .catch(() => {})
+      .catch((caught: unknown) => {
+        if (!active) return;
+        setProfileSyncError(caught instanceof ApiError ? caught.message : 'اتصال به سرور برقرار نشد. اینترنت را بررسی کن و دوباره تلاش کن.');
+        setProfileSyncStatus('error');
+      })
       .finally(() => { if (active) setCloudProfileChecked(true); });
     return () => { active = false; };
-  }, [user?.id, user?.role, loading, saveProfile]);
+  }, [user?.id, user?.role, loading, saveProfile, syncAttempt]);
 
   const quote = useMotivationalQuote();
   const [enabledModules, setEnabledModules] = useState<AiModuleKey[]>([...ALL_AI_MODULES]);
@@ -110,7 +127,7 @@ export function Dashboard() {
   const muscleRecoveries = useMemo(() => calculateMuscleRecovery(sessions, now), [sessions, now]);
   const needsSetup = profileNeedsSetup(profile);
 
-  if (loading || !cloudProfileChecked) return null;
+  if (loading || (!cloudProfileChecked && syncAttempt === 0)) return null;
   if (user?.role === 'student' && needsSetup && !onboardingDismissed) {
     return <StudentOnboarding onDismiss={() => {
       dismissStudentOnboarding(onboardingKey);
@@ -128,6 +145,19 @@ export function Dashboard() {
         </div>
         <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
       </section>
+
+      {user?.role === 'student' && profileSyncStatus === 'synced' && (
+        <p className="profile-sync-status profile-sync-status--ok" role="status">پروفایل با حساب همگام است و برای مربی فعلی‌ات قابل مشاهده است.</p>
+      )}
+      {user?.role === 'student' && profileSyncStatus === 'error' && (
+        <section className="profile-sync-status profile-sync-status--error" role="alert">
+          <div><strong>همگام‌سازی پروفایل انجام نشد.</strong><p>{profileSyncError}</p></div>
+          <button className="button button--small button--secondary" type="button" onClick={() => setSyncAttempt((attempt) => attempt + 1)}>تلاش دوباره</button>
+        </section>
+      )}
+      {user?.role === 'student' && syncAttempt > 0 && profileSyncStatus === 'syncing' && (
+        <p className="profile-sync-status" role="status">در حال تلاش دوباره برای همگام‌سازی پروفایل…</p>
+      )}
 
       {activeSession && (
         <section className="active-workout-banner">
