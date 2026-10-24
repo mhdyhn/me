@@ -2126,3 +2126,70 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .account-load-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid rgba(242, 143, 130, .22); border-radius: 12px; background: rgba(242, 143, 130, .05); }
 .account-load-error p { margin: 0; color: #ffad9f; font-size: 12px; }
 @media (max-width: 560px) { .account-load-error { align-items: flex-start; flex-direction: column; } }
+
+/* UX redesign foundation — calm light palette and shared component tokens. */
+:root {
+  color: #243229;
+  background: #f5f7f4;
+  color-scheme: light;
+  --bg: #f5f7f4;
+  --surface: #ffffff;
+  --surface-soft: #f8faf8;
+  --surface-raised: #edf2ee;
+  --line: #dce5dd;
+  --line-soft: rgba(47, 79, 58, .12);
+  --text: #243229;
+  --muted: #64736a;
+  --subtle: #829087;
+  --accent: #286345;
+  --accent-ink: #ffffff;
+  --blue: #386d9d;
+  --red: #b54747;
+  --radius: 14px;
+  --shadow: 0 8px 28px rgba(35, 55, 42, .07);
+}
+
+body { color: var(--text); background: var(--bg); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline-color: #286345; }
+::selection { color: #ffffff; background: #286345; }
+.sidebar { border-color: var(--line); background: rgba(255, 255, 255, .96); }
+.brand-mark { color: #ffffff; background: #286345; }
+.brand-lockup small, .sidebar-label, .sidebar-footer { color: var(--muted); }
+.nav-link { color: #52645a; }
+.nav-link:hover { color: #243229; background: #f1f5f1; }
+.nav-link.is-active { border-color: #d5e4d8; color: #20563c; background: #eaf2ec; }
+.sidebar-coach-note { border-color: #dce8df; background: #f6f9f6; }
+.sidebar-coach-note strong { color: #33463a; }
+.note-mark, .profile-avatar { border-color: #dce8df; color: #286345; background: #eaf2ec; }
+.status-dot, .resume-dot, .live-dot { background: #286345; box-shadow: 0 0 0 3px rgba(40, 99, 69, .1); }
+.topbar { border-color: var(--line); background: rgba(245, 247, 244, .94); }
+.topbar-title h1 { color: var(--text); }
+.eyebrow { color: var(--muted); }
+.profile-button { color: #52645a; }
+.resume-pill { border-color: #d5e4d8; color: #20563c; background: #eaf2ec; }
+.panel-card { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
+.button--primary { color: #ffffff; background: #286345; }
+.button--primary:hover:not(:disabled) { background: #205238; }
+.button--secondary, .button--ghost { border-color: #d2ded5; color: #33483a; background: #ffffff; }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: #a8c1ad; background: #f4f8f4; }
+.button--quiet { border-color: #dce5dd; color: #52645a; background: transparent; }
+.button--quiet:hover:not(:disabled) { color: #243229; background: #edf2ee; }
+.text-link, .inline-link, .text-button, .back-link:hover { color: #286345; }
+.text-link:hover, .inline-link:hover { color: #205238; }
+.back-link { color: #64736a; }
+.section-heading h2, .empty-state h3 { color: #243229; }
+.section-description, .muted { color: #64736a; }
+.field-control input, .field-control select, .field-control textarea, .workout-notes-disclosure textarea,
+.summary-notes textarea, .select-with-icon select, .chat-composer textarea,
+.nutrition-item__grams input, .nutrition-search input, .meal-diary__day input[type="date"] {
+  border-color: #d3ded5;
+  color: #243229;
+  background: #ffffff;
+}
+.field-control select { color: #33483a; }
+.field-control input::placeholder, .field-control textarea::placeholder, .search-field input::placeholder { color: #829087; }
+.field-control input:focus, .field-control select:focus, .field-control textarea:focus,
+.chat-composer textarea:focus { border-color: #6f9a7b; }
+.select-with-icon select { color: #33483a; }
+.account-load-error { border-color: #efd6d2; background: #fff8f7; }
+.account-load-error p { color: #9c3d3d; }
