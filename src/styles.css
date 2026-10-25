@@ -2247,91 +2247,91 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .login-card { padding: 24px 20px 20px; border-radius: 16px; }
 }
 
-/* Unified Champagne & Ink design system. */
+/* Exact palette from the approved reference: pearl ivory, lavender, ink, purple and restrained gold. */
 :root {
-  color: #1f1a17;
-  background: #faf7f2;
+  color: #241338;
+  background: #FAF7FD;
   color-scheme: light;
-  --bg: #faf7f2;
-  --surface: #ffffff;
-  --surface-soft: #f0eae0;
-  --surface-raised: #ebe3d7;
-  --line: #e4dccf;
-  --line-soft: rgba(43, 36, 32, .12);
-  --text: #1f1a17;
-  --muted: #8a7f73;
-  --subtle: #9c9185;
-  --accent: #c8a76a;
-  --accent-ink: #2b2420;
-  --brand: #2b2420;
-  --bronze: #9c7a45;
-  --success: #7e9a7f;
-  --blue: #657b83;
-  --red: #c0624a;
-  --luxury-gradient: linear-gradient(135deg, #e3c98f 0%, #c8a76a 55%, #9c7a45 100%);
+  --bg: #FAF7FD;
+  --surface: #FFFFFF;
+  --surface-soft: #F0E9F8;
+  --surface-raised: #E6DAF2;
+  --line: #E6DAF2;
+  --line-soft: rgba(91, 46, 145, .12);
+  --text: #241338;
+  --muted: #8A7A9E;
+  --subtle: #8A7A9E;
+  --accent: #5B2E91;
+  --accent-ink: #FFFFFF;
+  --brand: #5B2E91;
+  --purple-soft: #A67BD9;
+  --gold: #D4AF6A;
+  --success: #5B2E91;
+  --blue: #A67BD9;
+  --red: #5B2E91;
   --radius: 14px;
-  --shadow: 0 8px 28px rgba(43, 36, 32, .07);
+  --shadow: 0 8px 28px rgba(91, 46, 145, .07);
 }
 
 body { color: var(--text); background: var(--bg); }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--bronze); outline-offset: 3px; }
-::selection { color: #2b2420; background: #e3c98f; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--purple-soft); outline-offset: 3px; }
+::selection { color: #241338; background: #E6DAF2; }
 .sidebar { border-color: var(--line); background: rgba(255, 255, 255, .97); }
-.brand-mark { color: #2b2420; background: var(--luxury-gradient); }
+.brand-mark { color: #FFFFFF; background: var(--brand); }
 .brand-lockup strong, .topbar-title h1, .section-heading h2, .empty-state h3 { color: var(--text); }
 .brand-lockup small, .sidebar-label, .sidebar-footer, .eyebrow { color: var(--muted); }
-.nav-link { color: #655b51; }
-.nav-link:hover { color: var(--brand); background: #f7f3ec; }
-.nav-link.is-active { border-color: #dbc99e; color: var(--brand); background: #f7f2e7; }
-.sidebar-coach-note { border-color: var(--line); background: #faf7f2; }
-.sidebar-coach-note strong { color: var(--brand); }
-.note-mark, .profile-avatar { border-color: #e6d8ba; color: var(--bronze); background: #faf5e9; }
-.status-dot, .resume-dot, .live-dot { background: var(--success); box-shadow: 0 0 0 3px rgba(126, 154, 127, .14); }
-.topbar { border-color: var(--line); background: rgba(250, 247, 242, .96); }
-.profile-button, .back-link { color: #655b51; }
-.resume-pill { border-color: #e6d8ba; color: var(--bronze); background: #faf5e9; }
+.nav-link { color: #8A7A9E; }
+.nav-link:hover { color: var(--text); background: #F0E9F8; }
+.nav-link.is-active { border-color: #E6DAF2; color: var(--brand); background: #F0E9F8; }
+.sidebar-coach-note { border-color: var(--line); background: #FAF7FD; }
+.sidebar-coach-note strong { color: var(--text); }
+.note-mark, .profile-avatar { border-color: #E6DAF2; color: var(--brand); background: #F0E9F8; }
+.status-dot, .resume-dot, .live-dot { background: var(--purple-soft); box-shadow: 0 0 0 3px rgba(166, 123, 217, .14); }
+.topbar { border-color: var(--line); background: rgba(250, 247, 253, .96); }
+.profile-button, .back-link { color: var(--muted); }
+.resume-pill { border-color: #D4AF6A; color: #5B2E91; background: #F0E9F8; }
 .panel-card { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
-.button--primary, .login-submit { color: #2b2420; background: var(--luxury-gradient); }
-.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { filter: brightness(.97); background: var(--luxury-gradient); }
-.button--secondary, .button--ghost { border-color: var(--line); color: var(--brand); background: #fff; }
-.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: #cdbb99; background: #faf7f2; }
-.button--quiet { border-color: var(--line); color: #655b51; background: transparent; }
-.button--quiet:hover:not(:disabled) { color: var(--brand); background: var(--surface-soft); }
-.text-link, .inline-link, .text-button, .back-link:hover { color: var(--bronze); }
-.text-link:hover, .inline-link:hover { color: var(--brand); }
-.icon-accent, .accent-dot { color: var(--bronze); }
+.button--primary, .login-submit { color: #FFFFFF; background: #5B2E91; }
+.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { filter: brightness(.94); background: #5B2E91; }
+.button--secondary, .button--ghost { border-color: var(--line); color: var(--brand); background: #FFFFFF; }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: #A67BD9; background: #F0E9F8; }
+.button--quiet { border-color: var(--line); color: var(--muted); background: transparent; }
+.button--quiet:hover:not(:disabled) { color: var(--brand); background: #F0E9F8; }
+.text-link, .inline-link, .text-button, .back-link:hover { color: var(--brand); }
+.text-link:hover, .inline-link:hover { color: #A67BD9; }
+.icon-accent, .accent-dot { color: var(--purple-soft); }
 .section-description, .muted { color: var(--muted); }
 
-/* Light, cohesive dashboard surfaces: no isolated black/green hero panel. */
+/* Unified dashboard cards: same light palette, no dark isolated blocks. */
 .next-workout-card {
   border-color: var(--line);
   color: var(--text);
-  background: linear-gradient(135deg, #ffffff 0%, #f0eae0 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F0E9F8 100%);
   box-shadow: var(--shadow);
 }
-.next-workout-card h3 { color: var(--brand); }
-.workout-focus { color: var(--bronze); }
-.next-workout-description { color: #655b51; }
-.workout-outline { color: var(--bronze); }
+.next-workout-card h3 { color: var(--text); }
+.workout-focus { color: #A67BD9; }
+.next-workout-description { color: var(--muted); }
+.workout-outline { color: var(--brand); }
 .workout-outline > svg { filter: none; }
-.day-chip, .week-badge { border-color: #e6d8ba; color: var(--bronze); background: #faf5e9; }
-.workout-meta-row { border-color: var(--line); color: #655b51; }
-.workout-meta-row svg, .next-workout-card__footer svg { color: var(--bronze); }
-.week-progress span { background: #e9e2d7; box-shadow: none; }
-.week-progress span.is-done { background: var(--luxury-gradient); box-shadow: none; }
-.profile-summary__number { border-color: var(--line); color: var(--bronze); background: #faf7f2; }
-.recent-session-icon, .subtle-icon { border-color: var(--line); color: var(--bronze); background: #faf7f2; }
-.recent-session-empty { border-color: var(--line); color: var(--muted); background: #fff; }
-.explore-strip { border-color: var(--line); background: #f7f3ec; }
+.day-chip, .week-badge { border-color: #D4AF6A; color: #5B2E91; background: #F0E9F8; }
+.workout-meta-row { border-color: var(--line); color: var(--muted); }
+.workout-meta-row svg, .next-workout-card__footer svg { color: #A67BD9; }
+.week-progress span { background: #E6DAF2; box-shadow: none; }
+.week-progress span.is-done { background: #D4AF6A; box-shadow: none; }
+.profile-summary__number { border-color: var(--line); color: var(--brand); background: #F0E9F8; }
+.recent-session-icon, .subtle-icon { border-color: var(--line); color: var(--brand); background: #F0E9F8; }
+.recent-session-empty { border-color: var(--line); color: var(--muted); background: #FFFFFF; }
+.explore-strip { border-color: var(--line); background: #F0E9F8; }
 .explore-strip strong { color: var(--text); }
 .explore-strip small { color: var(--muted); }
-.active-workout-banner { border-color: #d8e0d5; background: #f3f6f1; }
+.active-workout-banner { border-color: #E6DAF2; background: #F0E9F8; }
 .active-workout-banner strong { color: var(--text); }
-.profile-sync-status { border-color: var(--line); color: var(--muted); background: #fff; }
-.profile-sync-status--ok { border-color: #d8e0d5; color: #526e54; background: #f3f6f1; }
-.profile-sync-status--error { border-color: #edcfc5; color: #9b4b37; background: #fff6f2; }
+.profile-sync-status { border-color: var(--line); color: var(--muted); background: #FFFFFF; }
+.profile-sync-status--ok { border-color: #E6DAF2; color: var(--brand); background: #F0E9F8; }
+.profile-sync-status--error { border-color: #E6DAF2; color: var(--text); background: #F0E9F8; }
 
-/* Shared forms, program cards, and exercise browsing use the same warm-neutral base. */
+/* Shared forms, program cards, and exercise browsing use the same palette. */
 .field-control input, .field-control select, .field-control textarea,
 .workout-notes-disclosure textarea, .summary-notes textarea,
 .select-with-icon select, .chat-composer textarea,
@@ -2339,49 +2339,125 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .meal-diary__day input[type="date"], .search-field {
   border-color: var(--line);
   color: var(--text);
-  background: #fff;
+  background: #FFFFFF;
 }
-.field-control select, .select-with-icon select { color: var(--brand); }
+.field-control select, .select-with-icon select { color: var(--text); }
 .field-control input::placeholder, .field-control textarea::placeholder,
-.search-field input::placeholder { color: var(--subtle); }
+.search-field input::placeholder { color: var(--muted); }
 .field-control input:focus, .field-control select:focus, .field-control textarea:focus,
-.chat-composer textarea:focus { border-color: var(--bronze); }
+.chat-composer textarea:focus { border-color: #A67BD9; }
 .search-field { color: var(--muted); }
-.filter-tab { border-color: var(--line); color: #655b51; }
-.filter-tab.is-active { border-color: #d5bd8c; color: var(--brand); background: #faf5e9; }
-.exercise-card { border-color: var(--line); background: #fff; }
-.exercise-card__visual, .exercise-card__visual--pull, .exercise-card__visual--legs, .exercise-card__visual--core { background: linear-gradient(135deg, #faf7f2, #f0eae0); }
+.filter-tab { border-color: var(--line); color: var(--muted); }
+.filter-tab.is-active { border-color: #A67BD9; color: var(--brand); background: #F0E9F8; }
+.exercise-card { border-color: var(--line); background: #FFFFFF; }
+.exercise-card__visual, .exercise-card__visual--pull, .exercise-card__visual--legs, .exercise-card__visual--core { background: linear-gradient(135deg, #FAF7FD, #F0E9F8); }
 .exercise-card__number, .exercise-card__category { color: var(--muted); }
 .exercise-card__body h3 { color: var(--text); }
 .exercise-card__body > p, .exercise-card__footer { color: var(--muted); }
 .program-day__index { color: var(--muted); }
-.program-day__index > span:first-child { border-color: var(--line); background: #faf7f2; }
-.day-line { background: linear-gradient(#d8cfc0, transparent); }
+.program-day__index > span:first-child { border-color: var(--line); background: #F0E9F8; }
+.day-line { background: linear-gradient(#E6DAF2, transparent); }
 .program-day__heading h3, .program-overview__main strong { color: var(--text); }
 .program-day__eyebrow, .program-day__heading p, .program-day__description, .program-day__meta, .program-overview__stat > span { color: var(--muted); }
-.program-day__meta svg { color: var(--bronze); }
-.program-day--optional { border-color: var(--line); background: #faf7f2; }
-.program-rest-note { border-color: var(--line); background: #f7f3ec; }
-.program-rest-note p { color: #655b51; }
+.program-day__meta svg { color: #D4AF6A; }
+.program-day--optional { border-color: var(--line); background: #FAF7FD; }
+.program-rest-note { border-color: var(--line); background: #F0E9F8; }
+.program-rest-note p { color: var(--muted); }
 .program-rest-note strong { color: var(--text); }
-.category-tag--legs { color: var(--bronze); background: #faf5e9; }
-.category-tag--core { color: #75626e; background: #f5f0f3; }
-.form-success { color: #526e54; background: #f3f6f1; }
-.badge--success { color: #526e54; border-color: #d8e0d5; background: #f3f6f1; }
-.badge--danger { color: #9b4b37; border-color: #edcfc5; background: #fff6f2; }
-.account-load-error, .student-nutrition-load-error, .coach-student-load-error, .student-ai-load-error { border-color: #edcfc5; background: #fff6f2; }
-.account-load-error p, .student-nutrition-load-error p, .coach-student-load-error p, .student-ai-load-error p { color: #9b4b37; }
-.student-profile-sharing-status.is-shared .student-profile-sharing-status__label { color: #526e54; }
-.student-profile-sharing-status.is-private .student-profile-sharing-status__label { color: #9b4b37; }
+.category-tag--legs, .category-tag--core { color: var(--brand); background: #F0E9F8; }
+.form-success, .badge--success { color: var(--brand); border-color: var(--line); background: #F0E9F8; }
+.badge--danger { color: var(--text); border-color: var(--line); background: #F0E9F8; }
+.account-load-error, .student-nutrition-load-error, .coach-student-load-error, .student-ai-load-error { border-color: var(--line); background: #F0E9F8; }
+.account-load-error p, .student-nutrition-load-error p, .coach-student-load-error p, .student-ai-load-error p { color: var(--text); }
+.student-profile-sharing-status.is-shared .student-profile-sharing-status__label,
+.student-profile-sharing-status.is-private .student-profile-sharing-status__label { color: var(--brand); }
 
-/* Public sign-in page uses the same Champagne & Ink palette. */
-.login-screen { background: linear-gradient(180deg, #f0eae0 0%, #faf7f2 42%, #faf7f2 100%); }
-.login-glow { background: radial-gradient(circle, rgba(200, 167, 106, .1), transparent 68%); }
-.login-card { border-color: var(--line); background: #fff; box-shadow: 0 18px 50px rgba(43, 36, 32, .09); }
+/* Chat message surfaces also follow the purple/ivory system. */
+.chat-screen { background: var(--bg); }
+.chat-bubble { border-color: var(--line); color: var(--text); background: #F0E9F8; box-shadow: none; }
+.chat-row--mine .chat-bubble { border-color: #5B2E91; color: #FFFFFF; background: #5B2E91; }
+.chat-composer textarea { border-color: var(--line); color: var(--text); background: #FFFFFF; }
+.chat-send { color: #241338; background: #D4AF6A; }
+
+/* Public sign-in page uses the same exact palette. */
+.login-screen { background: linear-gradient(180deg, #F0E9F8 0%, #FAF7FD 42%, #FAF7FD 100%); }
+.login-glow { background: radial-gradient(circle, rgba(166, 123, 217, .1), transparent 68%); }
+.login-card { border-color: var(--line); background: #FFFFFF; box-shadow: 0 18px 50px rgba(91, 46, 145, .09); }
 .login-brand strong, .login-card h1, .login-input input { color: var(--text); }
 .login-brand small, .login-sub, .login-help { color: var(--muted); }
-.login-field > span { color: #655b51; }
-.login-input { border-color: var(--line); background: #fff; color: var(--muted); }
-.login-input:focus-within { border-color: var(--bronze); box-shadow: 0 0 0 3px rgba(200, 167, 106, .18); color: var(--bronze); }
-.login-submit { background: var(--luxury-gradient); color: #2b2420; }
-.login-error { border-color: #edcfc5; background: #fff6f2; color: #9b4b37; }
+.login-field > span { color: var(--muted); }
+.login-input { border-color: var(--line); background: #FFFFFF; color: var(--muted); }
+.login-input:focus-within { border-color: #A67BD9; box-shadow: 0 0 0 3px rgba(166, 123, 217, .18); color: var(--brand); }
+.login-submit { background: #5B2E91; color: #FFFFFF; }
+.login-error { border-color: var(--line); background: #F0E9F8; color: var(--text); }
+
+/* Finish the palette migration for workout, AI, and profile panels. */
+.workout-mode-label, .workout-topline__name, .workout-progress-line > div > span,
+.workout-progress-line > div > strong small, .workout-progress-line > small,
+.current-exercise-heading p, .set-counter span, .set-target-note,
+.workout-queue-card .queue-count { color: var(--muted); }
+.workout-progress-line, .workout-queue-card, .current-set-card, .last-time-card,
+.reference-hint, .set-target-note, .workout-notes-disclosure,
+.rest-timer-card, .queue-item, .prescription-item, .target-chips span,
+.movement-phase, .movement-phase-copy, .machine-setup-block,
+.safety-note, .reference-note, .progression-advice,
+.dashboard-ai-card, .coach-ai-panel, .latest-completed-banner,
+.student-profile-private, .progress-session {
+  border-color: var(--line);
+  color: var(--text);
+  background: #FFFFFF;
+  box-shadow: none;
+}
+.workout-progress-line > div > strong, .workout-notes-disclosure summary::after,
+.workout-form-card__info .eyebrow, .set-target-note svg,
+.workout-finish-top-btn, .latest-completed-stat strong { color: var(--brand); }
+.progress-track, .timer-track { background: #E6DAF2; }
+.progress-track > span, .timer-track > span { background: #A67BD9; }
+.workout-form-card__visual, .queue-item__number, .movement-phase.is-active,
+.editor-picker-item__media { border-color: var(--line); background: #F0E9F8; }
+.workout-form-card__toggle { border-color: var(--line); color: var(--brand); background: #FFFFFF; }
+.workout-form-card__toggle:hover { border-color: #A67BD9; background: #F0E9F8; }
+.workout-form-card__info p, .last-time-card > div, .last-time-card small,
+.reference-hint, .target-chips span, .movement-phase, .rest-timer-head .eyebrow,
+.timer-readout, .timer-adjusters button, .workout-notes-disclosure summary,
+.workout-notes-disclosure summary span, .queue-item__number { color: var(--text); }
+.last-time-card .eyebrow, .rest-timer-head .eyebrow,
+.rest-timer-card--done .rest-timer-head .eyebrow { color: var(--muted); }
+.set-logged-confirm, .rest-timer-card--done, .rest-timer-card,
+.rest-timer-card--done .timer-track > span { border-color: var(--line); background: #F0E9F8; }
+.rest-timer-card .timer-track > span, .rest-timer-card--done .timer-track > span { background: #A67BD9; }
+.timer-adjusters button { border-color: var(--line); background: #FFFFFF; }
+.workout-notes-disclosure summary { color: var(--text); }
+.workout-notes-disclosure summary span { color: var(--muted); }
+.workout-notes-disclosure textarea { border-color: var(--line); color: var(--text); background: #FFFFFF; }
+.queue-item { border-color: var(--line); }
+.queue-item__number { border-color: var(--line); background: #F0E9F8; }
+.form-error, .student-profile-load-error, .storage-warning {
+  border-color: var(--line);
+  color: var(--text);
+  background: #F0E9F8;
+}
+.set-logged-confirm, .form-success, .progress-status--completed,
+.student-profile-sharing-status.is-shared { color: var(--brand); }
+.progress-status--completed { background: #F0E9F8; }
+.progress-status--abandoned { color: var(--text); background: #F0E9F8; }
+.student-profile-load-error p { color: var(--text); }
+.student-profile-sharing-status.is-shared, .student-profile-sharing-status.is-private { border-color: var(--line); background: #F0E9F8; }
+
+/* Non-workout pages keep the exact same paper, ink, and lilac tones. */
+.chat-day span, .chat-row--mine .chat-bubble { border-color: var(--line); color: var(--text); background: #F0E9F8; }
+.chat-row--mine .chat-bubble { border-color: #5B2E91; color: #FFFFFF; background: #5B2E91; }
+.chat-send { color: #241338; background: #D4AF6A; }
+.field input, .mini-field input, .day-editor__head input, .picker__search,
+.summary-notes textarea { border-color: var(--line); color: var(--text); background: #FFFFFF; }
+.nutrition-day.is-active, .nutrition-step span, .nutrition-context__icon,
+.today-pill, .program-empty-icon, .template-card__badge,
+.ai-tab-button.is-active .ai-tab-badge, .prehab-ex-num {
+  border-color: var(--line);
+  color: var(--brand);
+  background: #F0E9F8;
+}
+.ai-recommendation-box, .ai-feedback-banner, .coach-ai-readiness,
+.admin-overview-card, .admin-overview-stats { border-color: var(--line); color: var(--text); background: #FFFFFF; }
+.admin-stat-num, .admin-stat-label, .coach-ai-readiness strong { color: var(--text); }
+.joint-pill.is-selected { border-color: #A67BD9; color: var(--brand); background: #F0E9F8; }
