@@ -11,6 +11,8 @@ import type { WorkoutTemplate } from '../types';
  */
 /** The developer's account starts with the original programme; every other account starts empty. */
 export interface AssignedMeta {
+  id: string;
+  version: number;
   title: string;
   priceTomans: number;
   coachName: string | null;

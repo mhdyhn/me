@@ -26,10 +26,13 @@ interface UserRow {
   password_enc: string | null;
   iban?: string | null;
   is_active?: number | null;
+  auth_version: string | number;
 }
 
 export interface StoredUser extends PublicUser {
   passwordHash: string;
+  /** Changes when credentials are reset or the account is deactivated; never sent to clients. */
+  authVersion: number;
   /** The generated password, encrypted, while the user still has it. Null after they choose their own. */
   passwordEnc: string | null;
 }
@@ -43,6 +46,7 @@ function fromRow(row: UserRow): StoredUser {
     coachId: row.coach_id === null ? null : Number(row.coach_id),
     mustChangePassword: Number(row.must_change_password) === 1,
     passwordHash: row.password_hash,
+    authVersion: Number(row.auth_version),
     passwordEnc: row.password_enc ?? null,
     iban: row.iban ?? null,
     isActive: row.is_active === undefined || row.is_active === null ? true : Number(row.is_active) === 1,
@@ -50,8 +54,8 @@ function fromRow(row: UserRow): StoredUser {
 }
 
 export function toPublic(user: StoredUser): PublicUser {
-  // Neither the password hash nor the encrypted copy of the generated password leaves the server.
-  const { passwordHash: _hash, passwordEnc: _enc, ...publicUser } = user;
+  // Credentials and the session version never leave the server.
+  const { passwordHash: _hash, passwordEnc: _enc, authVersion: _version, ...publicUser } = user;
   return publicUser;
 }
 
@@ -95,21 +99,24 @@ export async function countStudents(db: Db, coachId: number): Promise<number> {
   return Number(row.n);
 }
 
-export async function updatePassword(db: Db, id: number, passwordHash: string, mustChangePassword: boolean, passwordEnc: string | null): Promise<void> {
-  await db.query('UPDATE users SET password_hash = $1, must_change_password = $2, password_enc = $3 WHERE id = $4', [passwordHash, mustChangePassword ? 1 : 0, passwordEnc, id]);
-}
-
 export async function updateCoachIban(db: Db, id: number, iban: string): Promise<void> {
   await db.query("UPDATE users SET iban = $1 WHERE id = $2 AND role = 'coach'", [iban, id]);
 }
 
 export async function setUserActive(db: Db, id: number, isActive: boolean): Promise<void> {
-  await db.query('UPDATE users SET is_active = $1 WHERE id = $2', [isActive ? 1 : 0, id]);
-}
-
-export async function listCoaches(db: Db): Promise<PublicUser[]> {
-  const rows = await db.query<UserRow>("SELECT * FROM users WHERE role = 'coach' ORDER BY id");
-  return rows.map((row) => toPublic(fromRow(row)));
+  if (isActive) {
+    await db.query('UPDATE users SET is_active = 1 WHERE id = $1', [id]);
+    return;
+  }
+  // Bumping the version also invalidates an old-credential login racing with this update.
+  await db.query(
+    `WITH updated AS (
+       UPDATE users SET is_active = 0, auth_version = auth_version + 1 WHERE id = $1 RETURNING id
+     ), revoked AS (
+       DELETE FROM sessions WHERE user_id = $1 AND EXISTS (SELECT 1 FROM updated)
+     ) SELECT id FROM updated`,
+    [id],
+  );
 }
 
 /** Coaches with how many students each one has, for the admin's coach list. */

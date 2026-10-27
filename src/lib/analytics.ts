@@ -255,5 +255,3 @@ export const getProgressionAdvice = (
     readyToIncrease: false,
   };
 };
-
-export const formatRir = (rir: number) => `${faNumber(rir)} تکرار در ذخیره`;

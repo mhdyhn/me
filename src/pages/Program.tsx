@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, PlusCircle, Sparkles, Trash2, X, CalendarPlus, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
+import { ProgrammeArchive } from '../components/ProgrammeArchive';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide } from '../lib/exerciseGuide';
 import { getCompletedThisWeek } from '../lib/analytics';
@@ -41,9 +42,15 @@ export function Program() {
 
   async function startPayment() {
     setPayError(null);
+    if (!assignedMeta?.id || !Number.isInteger(assignedMeta.version)) {
+      setPayError('شناسهٔ برنامه در دسترس نیست. صفحه را دوباره بارگذاری کنید.');
+      return;
+    }
     setPaying(true);
     try {
-      const res = await api<{ authority: string; paymentUrl: string }>('POST', '/pay/start', {});
+      const res = await api<{ authority: string; paymentUrl: string }>('POST', '/pay/start', {
+        expectedId: assignedMeta.id, expectedVersion: assignedMeta.version,
+      });
       window.location.href = res.paymentUrl;
     } catch (err) {
       setPayError(err instanceof ApiError ? err.message : 'خطا در اتصال به درگاه پرداخت.');
@@ -132,6 +139,7 @@ export function Program() {
             {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
           </button>
         </div>
+        {user?.role === 'student' && <ProgrammeArchive studentId={user.id} />}
       </div>
     );
   }
@@ -139,6 +147,7 @@ export function Program() {
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="تقسیم‌بندی تمرین‌ها" title="هفته‌ات را با برنامه پیش ببر." description="جلسه‌های اصلی، روزهای اختیاری و زمان استراحت، همه از برنامهٔ همین حساب." />
+      {user?.role === 'student' && <ProgrammeArchive studentId={user.id} />}
 
       {/* Manager / Admin Program Actions Toolbar */}
       {!readOnly && (

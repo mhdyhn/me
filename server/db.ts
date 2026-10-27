@@ -108,6 +108,7 @@ async function migrate(db: Db): Promise<void> {
       created_at TEXT NOT NULL,
       password_enc TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
+      auth_version INTEGER NOT NULL DEFAULT 0,
       CHECK ((role = 'student') = (coach_id IS NOT NULL))
     );
 
@@ -129,7 +130,8 @@ async function migrate(db: Db): Promise<void> {
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expires_at TEXT NOT NULL
+      expires_at TEXT NOT NULL,
+      auth_version INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE INDEX IF NOT EXISTS idx_users_coach_id ON users(coach_id);
@@ -137,6 +139,11 @@ async function migrate(db: Db): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_student_programs_coach_id ON student_programs(coach_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+  `);
+  // Existing users and sessions both start at version zero, so migration keeps them signed in.
+  await db.exec(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
   `);
   await migrateChat(db);
   await migrateNutrition(db);

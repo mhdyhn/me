@@ -1,0 +1,77 @@
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, api, type Programme } from '../lib/api';
+import { faNumber } from '../lib/format';
+
+type ArchivePage = { programs: Programme[]; nextCursor: string | null };
+
+/** Previous purchased or free programmes remain readable even after the coach assigns a new one. */
+export function ProgrammeArchive({ studentId }: { studentId: number }) {
+  const [programs, setPrograms] = useState<Programme[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const generation = useRef(0);
+
+  useEffect(() => {
+    const request = ++generation.current;
+    setPrograms([]);
+    setCursor(null);
+    setError(null);
+    setLoading(false);
+    api<ArchivePage>('GET', '/me/programs/archive')
+      .then((result) => {
+        if (request !== generation.current) return;
+        setPrograms(Array.isArray(result.programs) ? result.programs : []);
+        setCursor(result.nextCursor ?? null);
+      })
+      .catch((caught) => {
+        if (request === generation.current) setError(caught instanceof ApiError ? caught.message : 'بایگانی برنامه‌ها بارگذاری نشد.');
+      });
+    return () => { generation.current += 1; };
+  }, [studentId]);
+
+  async function loadMore() {
+    if (!cursor || loading) return;
+    const request = generation.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api<ArchivePage>('GET', `/me/programs/archive?cursor=${encodeURIComponent(cursor)}`);
+      if (request !== generation.current) return;
+      setPrograms((current) => [...current, ...(Array.isArray(result.programs) ? result.programs : [])]);
+      setCursor(result.nextCursor ?? null);
+    } catch (caught) {
+      if (request === generation.current) setError(caught instanceof ApiError ? caught.message : 'ادامهٔ بایگانی بارگذاری نشد.');
+    } finally {
+      if (request === generation.current) setLoading(false);
+    }
+  }
+
+  if (!programs.length) return error ? <p className="account-muted" role="status">بایگانی برنامه‌ها در دسترس نیست: {error}</p> : null;
+
+  return (
+    <details className="panel-card programme-archive">
+      <summary>بایگانی برنامه‌های قبلی</summary>
+      <p className="account-muted">برنامه‌های خریداری‌شده و رایگان قبلی در اینجا برای مشاهده محفوظ‌اند. تمرین فعال از برنامهٔ فعلی شروع می‌شود.</p>
+      {programs.map((program) => (
+        <details key={program.id} className="programme-archive__item">
+          <summary>{program.title}</summary>
+          {program.days.map((day, dayIndex) => (
+            <section key={`${program.id}-${dayIndex}`}>
+              <h3>{day.name}</h3>
+              <ul>
+                {day.exercises.map((exercise, index) => (
+                  <li key={`${exercise.exerciseId}-${index}`}>
+                    {exercise.name} · {faNumber(exercise.sets)} ست · {exercise.reps} تکرار · {faNumber(exercise.restSeconds)} ثانیه استراحت
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </details>
+      ))}
+      {error && <p className="form-error" role="status">{error}</p>}
+      {cursor && <button type="button" className="button button--secondary button--small" disabled={loading} onClick={() => void loadMore()}>{loading ? 'در حال بارگذاری…' : 'نمایش برنامه‌های بیشتر'}</button>}
+    </details>
+  );
+}

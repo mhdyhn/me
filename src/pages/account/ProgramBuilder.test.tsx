@@ -33,10 +33,10 @@ function mockApi(program: unknown = null, failProgramLoads = 0) {
           remainingProgramLoadFailures -= 1;
           [json, status] = [{ error: 'temporary network error' }, 503];
         } else {
-          [json, status] = [{ program }, 200];
+          [json, status] = [{ program: program ? { id: 'program-1', version: 1, ...(program as object) } : null }, 200];
         }
       }
-      if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), updatedAt: 'now' } }, 200];
+      if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), id: 'program-1', version: 2, updatedAt: 'now' } }, 200];
       if (method === 'DELETE' && input === '/api/students/3/program') [json, status] = [{ ok: true }, 200];
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
     }),
@@ -188,10 +188,29 @@ describe('coach programme builder', () => {
     await user.clear(repsInput);
     await user.type(repsInput, '۸-۱۲');
     await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
-    await screen.findByText('برنامه ذخیره شد. شاگرد همین حالا آن را می‌بیند.');
+    await screen.findByText('برنامه ذخیره شد. شاگرد همین حالا وضعیت آن را می‌بیند.');
     const put = sent.find((item) => item.method === 'PUT');
     expect(put?.path).toBe('/api/students/3/program');
     expect((put?.body as { days: Array<{ exercises: Array<{ reps: string }> }> }).days[0]!.exercises[0]!.reps).toBe('8-12');
+  });
+
+  it('lets the coach distinguish a free edit from a new paid programme', async () => {
+    const sent = mockApi({
+      id: 'existing-offer', version: 4, title: 'برنامهٔ موجود', priceTomans: 250000, updatedAt: 'x',
+      days: [{ name: 'روز اول', exercises: [{ exerciseId: 'a-b', name: 'حرکت', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderBuilder();
+    const user = userEvent.setup();
+    const edit = await screen.findByRole('radio', { name: /ویرایش برنامهٔ فعلی/ });
+    expect(edit).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: /ثبت برنامهٔ جدید/ }));
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+    await screen.findByText(/برنامه ذخیره شد/);
+    const put = sent.find((item) => item.method === 'PUT');
+    expect(put?.body).toMatchObject({ saveMode: 'new', expectedId: 'existing-offer', expectedVersion: 4, priceTomans: 250000 });
+    expect(confirm).toHaveBeenCalledOnce();
+    confirm.mockRestore();
   });
 
   it('deleting a day asks for confirmation first', async () => {
@@ -267,11 +286,11 @@ describe('ordering in the builder', () => {
     renderBuilder();
     const user = userEvent.setup();
 
-    const deleteBtn = await screen.findByRole('button', { name: /حذف کامل برنامهٔ شاگرد/ });
+    const deleteBtn = await screen.findByRole('button', { name: /برداشتن برنامهٔ فعال/ });
     await user.click(deleteBtn);
 
     expect(confirm).toHaveBeenCalled();
-    expect(await screen.findByText(/برنامهٔ شاگرد با موفقیت حذف شد/)).toBeInTheDocument();
+    expect(await screen.findByText(/برنامهٔ فعال برداشته شد/)).toBeInTheDocument();
     const del = sent.find((call) => call.method === 'DELETE');
     expect(del?.path).toBe('/api/students/3/program');
     confirm.mockRestore();

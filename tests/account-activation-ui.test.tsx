@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { CoachHome } from '../src/pages/account/CoachHome';
 import { AdminHome } from '../src/pages/account/AdminHome';
 import { Login } from '../src/pages/account/Login';
+import { ChangePassword } from '../src/pages/account/ChangePassword';
 import { RequireSignIn } from '../src/pages/account/AccountShell';
 import * as SessionContextModule from '../src/context/SessionContext';
 import * as apiModule from '../src/lib/api';
@@ -16,6 +17,18 @@ afterEach(() => {
 });
 
 describe('Coach and Admin Activation UI', () => {
+  it.each(['admin', 'coach', 'student'] as const)('informs %s about other sessions before changing their password', (role) => {
+    vi.spyOn(SessionContextModule, 'useSession').mockReturnValue({
+      status: 'signed-in',
+      user: { id: 1, username: 'user1', displayName: 'کاربر', role, coachId: role === 'student' ? 2 : null, mustChangePassword: true, isActive: true },
+      signIn: vi.fn(), signOut: vi.fn(), refresh: vi.fn(), setUser: vi.fn(),
+    });
+    render(<MemoryRouter><ChangePassword /></MemoryRouter>);
+    expect(screen.getByText(/نشست دستگاه‌های دیگر باطل می‌شود/)).toBeInTheDocument();
+    expect(screen.getByText(/اطلاعات محلی پاک نمی‌شود/)).toBeInTheDocument();
+    expect(screen.getByLabelText('رمز فعلی')).toBeInTheDocument();
+  });
+
   it('Coach panel shows student status badge and toggles student active state', async () => {
     const mockStudent = {
       id: 101,

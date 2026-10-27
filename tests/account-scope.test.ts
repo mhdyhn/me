@@ -26,6 +26,8 @@ describe('coach programme for students', () => {
 
   it('maps the coach programme to the shape every screen already uses', () => {
     const [day] = assignedToTemplates({
+      id: 'program-1',
+      version: 1,
       title: 'برنامهٔ تست',
       updatedAt: '2026-10-01T00:00:00Z',
       days: [{ name: 'روز اول', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],

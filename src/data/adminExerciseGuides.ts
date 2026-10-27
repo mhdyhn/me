@@ -200,5 +200,3 @@ const ADMIN_VISUAL_IDS: Record<string, string> = {
 };
 
 export const adminExerciseVisualId = (exerciseId: string): string | undefined => ADMIN_VISUAL_IDS[exerciseId] ?? adminExerciseCatalogId(exerciseId);
-
-export const adminProgramExerciseIds = (): string[] => [...new Set(adminPersonalProgram.flatMap((day) => day.exercises.map((item) => item.exerciseId)))];

@@ -446,8 +446,3 @@ export const exercises: ExerciseDefinition[] = [
 });
 
 export const exerciseById = (id: string) => exercises.find((exercise) => exercise.id === id);
-
-/** Every muscle name the catalogue uses, so the anatomy view can be checked against it. */
-export const muscleNames = [
-  ...new Set(exercises.flatMap((exercise) => [...exercise.primaryMuscles, ...exercise.secondaryMuscles])),
-];
