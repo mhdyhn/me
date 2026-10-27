@@ -384,7 +384,7 @@ export function Workout() {
       <div className="workout-topline">
         <Link to="/program" className="back-link"><ArrowLeft size={15} /> برنامه</Link>
         <span className="workout-mode-label"><span className="live-dot" /> حالت تمرین</span>
-        <span className="workout-topline__name">{activeTemplate.name}</span>
+        <span className="workout-topline__name" title={activeTemplate.name}>{activeTemplate.name}</span>
         {loggedSetCount > 0 && (
           <button type="button" className="workout-finish-top-btn" onClick={() => void handleFinishWorkout()}>
             <Check size={14} /> پایان و ثبت جلسه
@@ -393,7 +393,7 @@ export function Workout() {
       </div>
       <div className="workout-progress-line"><div><span>پیشرفت جلسه</span><strong>{faNumber(loggedSetCount)} <small>/ {faNumber(plannedSetCount)} ست</small></strong></div><span className="progress-track"><span style={{ width: `${progressPercent}%` }} /></span><small>{faNumber(completedExercises)} / {faNumber(activeTemplate.exercises.length)} حرکت</small></div>
 
-      {activeTemplate.description && <section className="panel-card" style={{ margin: '12px 0', padding: 14 }}><strong>پیش از شروع جلسه</strong><p className="muted" style={{ margin: '6px 0 0', lineHeight: 1.8 }}>{activeTemplate.description}</p></section>}
+      {activeTemplate.description && <section className="panel-card" style={{ margin: '12px 0', padding: 14 }}><strong>پیش از شروع جلسه</strong><p className="muted workout-session-description">{activeTemplate.description}</p></section>}
 
       <div className="workout-layout">
         <main className="workout-current-column">

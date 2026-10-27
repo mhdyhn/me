@@ -82,7 +82,7 @@ function CoachTransactionsView() {
             placeholder="IR..."
             dir="ltr"
             maxLength={34}
-            style={{ minWidth: 260, fontFamily: 'monospace' }}
+            style={{ width: 'min(100%, 260px)', minWidth: 0, fontFamily: 'monospace' }}
             required
           />
           <button type="submit" className="button button--primary" disabled={savingIban}>
@@ -185,7 +185,7 @@ function AdminTransactionsView() {
 
 function TransactionList({ transactions, isCoach }: { transactions: PaymentTransaction[]; isCoach: boolean }) {
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
+    <div className="transaction-list">
       {transactions.map((t) => {
         const isPaid = t.status === 'paid';
         const isCanceled = t.status === 'canceled' || t.status === 'failed';
@@ -210,14 +210,14 @@ function TransactionList({ transactions, isCoach }: { transactions: PaymentTrans
               gap: 12,
             }}
           >
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div className="transaction-card__identity">
+              <div className="transaction-card__names">
                 <span style={{ fontWeight: 600 }}>شاگرد: {t.studentName ?? 'شاگرد'}</span>
                 {!isCoach && t.coachName && (
                   <span className="badge">مربی: {t.coachName}</span>
                 )}
               </div>
-              <div className="account-muted" style={{ fontSize: 12, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              <div className="account-muted transaction-card__meta">
                 <span>{dateStr}</span>
                 {t.refId && <span>کد پیگیری: <code dir="ltr">{t.refId}</code></span>}
               </div>

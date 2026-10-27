@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "build:offline": "vite build --mode offline && node tools/make-single-file.mjs",
     "verify:offline": "node tools/verify-offline-bundle.mjs",
-    "server": "node server/index.ts"
+    "server": "node server/index.ts",
+    "test:responsive": "playwright test --config=playwright.responsive.config.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
+    "@playwright/test": "^1.64.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^14.6.1",

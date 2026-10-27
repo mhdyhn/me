@@ -337,6 +337,7 @@ function Builder() {
               key={index}
               type="button"
               role="tab"
+              title={day.name || `روز ${index + 1}`}
               aria-selected={index === activeDay}
               className={`day-tab${index === activeDay ? ' is-active' : ''}`}
               onClick={() => setActiveDay(index)}
