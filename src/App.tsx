@@ -14,10 +14,8 @@ import type { ReactElement } from 'react';
 import { Dashboard } from './pages/Dashboard';
 
 /**
- * Only the dashboard ships with the shell: it is the page the app opens on. Every
- * other route — and the whole exercise database and 3D viewer behind them — is
- * fetched when it is first opened, so a phone downloads a few kilobytes to show
- * the plan instead of the entire catalogue.
+ * Each role opens on a focused home screen. Heavier routes — including the
+ * exercise catalogue — stay lazy-loaded so the first screen stays lightweight.
  */
 const ExerciseDetail = lazy(() => import('./pages/ExerciseDetail').then((module) => ({ default: module.ExerciseDetail })));
 const ExerciseLibrary = lazy(() => import('./pages/ExerciseLibrary').then((module) => ({ default: module.ExerciseLibrary })));
@@ -65,6 +63,12 @@ function ProgramEditorRoute() {
   return isProgramReadOnly() ? <Navigate to="/program" replace /> : <ProgramEditor />;
 }
 
+/** Give each role a home screen centered on its main job. */
+function RoleHome() {
+  const { user } = useSession();
+  return user?.role === 'coach' || user?.role === 'admin' ? <Navigate to="/coach" replace /> : <Dashboard />;
+}
+
 /** A movement's guide: a student can open only movements in the coach's program. */
 function ExerciseRoute() {
   const { user } = useSession();
@@ -98,7 +102,7 @@ export function App() {
             <Route path="payment/callback" element={<PaymentResult />} />
             <Route path="payment/sandbox-pay" element={<SandboxPay />} />
             <Route element={signedIn(<Layout />)}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<RoleHome />} />
               <Route path="my-program" element={<Navigate to="/program" replace />} />
               <Route path="program" element={<Program />} />
               <Route path="program/edit" element={<ProgramEditorRoute />} />

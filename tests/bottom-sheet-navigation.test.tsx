@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('Mobile Bottom Sheet Toolbar Navigation', () => {
-  it('displays exactly 5 main tabs on the fixed mobile navigation bar', async () => {
+  it('keeps the student mobile navigation focused on home, program, and progress', async () => {
     stubSession({ id: 10, username: 's10', role: 'student', displayName: 'علی', coachId: 1, mustChangePassword: false });
     render(<App />);
 
@@ -35,10 +35,9 @@ describe('Mobile Bottom Sheet Toolbar Navigation', () => {
     expect(navBar).toBeInTheDocument();
 
     const barItems = within(navBar as HTMLElement).getAllByRole('link');
-    expect(barItems).toHaveLength(4);
+    expect(barItems).toHaveLength(3);
     expect(within(navBar as HTMLElement).getByText('خانه')).toBeInTheDocument();
     expect(within(navBar as HTMLElement).getByText('برنامه')).toBeInTheDocument();
-    expect(within(navBar as HTMLElement).getByText('حرکت‌ها')).toBeInTheDocument();
     expect(within(navBar as HTMLElement).getByText('پیشرفت')).toBeInTheDocument();
 
     const moreButton = within(navBar as HTMLElement).getByRole('button', { name: /سایر بخش‌ها و امکانات|بیشتر/ });
@@ -69,19 +68,22 @@ describe('Mobile Bottom Sheet Toolbar Navigation', () => {
     expect(sheet).not.toHaveClass('is-open');
   });
 
-  it('displays coach-specific panel sections in the Bottom Sheet when user is coach', async () => {
+  it('keeps coach work in the main bar and leaves only secondary links in More', async () => {
     stubSession({ id: 2, username: 'c2', role: 'coach', displayName: 'مربی رضا', coachId: null, mustChangePassword: false });
     render(<App />);
     const user = userEvent.setup();
 
-    const moreButton = await screen.findByRole('button', { name: /سایر بخش‌ها و امکانات|بیشتر/ });
+    const mobileNav = await screen.findByRole('navigation', { name: 'ناوبری موبایل' });
+    const navBar = mobileNav.querySelector('.mobile-nav__bar') as HTMLElement;
+    for (const label of ['شاگردها', 'برنامه‌سازی', 'درآمدها']) {
+      expect(within(navBar).getByText(label)).toBeInTheDocument();
+    }
+    const moreButton = within(navBar).getByRole('button', { name: /سایر بخش‌ها و امکانات|بیشتر/ });
     await user.click(moreButton);
 
     const sheet = screen.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
-    expect(within(sheet).getByText('پنل مربیگری')).toBeInTheDocument();
-    expect(within(sheet).getByText('شاگرد')).toBeInTheDocument();
-    expect(within(sheet).getByText('افزودن برنامه')).toBeInTheDocument();
-    expect(within(sheet).getByText('درآمدها')).toBeInTheDocument();
-    expect(within(sheet).getByText('مدیر')).toBeInTheDocument();
+    expect(within(sheet).getByText('امکانات مربی')).toBeInTheDocument();
+    expect(within(sheet).getByText('گفتگو با مدیر')).toBeInTheDocument();
+    expect(within(sheet).getByText('برنامهٔ شخصی')).toBeInTheDocument();
   });
 });

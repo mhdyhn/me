@@ -33,35 +33,33 @@ interface NavItem {
   desc?: string;
 }
 
-/** The 4 fixed core tabs on mobile bottom bar. */
-const primaryTabs: NavItem[] = [
+/** Keep the fixed navigation focused on the primary job for each role. */
+const studentPrimaryTabs: NavItem[] = [
   { label: 'خانه', to: '/', icon: House, end: true },
   { label: 'برنامه', to: '/program', icon: CalendarDays },
-  { label: 'حرکت‌ها', to: '/exercises', icon: Dumbbell },
   { label: 'پیشرفت', to: '/progress', icon: BarChart3 },
 ];
-
-/** The whole personal app: every signed-in user has it. */
-const personalNavigation: NavItem[] = [
-  ...primaryTabs,
-  { label: 'هوش سلامتی', to: '/ai-hub', icon: Sparkles, desc: 'پایش آمادگی، ریکاوری و ضربان قلب' },
-  { label: 'تغذیه', to: '/nutrition', icon: Utensils, desc: 'اهداف کالری و دفتر خوراک روزانه' },
+const coachPrimaryTabs: NavItem[] = [
+  { label: 'شاگردها', to: '/coach', icon: Users, end: true },
+  { label: 'برنامه‌سازی', to: '/coach/programs/new', icon: ListPlus },
+  { label: 'درآمدها', to: '/coach/transactions', icon: Receipt },
+];
+const adminPrimaryTabs: NavItem[] = [
+  { label: 'مربی‌ها', to: '/coach', icon: ShieldCheck, end: true },
+  { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt },
 ];
 
-/** Extra sections added for each role. */
-const roleNavigation: Record<Role, NavItem[]> = {
+const personalSecondaryNavigation: NavItem[] = [
+  { label: 'حرکت‌ها', to: '/exercises', icon: Dumbbell, desc: 'کتابخانه و راهنمای اجرای حرکت‌ها' },
+  { label: 'هوش سلامتی', to: '/ai-hub', icon: Sparkles, desc: 'پایش آمادگی و ریکاوری' },
+  { label: 'تغذیه', to: '/nutrition', icon: Utensils, desc: 'برنامه و دفتر خوراک' },
+];
+const roleSecondaryNavigation: Record<Role, NavItem[]> = {
   student: [{ label: 'مربی', to: '/chat', icon: MessageCircle, desc: 'گفتگو و ارسال پیام به مربی' }],
-  coach: [
-    { label: 'شاگرد', to: '/coach', icon: Users, end: true, desc: 'فهرست و ساخت شاگردهای من' },
-    { label: 'افزودن برنامه', to: '/coach/programs/new', icon: ListPlus, desc: 'طراحی برنامه تمرینی جدید' },
-    { label: 'درآمدها', to: '/coach/transactions', icon: Receipt, desc: 'گزارش مالی و سهم مربی' },
-    { label: 'مدیر', to: '/coach/chat', icon: MessageCircle, desc: 'گفتگو با مدیر باشگاه' },
-  ],
-  admin: [
-    { label: 'مربی', to: '/coach', icon: ShieldCheck, end: true, desc: 'فهرست و ایجاد حساب مربیان' },
-    { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt, desc: 'تراکنش‌های کلی باشگاه' },
-  ],
+  coach: [{ label: 'گفتگو با مدیر', to: '/coach/chat', icon: MessageCircle, desc: 'ارتباط با مدیر باشگاه' }],
+  admin: [],
 };
+const settingsNavigation: NavItem = { label: 'تنظیمات', to: '/settings', icon: Settings2, desc: 'پروفایل و شخصی‌سازی' };
 
 const personalTitles: Record<string, string> = {
   '/': 'تمرین امروزت',
@@ -83,8 +81,18 @@ export function Layout() {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
 
-  const navigation = user ? [...personalNavigation, ...roleNavigation[user.role]] : personalNavigation;
-  const roleItems = user ? roleNavigation[user.role] : [];
+  const primaryTabs = user?.role === 'coach'
+    ? coachPrimaryTabs
+    : user?.role === 'admin'
+      ? adminPrimaryTabs
+      : studentPrimaryTabs;
+  const roleItems = user ? roleSecondaryNavigation[user.role] : [];
+  const secondaryItems = [
+    ...(user?.role !== 'student' ? [{ label: 'برنامهٔ شخصی', to: '/program', icon: CalendarDays, desc: 'برنامه تمرینی شخصی' }] : []),
+    ...personalSecondaryNavigation,
+    ...roleItems,
+    settingsNavigation,
+  ];
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
   const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
 
@@ -135,8 +143,11 @@ export function Layout() {
   const title = ownHeading ? null : personalTitles[location.pathname] ?? (location.pathname.startsWith('/exercise/') ? 'راهنمای حرکت' : 'تمرین در حال انجام');
 
   // Check if current page is one of the secondary items inside "بیشتر"
-  const isPrimaryActive = primaryTabs.some((tab) => (tab.end ? location.pathname === tab.to : location.pathname.startsWith(tab.to)));
+  const isPrimaryActive = primaryTabs.some((tab) => tab.end
+    ? location.pathname === tab.to
+    : location.pathname === tab.to || location.pathname.startsWith(`${tab.to}/`));
   const isMoreActive = !isPrimaryActive && location.pathname !== '/workout';
+  const sidebarSecondaryItems = secondaryItems.filter((item) => item.to !== settingsNavigation.to);
 
   return (
     <div className="app-shell">
@@ -147,11 +158,21 @@ export function Layout() {
         </NavLink>
         <p className="sidebar-label">منو</p>
         <nav className="side-nav" aria-label="ناوبری اصلی">
-          {navigation.map(({ label, to, icon: Icon, end }) => (
+          {primaryTabs.map(({ label, to, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link${isActive ? ' is-active' : ''}`}>
               <Icon size={18} strokeWidth={1.9} /><span>{label}</span>
             </NavLink>
           ))}
+          <details className="side-nav-more" open={sidebarSecondaryItems.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))}>
+            <summary><Menu size={18} /><span>بخش‌های دیگر</span></summary>
+            <div className="side-nav-more__items">
+              {sidebarSecondaryItems.map(({ label, to, icon: Icon }) => (
+                <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' is-active' : ''}`}>
+                  <Icon size={18} strokeWidth={1.9} /><span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </details>
         </nav>
         <div className="sidebar-spacer" />
         <div className="sidebar-coach-note">
@@ -213,7 +234,7 @@ export function Layout() {
       </div>
 
       <nav className="mobile-nav" aria-label="ناوبری موبایل">
-        <div className="mobile-nav__bar">
+        <div className="mobile-nav__bar" style={{ gridTemplateColumns: `repeat(${primaryTabs.length + 1}, minmax(0, 1fr))` }}>
           {primaryTabs.map(({ label, to, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-nav__item${isActive ? ' is-active' : ''}`}>
               <Icon size={20} strokeWidth={1.9} />
@@ -258,75 +279,23 @@ export function Layout() {
           </div>
 
           <div className="mobile-sheet__body">
-            {roleItems.length > 0 && (
-              <div className="mobile-sheet__section">
-                <div className="mobile-sheet__group-label">
-                  {user?.role === 'coach' ? 'پنل مربیگری' : user?.role === 'admin' ? 'مدیریت باشگاه' : 'ارتباط با مربی'}
-                </div>
-                <div className="mobile-sheet__grid">
-                  {roleItems.map(({ label, to, icon: Icon, end, desc }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
-                      onClick={() => setShowMoreSheet(false)}
-                    >
-                      <span className="mobile-sheet__card-icon"><Icon size={20} /></span>
-                      <div className="mobile-sheet__card-info">
-                        <strong className="mobile-sheet__card-title">{label}</strong>
-                        {desc && <span className="mobile-sheet__card-desc">{desc}</span>}
-                      </div>
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="mobile-sheet__section">
-              <div className="mobile-sheet__group-label">سلامتی، هوش مصنوعی و تغذیه</div>
+              <div className="mobile-sheet__group-label">{user?.role === 'coach' ? 'امکانات مربی' : user?.role === 'admin' ? 'امکانات مدیریت' : 'امکانات بیشتر'}</div>
               <div className="mobile-sheet__grid">
-                <NavLink
-                  to="/ai-hub"
-                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
-                  onClick={() => setShowMoreSheet(false)}
-                >
-                  <span className="mobile-sheet__card-icon"><Sparkles size={20} /></span>
-                  <div className="mobile-sheet__card-info">
-                    <strong className="mobile-sheet__card-title">هوش سلامتی</strong>
-                    <span className="mobile-sheet__card-desc">پایش آمادگی و ریکاوری</span>
-                  </div>
-                </NavLink>
-
-                <NavLink
-                  to="/nutrition"
-                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
-                  onClick={() => setShowMoreSheet(false)}
-                >
-                  <span className="mobile-sheet__card-icon"><Utensils size={20} /></span>
-                  <div className="mobile-sheet__card-info">
-                    <strong className="mobile-sheet__card-title">تغذیه</strong>
-                    <span className="mobile-sheet__card-desc">کالری و دفتر خوراک</span>
-                  </div>
-                </NavLink>
-              </div>
-            </div>
-
-            <div className="mobile-sheet__section">
-              <div className="mobile-sheet__group-label">تنظیمات و برنامه</div>
-              <div className="mobile-sheet__grid">
-                <NavLink
-                  to="/settings"
-                  className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
-                  onClick={() => setShowMoreSheet(false)}
-                >
-                  <span className="mobile-sheet__card-icon"><Settings2 size={20} /></span>
-                  <div className="mobile-sheet__card-info">
-                    <strong className="mobile-sheet__card-title">تنظیمات</strong>
-                    <span className="mobile-sheet__card-desc">پروفایل و شخصی‌سازی</span>
-                  </div>
-                </NavLink>
-
+                {secondaryItems.map(({ label, to, icon: Icon, desc }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                    onClick={() => setShowMoreSheet(false)}
+                  >
+                    <span className="mobile-sheet__card-icon"><Icon size={20} /></span>
+                    <div className="mobile-sheet__card-info">
+                      <strong className="mobile-sheet__card-title">{label}</strong>
+                      {desc && <span className="mobile-sheet__card-desc">{desc}</span>}
+                    </div>
+                  </NavLink>
+                ))}
                 <button
                   type="button"
                   className="mobile-sheet__card"
@@ -338,7 +307,7 @@ export function Layout() {
                   <span className="mobile-sheet__card-icon"><Smartphone size={20} /></span>
                   <div className="mobile-sheet__card-info">
                     <strong className="mobile-sheet__card-title">نصب اپلیکیشن</strong>
-                    <span className="mobile-sheet__card-desc">فایل نصبی و نسخه وب</span>
+                    <span className="mobile-sheet__card-desc">نسخهٔ نصب‌شدنی و وب</span>
                   </div>
                 </button>
               </div>
