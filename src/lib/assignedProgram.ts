@@ -55,6 +55,8 @@ export async function loadAssignedProgram(): Promise<void> {
     const result = await api<{ program: Programme | null; coachName?: string | null; isPaid?: boolean }>('GET', '/me/program');
     if (result.program) {
       setAssignedMeta({
+        id: result.program.id,
+        version: result.program.version,
         title: result.program.title,
         priceTomans: result.program.priceTomans ?? 0,
         coachName: result.coachName ?? null,

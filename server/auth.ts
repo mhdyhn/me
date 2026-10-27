@@ -41,18 +41,24 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Only the hash of a session token is stored, so a leaked database cannot be replayed. */
-export async function createSession(db: Db, userId: number, now: Date): Promise<string> {
+/** Create a session for the credential version that was actually verified. */
+export async function createSession(db: Db, userId: number, authVersion: number, now: Date): Promise<string | null> {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  await db.query('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)', [hashToken(token), userId, expiresAt]);
-  return token;
+  const rows = await db.query<{ token_hash: string }>(
+    `INSERT INTO sessions (token_hash, user_id, expires_at, auth_version)
+     SELECT $1, id, $3, $4 FROM users WHERE id = $2 AND auth_version = $4 AND is_active = 1
+     RETURNING token_hash`,
+    [hashToken(token), userId, expiresAt, authVersion],
+  );
+  return rows.length ? token : null;
 }
 
-/** The signed-in user for a session token, in one query (the app makes this call on every request). */
+/** A token is valid only while its credential version matches the account. */
 export async function userForToken(db: Db, token: string, now: Date): Promise<{ userId: number } | null> {
   const row = (await db.query<{ user_id: number }>(
-    'SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > $2',
+    `SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.expires_at > $2 AND s.auth_version = u.auth_version`,
     [hashToken(token), now.toISOString()],
   ))[0];
   return row ? { userId: Number(row.user_id) } : null;
@@ -62,6 +68,38 @@ export async function deleteSession(db: Db, token: string): Promise<void> {
   await db.query('DELETE FROM sessions WHERE token_hash = $1', [hashToken(token)]);
 }
 
-export async function deleteSessionsForUser(db: Db, userId: number): Promise<void> {
-  await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+/** Change the password and keep only the session that made the request. */
+export async function changeOwnPassword(
+  db: Db, userId: number, currentHash: string, authVersion: number, token: string, newHash: string, now: Date,
+): Promise<boolean> {
+  const tokenHash = hashToken(token);
+  const rows = await db.query<{ id: number }>(
+    `WITH updated AS (
+       UPDATE users SET password_hash = $2, must_change_password = 0, password_enc = NULL, auth_version = auth_version + 1
+       WHERE id = $1 AND password_hash = $3 AND auth_version = $4 AND is_active = 1
+         AND EXISTS (SELECT 1 FROM sessions WHERE user_id = $1 AND token_hash = $5 AND auth_version = $4 AND expires_at > $6)
+       RETURNING id, auth_version
+     ), kept AS (
+       UPDATE sessions SET auth_version = (SELECT auth_version FROM updated)
+       WHERE user_id = $1 AND token_hash = $5 AND EXISTS (SELECT 1 FROM updated)
+     ), revoked AS (
+       DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $5 AND EXISTS (SELECT 1 FROM updated)
+     ) SELECT id FROM updated`,
+    [userId, newHash, currentHash, authVersion, tokenHash, now.toISOString()],
+  );
+  return rows.length > 0;
+}
+
+/** A reset invalidates every existing session, including concurrent logins using old credentials. */
+export async function resetUserPassword(db: Db, userId: number, newHash: string, passwordEnc: string): Promise<boolean> {
+  const rows = await db.query<{ id: number }>(
+    `WITH updated AS (
+       UPDATE users SET password_hash = $2, must_change_password = 1, password_enc = $3, auth_version = auth_version + 1
+       WHERE id = $1 RETURNING id
+     ), revoked AS (
+       DELETE FROM sessions WHERE user_id = $1 AND EXISTS (SELECT 1 FROM updated)
+     ) SELECT id FROM updated`,
+    [userId, newHash, passwordEnc],
+  );
+  return rows.length > 0;
 }

@@ -74,8 +74,7 @@ describe('Account Activation and Deactivation', () => {
 
     // Existing session token is immediately blocked/deleted
     const accessBlocked = await call('GET', '/api/me', undefined, student.token);
-    expect(accessBlocked.status).toBe(403);
-    expect(accessBlocked.json.error).toContain('غیرفعال');
+    expect(accessBlocked.status).toBe(401);
 
     // Trying to log in with valid credentials returns 403 Forbidden with clear message
     const loginAttempt = await login(student.username, 'student-new-pass-1');
@@ -107,8 +106,7 @@ describe('Account Activation and Deactivation', () => {
 
     // Coach existing token is revoked
     const coachBlocked = await call('GET', '/api/students', undefined, coachToken);
-    expect(coachBlocked.status).toBe(403);
-    expect(coachBlocked.json.error).toContain('غیرفعال');
+    expect(coachBlocked.status).toBe(401);
 
     // Coach cannot log in
     const loginAttempt = await login(coachUsername, 'coach-new-pass-1');
@@ -160,6 +158,23 @@ describe('Account Activation and Deactivation', () => {
     // Student can log in again
     const studentOk = await login(student.username, 'student-new-pass-1');
     expect(studentOk.status).toBe(200);
+  });
+
+  it('does not restore old coach or student sessions when an account is quickly reactivated', async () => {
+    const { token: coachToken, id: coachId, username: coachUsername, adminToken } = await setupCoach();
+    const student = await setupStudent(coachToken);
+
+    expect((await call('PUT', `/api/students/${student.id}/active`, { active: false }, adminToken)).status).toBe(200);
+    expect((await call('PUT', `/api/students/${student.id}/active`, { active: true }, adminToken)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, student.token)).status).toBe(401);
+    expect((await login(student.username, 'student-new-pass-1')).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, coachToken)).status).toBe(200);
+
+    expect((await call('PUT', `/api/coaches/${coachId}/active`, { active: false }, adminToken)).status).toBe(200);
+    expect((await call('PUT', `/api/coaches/${coachId}/active`, { active: true }, adminToken)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, coachToken)).status).toBe(401);
+    expect((await login(coachUsername, 'coach-new-pass-1')).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, adminToken)).status).toBe(200);
   });
 
   it('Coach cannot deactivate a student of another coach', async () => {

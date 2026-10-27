@@ -13,9 +13,10 @@ const record = {
 
 function fakeDb(transaction = record) {
   const query = vi.fn(async (sql: string) => {
-    if (sql.includes('SELECT u.coach_id')) return [{ coach_id: 3, price_tomans: 100000, coach_iban: null, coach_name: 'مربی' }];
-    if (sql.includes('SELECT id FROM payment_transactions')) return [];
+    if (sql.includes('SELECT u.coach_id')) return [{ coach_id: 3, programme_id: 'offer-a', version: 1, price_tomans: 100000, coach_iban: null, coach_name: 'مربی' }];
+    if (sql.includes('SELECT t.id FROM payment_transactions')) return [];
     if (sql.includes('SELECT t.*')) return [{ ...transaction }];
+    if (sql.includes('INSERT INTO payment_transactions')) return [{ authority: 'recorded' }];
     return [];
   });
   return { db: { query, exec: vi.fn(), close: vi.fn() } as unknown as Db, query };
@@ -35,14 +36,14 @@ afterEach(() => {
 describe('production payment fail-closed policy', () => {
   it('does not create a simulated payment without a merchant id', async () => {
     const { db, query } = fakeDb();
-    await expect(createPaymentRequest(db, 7, 'https://example.com')).rejects.toMatchObject({ status: 503 });
+    await expect(createPaymentRequest(db, 7, 'https://example.com', { id: 'offer-a', version: 1 })).rejects.toMatchObject({ status: 503 });
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO payment_transactions'))).toBe(false);
   });
 
   it('rejects sandbox configuration even if a merchant is present in production', async () => {
     vi.stubEnv('ZARINPAL_MERCHANT_ID', 'real-merchant');
     vi.stubEnv('ZARINPAL_SANDBOX', 'true');
-    await expect(createPaymentRequest(fakeDb().db, 7, 'https://example.com')).rejects.toMatchObject({ status: 503 });
+    await expect(createPaymentRequest(fakeDb().db, 7, 'https://example.com', { id: 'offer-a', version: 1 })).rejects.toMatchObject({ status: 503 });
   });
 
   it('does not fall back to a fake payment after a gateway network failure', async () => {
@@ -50,7 +51,7 @@ describe('production payment fail-closed policy', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('gateway offline')));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { db, query } = fakeDb();
-    await expect(createPaymentRequest(db, 7, 'https://example.com')).rejects.toMatchObject({ status: 502 });
+    await expect(createPaymentRequest(db, 7, 'https://example.com', { id: 'offer-a', version: 1 })).rejects.toMatchObject({ status: 502 });
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO payment_transactions'))).toBe(false);
   });
 
@@ -83,20 +84,21 @@ describe('production payment fail-closed policy', () => {
 
   it('excludes sandbox transactions and legacy sandbox references from production entitlements', async () => {
     const { db, query } = fakeDb();
-    expect(await isProgramPaid(db, 7)).toBe(false);
+    expect(await isProgramPaid(db, 7, 'offer-a')).toBe(false);
     const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain("gateway_mode <> 'sandbox'");
     expect(sql).toContain("NOT LIKE 'SANDBOX-%'");
     expect(sql).toContain('ref_id IS NOT NULL');
     expect(sql).toContain("NOT IN ('undefined', 'null')");
-    expect(params).toEqual([7, 1]);
+    expect(sql).toContain('t.programme_id = $2');
+    expect(params).toEqual([7, 'offer-a', 1]);
   });
 
   it('allows explicit non-production simulation with a unique sandbox identifier', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const { db, query } = fakeDb();
-    const first = await createPaymentRequest(db, 7, 'http://localhost:5173');
-    const second = await createPaymentRequest(db, 7, 'http://localhost:5173');
+    const first = await createPaymentRequest(db, 7, 'http://localhost:5173', { id: 'offer-a', version: 1 });
+    const second = await createPaymentRequest(db, 7, 'http://localhost:5173', { id: 'offer-a', version: 1 });
     expect(first.authority).toMatch(/^SANDBOX-/);
     expect(first.authority).not.toBe(second.authority);
     const inserts = query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO payment_transactions')) as unknown as [string, unknown[]][];

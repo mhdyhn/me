@@ -146,6 +146,13 @@ describe('authentication', () => {
     expect((await login('owner', 'owner-pass-123')).status).toBe(200);
   });
 
+  it('forgets incomplete failed attempts after the lock window', async () => {
+    for (let i = 0; i < 4; i += 1) expect((await login('owner', 'wrong-wrong-1')).status).toBe(401);
+    clock = new Date(clock.getTime() + 16 * 60 * 1000);
+    expect((await login('owner', 'wrong-wrong-1')).status).toBe(401);
+    expect((await login('owner', 'owner-pass-123')).status).toBe(200);
+  });
+
   it('expires sessions after 30 days and revokes them on logout', async () => {
     const token = (await login('owner', 'owner-pass-123')).json.token as string;
     clock = new Date(clock.getTime() + 31 * 24 * 60 * 60 * 1000);
@@ -236,6 +243,35 @@ describe('roles and student provisioning', () => {
     expect(short.status).toBe(400);
     expect(wrong.status).toBe(400);
   });
+
+  it('keeps the current session but revokes other sessions on password changes for all three roles', async () => {
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const adminOther = (await login('owner', 'owner-pass-123')).json.token as string;
+    const createdCoach = await call('POST', '/api/coaches', { displayName: 'مربی امنیت' }, admin);
+    const coach = (await login(createdCoach.json.username, createdCoach.json.password)).json.token as string;
+    const coachOther = (await login(createdCoach.json.username, createdCoach.json.password)).json.token as string;
+    expect((await call('POST', '/api/me/password', { currentPassword: createdCoach.json.password, newPassword: 'coach-private-pass' }, coach)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, coach)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, coachOther)).status).toBe(401);
+
+    const createdStudent = await call('POST', '/api/students', { displayName: 'شاگرد امنیت' }, coach);
+    const student = (await login(createdStudent.json.username, createdStudent.json.password)).json.token as string;
+    const studentOther = (await login(createdStudent.json.username, createdStudent.json.password)).json.token as string;
+    expect((await call('POST', '/api/me/password', { currentPassword: 'wrong-password', newPassword: 'student-private-pass' }, student)).status).toBe(400);
+    expect((await call('GET', '/api/me', undefined, studentOther)).status).toBe(200);
+    expect((await call('POST', '/api/me/password', { currentPassword: createdStudent.json.password, newPassword: 'student-private-pass' }, student)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, student)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, studentOther)).status).toBe(401);
+
+    expect((await call('POST', '/api/me/password', { currentPassword: 'owner-pass-123', newPassword: 'owner-private-pass' }, admin)).status).toBe(200);
+    const currentAdmin = await call('GET', '/api/me', undefined, admin);
+    expect(currentAdmin.status).toBe(200);
+    expect(currentAdmin.json.user).not.toHaveProperty('authVersion');
+    expect((await call('GET', '/api/me', undefined, adminOther)).status).toBe(401);
+    expect((await call('GET', '/api/me', undefined, coach)).status).toBe(200);
+    expect((await call('GET', '/api/me', undefined, student)).status).toBe(200);
+    expect((await login('owner', 'owner-private-pass')).status).toBe(200);
+  });
 });
 
 describe('admin and coaches', () => {
@@ -289,6 +325,7 @@ describe('deleting coaches and students', () => {
     expect(removed.status).toBe(200);
     const list = await call('GET', '/api/students', undefined, coach.token);
     expect(list.json.students).toEqual([]);
+    expect((await call('GET', '/api/me', undefined, student.json.token)).status).toBe(401);
     expect((await login(created.json.username as string, created.json.password as string)).status).toBe(401);
   });
 
@@ -604,20 +641,20 @@ describe('ZarinPal payments with multi-settlement', () => {
     const coach = await coachSession();
     const student = await studentSession(coach.token, 'شاگرد تست قدیمی');
     await db.query(`INSERT INTO payment_transactions
-      (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, gateway_mode)
-      VALUES ($1, $2, 100, 90, 10, 'legacy-test', 'paid', NULL, $3, 'legacy')`, [student.id, coach.id, clock.toISOString()]);
+      (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, gateway_mode, programme_id)
+      VALUES ($1, $2, 100, 90, 10, 'legacy-test', 'paid', NULL, $3, 'legacy', 'legacy-test-program')`, [student.id, coach.id, clock.toISOString()]);
     const { isProgramPaid } = await import('./payments.ts');
     vi.stubEnv('NODE_ENV', 'production');
     try {
-      expect(await isProgramPaid(db, student.id)).toBe(false);
+      expect(await isProgramPaid(db, student.id, 'legacy-test-program')).toBe(false);
       await db.query("UPDATE payment_transactions SET ref_id = 'undefined' WHERE authority = 'legacy-test'");
-      expect(await isProgramPaid(db, student.id)).toBe(false);
+      expect(await isProgramPaid(db, student.id, 'legacy-test-program')).toBe(false);
       await db.query("UPDATE payment_transactions SET ref_id = 'SANDBOX-123' WHERE authority = 'legacy-test'");
-      expect(await isProgramPaid(db, student.id)).toBe(false);
+      expect(await isProgramPaid(db, student.id, 'legacy-test-program')).toBe(false);
       await db.query("UPDATE payment_transactions SET ref_id = '123456' WHERE authority = 'legacy-test'");
-      expect(await isProgramPaid(db, student.id)).toBe(true);
+      expect(await isProgramPaid(db, student.id, 'legacy-test-program')).toBe(true);
       await db.query("UPDATE payment_transactions SET gateway_mode = 'sandbox' WHERE authority = 'legacy-test'");
-      expect(await isProgramPaid(db, student.id)).toBe(false);
+      expect(await isProgramPaid(db, student.id, 'legacy-test-program')).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -688,7 +725,8 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(lockedView.json.program.days).toHaveLength(0); // Exercises masked on server
 
     // Student initiates payment
-    const startRes = await call('POST', '/api/pay/start', {}, student.token);
+    const current = (await call('GET', '/api/me/program', undefined, student.token)).json.program;
+    const startRes = await call('POST', '/api/pay/start', { expectedId: current.id, expectedVersion: current.version }, student.token);
     expect(startRes.status).toBe(201);
     expect(startRes.json.authority).toBeDefined();
     expect(startRes.json.paymentUrl).toBeDefined();
@@ -722,7 +760,7 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(unlockedView.json.program.days[0].exercises[0].exerciseId).toBe('bench-press');
 
     // Trying to start payment again for already paid program returns 400
-    const secondStart = await call('POST', '/api/pay/start', {}, student.token);
+    const secondStart = await call('POST', '/api/pay/start', { expectedId: current.id, expectedVersion: current.version }, student.token);
     expect(secondStart.status).toBe(400);
 
     // Coach views transactions
@@ -758,7 +796,8 @@ describe('ZarinPal payments with multi-settlement', () => {
       coach.token
     );
 
-    const startRes = await call('POST', '/api/pay/start', {}, student.token);
+    const current = (await call('GET', '/api/me/program', undefined, student.token)).json.program;
+    const startRes = await call('POST', '/api/pay/start', { expectedId: current.id, expectedVersion: current.version }, student.token);
     const authority = startRes.json.authority as string;
 
     const cancelRes = await call('POST', '/api/pay/verify', { authority, status: 'NOK' }, student.token);

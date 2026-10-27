@@ -76,7 +76,8 @@ export function PaymentResult() {
               <CheckCircle2 size={56} />
             </div>
             <h2 style={{ margin: 0, color: '#087c57' }}>{simulated ? 'پرداخت آزمایشی با موفقیت شبیه‌سازی شد' : 'پرداخت با موفقیت انجام شد'}</h2>
-            <p style={{ margin: 0 }}>{simulated ? 'هیچ مبلغ واقعی منتقل نشده است.' : message}</p>
+            {simulated && <p style={{ margin: 0 }}>هیچ مبلغ واقعی منتقل نشده است.</p>}
+            <p style={{ margin: 0 }}>{message}</p>
 
             {transaction && (
               <div
@@ -112,7 +113,7 @@ export function PaymentResult() {
             )}
 
             <Link to="/program" className="button button--primary" style={{ width: '100%', justifyContent: 'center' }}>
-              مشاهده و شروع برنامه تمرینی <ArrowRight size={18} />
+              بازگشت به برنامه‌ها <ArrowRight size={18} />
             </Link>
           </>
         ) : (

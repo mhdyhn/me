@@ -80,13 +80,139 @@ describe('student programme', () => {
     expect(mine.json.coachName).toBe('مربی یک');
   });
 
-  it('saving again replaces the programme', async () => {
+  it('keeps the assigned coach as programme owner when the admin saves it', async () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);
-    await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken);
-    await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, title: 'برنامهٔ جدید' }, coachToken);
+    const coachId = (await call('GET', '/api/me', undefined, coachToken)).json.user.id;
+    const adminToken = await signIn('owner', 'owner-pass-123');
+
+    expect((await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, adminToken)).status).toBe(200);
+    const rows = await db.query<{ coach_id: number }>('SELECT coach_id FROM student_programs WHERE student_id = $1', [pupil.id]);
+    expect(Number(rows[0]?.coach_id)).toBe(coachId);
+    expect((await call('GET', `/api/students/${pupil.id}/program`, undefined, coachToken)).json.program.title).toBe(goodProgramme.title);
+    expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.program.title).toBe(goodProgramme.title);
+  });
+
+  it('requires a version and an explicit decision before replacing the programme', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken)).json.program;
+    expect((await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, title: 'برنامهٔ جدید' }, coachToken)).status).toBe(409);
+    const saved = await call('PUT', `/api/students/${pupil.id}/program`, {
+      ...goodProgramme, title: 'برنامهٔ جدید', saveMode: 'new', expectedId: first.id, expectedVersion: first.version,
+    }, coachToken);
+    expect(saved.status).toBe(200);
+    expect(saved.json.program.id).not.toBe(first.id);
     const read = await call('GET', `/api/students/${pupil.id}/program`, undefined, coachToken);
     expect(read.json.program.title).toBe('برنامهٔ جدید');
+  });
+
+  it('keeps an edited purchase unlocked, sells a new programme separately and preserves the archive', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
+    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    expect(checkout.status).toBe(201);
+    // A second device gets the same pending checkout, not a second charge request.
+    const again = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    expect(again.json.authority).toBe(checkout.json.authority);
+    expect((await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    const edit = await call('PUT', `/api/students/${pupil.id}/program`, {
+      ...goodProgramme, title: 'اصلاح برنامه', priceTomans: 150000, saveMode: 'edit', expectedId: first.id, expectedVersion: first.version,
+    }, coachToken);
+    expect(edit.status).toBe(200);
+    expect(edit.json.program.id).toBe(first.id);
+    expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(true);
+    const next = await call('PUT', `/api/students/${pupil.id}/program`, {
+      ...goodProgramme, title: 'برنامهٔ دوم', priceTomans: 200000, saveMode: 'new', expectedId: edit.json.program.id, expectedVersion: edit.json.program.version,
+    }, coachToken);
+    expect(next.status).toBe(200);
+    expect(next.json.program.id).not.toBe(first.id);
+    const locked = await call('GET', '/api/me/program', undefined, pupil.token);
+    expect(locked.json.isPaid).toBe(false);
+    expect(locked.json.program.days).toEqual([]);
+    const archive = await call('GET', '/api/me/programs/archive', undefined, pupil.token);
+    expect(archive.json.programs).toHaveLength(1);
+    expect(archive.json.programs[0].title).toBe('اصلاح برنامه');
+    expect(archive.json.programs[0].days).toHaveLength(1);
+    const secondPupil = await student(coachToken);
+    expect((await call('GET', '/api/me/programs/archive', undefined, secondPupil.token)).json.programs).toEqual([]);
+    expect((await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token)).status).toBe(409);
+    const second = await call('POST', '/api/pay/start', { expectedId: next.json.program.id, expectedVersion: next.json.program.version }, pupil.token);
+    expect(second.status).toBe(201);
+    expect(second.json.authority).not.toBe(checkout.json.authority);
+    expect((await call('POST', '/api/pay/verify', { authority: second.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(true);
+  });
+
+  it('does not silently resume a pending checkout at a different advertised price', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
+    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    expect(checkout.status).toBe(201);
+    const edited = (await call('PUT', `/api/students/${pupil.id}/program`, {
+      ...goodProgramme, priceTomans: 200000, saveMode: 'edit', expectedId: first.id, expectedVersion: first.version,
+    }, coachToken)).json.program;
+    const retry = await call('POST', '/api/pay/start', { expectedId: edited.id, expectedVersion: edited.version }, pupil.token);
+    expect(retry.status).toBe(409);
+    expect(retry.json.error).toContain('پرداخت تکراری');
+    expect((await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(true);
+  });
+
+  it('binds a late payment to the programme that was bought, not a newer one', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
+    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    expect(checkout.status).toBe(201);
+    const next = await call('PUT', `/api/students/${pupil.id}/program`, {
+      ...goodProgramme, title: 'برنامهٔ بعدی', priceTomans: 300000, saveMode: 'new', expectedId: first.id, expectedVersion: first.version,
+    }, coachToken);
+    expect(next.status).toBe(200);
+    const verified = await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token);
+    expect(verified.json.success).toBe(true);
+    expect(verified.json.message).toContain('بایگانی');
+    expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(false);
+    const archive = await call('GET', '/api/me/programs/archive', undefined, pupil.token);
+    expect(archive.json.programs).toHaveLength(1);
+    expect(archive.json.programs[0].id).toBe(first.id);
+  });
+
+  it('prevents stale editors and simultaneous new-programme saves from overwriting one another', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken)).json.program;
+    const request = { ...goodProgramme, saveMode: 'new', expectedId: first.id, expectedVersion: first.version };
+    const results = await Promise.all([
+      call('PUT', `/api/students/${pupil.id}/program`, { ...request, title: 'جدید الف' }, coachToken),
+      call('PUT', `/api/students/${pupil.id}/program`, { ...request, title: 'جدید ب' }, coachToken),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+    expect((await call('DELETE', `/api/students/${pupil.id}/program`, { expectedId: first.id, expectedVersion: first.version }, coachToken)).status).toBe(409);
+  });
+
+  it('pages through a large archive without exposing another student’s programmes', async () => {
+    const coachToken = await coach();
+    const pupil = await student(coachToken);
+    const other = await student(coachToken);
+    const coachId = (await call('GET', '/api/me', undefined, coachToken)).json.user.id;
+    await db.query(`INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
+      SELECT 'archive-' || n::text, $1, $2, $3, 0, $4, $4 FROM generate_series(1, 25) n`,
+    [pupil.id, coachId, JSON.stringify(goodProgramme), clock.toISOString()]);
+    const first = await call('GET', '/api/me/programs/archive', undefined, pupil.token);
+    expect(first.json.programs).toHaveLength(20);
+    expect(first.json.nextCursor).toBeTruthy();
+    const second = await call('GET', `/api/me/programs/archive?cursor=${encodeURIComponent(first.json.nextCursor)}`, undefined, pupil.token);
+    expect(second.json.programs).toHaveLength(5);
+    expect(second.json.nextCursor).toBeNull();
+    const ids = [...first.json.programs, ...second.json.programs].map((program: { id: string }) => program.id);
+    expect(new Set(ids).size).toBe(25);
+    expect((await call('GET', '/api/me/programs/archive', undefined, other.token)).json.programs).toEqual([]);
+    const foreignCursor = await call('GET', `/api/me/programs/archive?cursor=${encodeURIComponent(first.json.nextCursor)}`, undefined, other.token);
+    expect(foreignCursor.json.programs).toEqual([]);
+    expect((await call('GET', `/api/me/programs/archive?cursor=${'a'.repeat(129)}`, undefined, pupil.token)).status).toBe(400);
   });
 
   it('a student with no programme gets null, not an error', async () => {
@@ -160,10 +286,10 @@ describe('student programme', () => {
   it('allows coach and admin to delete a programme', async () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);
-    await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken);
+    const first = (await call('PUT', `/api/students/${pupil.id}/program`, goodProgramme, coachToken)).json.program;
 
-    // Coach deletes programme
-    const delRes = await call('DELETE', `/api/students/${pupil.id}/program`, undefined, coachToken);
+    // Coach removes the current programme, without deleting its archive.
+    const delRes = await call('DELETE', `/api/students/${pupil.id}/program`, { expectedId: first.id, expectedVersion: first.version }, coachToken);
     expect(delRes.status).toBe(200);
     expect(delRes.json.ok).toBe(true);
 
@@ -178,7 +304,7 @@ describe('student programme', () => {
     expect(adminRead.status).toBe(200);
     expect(adminRead.json.program.title).toBe('برنامهٔ سه روزه');
 
-    const adminDel = await call('DELETE', `/api/students/${pupil.id}/program`, undefined, adminToken);
+    const adminDel = await call('DELETE', `/api/students/${pupil.id}/program`, { expectedId: adminRead.json.program.id, expectedVersion: adminRead.json.program.version }, adminToken);
     expect(adminDel.status).toBe(200);
   });
 

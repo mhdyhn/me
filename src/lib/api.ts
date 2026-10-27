@@ -37,6 +37,8 @@ export interface ProgramDay {
 }
 
 export interface Programme {
+  id: string;
+  version: number;
   title: string;
   days: ProgramDay[];
   priceTomans?: number;

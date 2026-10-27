@@ -35,6 +35,8 @@ interface TransactionRow {
   created_at: string;
   verified_at: string | null;
   gateway_mode: 'sandbox' | 'live' | 'legacy';
+  programme_id: string | null;
+  programme_mapping: string;
 }
 
 export async function migratePayments(db: Db): Promise<void> {
@@ -61,7 +63,50 @@ export async function migratePayments(db: Db): Promise<void> {
 
     ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS gateway_mode TEXT NOT NULL DEFAULT 'legacy';
     ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS price_tomans INTEGER DEFAULT 0;
+    ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS programme_id TEXT;
+    ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS programme_id TEXT;
+    ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS programme_mapping TEXT NOT NULL DEFAULT 'legacy_unmapped';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS iban TEXT;
+
+    -- The active row remains compatible with existing data; offers retain earlier programmes.
+    CREATE TABLE IF NOT EXISTS programme_offers (
+      id TEXT PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      coach_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      price_tomans INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_programme_offers_student ON programme_offers(student_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_payment_programme ON payment_transactions(student_id, programme_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_one_pending_explicit
+      ON payment_transactions(student_id, programme_id)
+      WHERE status = 'pending' AND programme_mapping = 'explicit' AND programme_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS app_data_migrations (name TEXT PRIMARY KEY);
+
+    UPDATE student_programs SET programme_id = 'legacy-' || student_id::text WHERE programme_id IS NULL;
+    INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
+    SELECT programme_id, student_id, coach_id, body, COALESCE(price_tomans, 0), updated_at, updated_at
+    FROM student_programs WHERE programme_id IS NOT NULL
+    ON CONFLICT (id) DO NOTHING;
+  `);
+  // Old payments had no programme identity. Preserve the access they already gave to the
+  // currently active programme. Only clearly attributable pending checkouts are attached.
+  // The marker and mapping are one atomic statement so later programmes are never backfilled.
+  await db.query(`
+    WITH migration AS (
+      INSERT INTO app_data_migrations(name) VALUES ('programme-payment-identity-v1')
+      ON CONFLICT DO NOTHING RETURNING name
+    )
+    UPDATE payment_transactions AS t
+    SET programme_id = sp.programme_id, programme_mapping = 'legacy_current'
+    FROM student_programs AS sp
+    WHERE EXISTS (SELECT 1 FROM migration) AND t.programme_id IS NULL
+      AND t.student_id = sp.student_id
+      AND (t.status = 'paid' OR (t.status = 'pending' AND t.created_at >= sp.updated_at
+           AND t.amount_tomans = COALESCE(sp.price_tomans, 0) AND t.coach_id = sp.coach_id))
   `);
 }
 
@@ -89,11 +134,16 @@ export function normalizeIban(raw: string): string {
   return cleaned;
 }
 
-/** Checks whether the student has completed payment for their program. */
-export async function isProgramPaid(db: Db, studentId: number): Promise<boolean> {
+/** Shared by the active programme and archive; test payments never unlock live data. */
+export function paidTransactionCondition(alias: 't', productionParam: '$2' | '$3' | '$10'): string {
+  return `${alias}.status = 'paid' AND (${productionParam} = 0 OR (${alias}.gateway_mode <> 'sandbox' AND ${alias}.ref_id IS NOT NULL AND TRIM(${alias}.ref_id) <> '' AND LOWER(TRIM(${alias}.ref_id)) NOT IN ('undefined', 'null') AND UPPER(TRIM(${alias}.ref_id)) NOT LIKE 'SANDBOX-%'))`;
+}
+
+/** A verified payment grants exactly the programme recorded on that transaction. */
+export async function isProgramPaid(db: Db, studentId: number, programmeId: string): Promise<boolean> {
   const rows = await db.query<{ id: number }>(
-    "SELECT id FROM payment_transactions WHERE student_id = $1 AND status = 'paid' AND ($2 = 0 OR (gateway_mode <> 'sandbox' AND ref_id IS NOT NULL AND TRIM(ref_id) <> '' AND LOWER(TRIM(ref_id)) NOT IN ('undefined', 'null') AND UPPER(TRIM(ref_id)) NOT LIKE 'SANDBOX-%')) LIMIT 1",
-    [studentId, process.env.NODE_ENV === 'production' ? 1 : 0]
+    `SELECT t.id FROM payment_transactions t WHERE t.student_id = $1 AND t.programme_id = $2 AND ${paidTransactionCondition('t', '$3')} LIMIT 1`,
+    [studentId, programmeId, process.env.NODE_ENV === 'production' ? 1 : 0]
   );
   return rows.length > 0;
 }
@@ -132,6 +182,26 @@ function toTransaction(row: TransactionRow): PaymentTransaction {
   };
 }
 
+async function pendingCheckout(db: Db, studentId: number, programmeId: string, origin: string, expected: { amount: number; coachId: number }): Promise<{ authority: string; paymentUrl: string } | null> {
+  const pending = (await db.query<{ authority: string; gateway_mode: string; amount_tomans: number; coach_id: number }>(`
+    SELECT authority, gateway_mode, amount_tomans, coach_id FROM payment_transactions
+    WHERE student_id = $1 AND programme_id = $2 AND status = 'pending' ORDER BY id DESC LIMIT 1
+  `, [studentId, programmeId]))[0];
+  if (!pending) return null;
+  if (pending.amount_tomans !== expected.amount || pending.coach_id !== expected.coachId) {
+    throw new HttpError(409, 'پرداخت قبلی با قیمت یا مربی متفاوت در انتظار است؛ برای جلوگیری از پرداخت تکراری با پشتیبانی تماس بگیرید.');
+  }
+  if (!/^[A-Za-z0-9_-]{5,100}$/.test(pending.authority) ||
+      (process.env.NODE_ENV === 'production' && (pending.gateway_mode === 'sandbox' || pending.authority.startsWith('SANDBOX-')))) {
+    throw new HttpError(503, 'پرداخت قبلی نیاز به بررسی پشتیبانی دارد؛ دوباره پرداخت نکنید.');
+  }
+  const sandbox = pending.gateway_mode === 'sandbox' || (isSandboxMode() && pending.gateway_mode === 'legacy' && pending.authority.startsWith('A000000000000000000000000000'));
+  const paymentUrl = sandbox
+    ? `${origin}/payment/sandbox-pay?Authority=${pending.authority}&Amount=${pending.amount_tomans}`
+    : `https://payment.zarinpal.com/pg/StartPay/${pending.authority}`;
+  return { authority: pending.authority, paymentUrl };
+}
+
 /**
  * Initiates payment with ZarinPal. Sends wages array for multi-settlement (تسهیم زرین‌پال).
  */
@@ -139,15 +209,18 @@ export async function createPaymentRequest(
   db: Db,
   studentId: number,
   origin: string,
+  expected: { id: string; version: number },
   now = new Date()
 ): Promise<{ authority: string; paymentUrl: string }> {
   const studentRows = await db.query<{
     coach_id: number;
     price_tomans: number | null;
+    programme_id: string;
+    version: number;
     coach_iban: string | null;
     coach_name: string;
   }>(
-    `SELECT u.coach_id, sp.price_tomans, c.iban AS coach_iban, c.display_name AS coach_name
+    `SELECT u.coach_id, sp.price_tomans, sp.programme_id, sp.version, c.iban AS coach_iban, c.display_name AS coach_name
      FROM users u
      JOIN student_programs sp ON sp.student_id = u.id
      JOIN users c ON c.id = u.coach_id
@@ -159,8 +232,11 @@ export async function createPaymentRequest(
   if (!info || !info.price_tomans || info.price_tomans <= 0) {
     throw new HttpError(400, 'این برنامه رایگان است یا نیازی به پرداخت ندارد.');
   }
+  if (info.programme_id !== expected.id || info.version !== expected.version) {
+    throw new HttpError(409, 'برنامه یا قیمت آن تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+  }
 
-  const alreadyPaid = await isProgramPaid(db, studentId);
+  const alreadyPaid = await isProgramPaid(db, studentId, info.programme_id);
   if (alreadyPaid) {
     throw new HttpError(400, 'هزینهٔ این برنامه قبلاً پرداخت شده است.');
   }
@@ -169,6 +245,8 @@ export async function createPaymentRequest(
   const { coachShare, adminShare } = calculateCommission(amount);
   const sandbox = isSandboxMode();
   const merchantId = sandbox ? null : liveMerchantId();
+  const existing = await pendingCheckout(db, studentId, info.programme_id, origin, { amount, coachId: info.coach_id });
+  if (existing) return existing;
   const callbackUrl = `${origin}/payment/callback`;
 
   let authority = '';
@@ -223,14 +301,32 @@ export async function createPaymentRequest(
     }
   }
 
-  await db.query(
+  const inserted = await db.query<{ authority: string }>(
     `INSERT INTO payment_transactions
-     (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, gateway_mode)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)`,
-    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live']
+     (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, gateway_mode, programme_id, programme_mapping)
+     SELECT $1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, 'explicit'
+     WHERE NOT EXISTS (SELECT 1 FROM payment_transactions t WHERE t.student_id = $1 AND t.programme_id = $9
+       AND ${paidTransactionCondition('t', '$10')})
+     ON CONFLICT DO NOTHING RETURNING authority`,
+    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live', info.programme_id, process.env.NODE_ENV === 'production' ? 1 : 0]
   );
-
+  if (!inserted.length) {
+    const raced = await pendingCheckout(db, studentId, info.programme_id, origin, { amount, coachId: info.coach_id });
+    if (raced) return raced;
+    throw new HttpError(409, 'وضعیت پرداخت تغییر کرده است؛ برنامه را دوباره بارگذاری کنید.');
+  }
   return { authority, paymentUrl };
+}
+
+async function successMessage(db: Db, row: TransactionRow, alreadyPaid: boolean): Promise<string> {
+  if (!row.programme_id) {
+    return 'پرداخت تأیید شد، اما برنامهٔ این تراکنش قدیمی مشخص نیست. برای بررسی دسترسی با پشتیبانی تماس بگیرید و دوباره پرداخت نکنید.';
+  }
+  const active = await db.query<{ programme_id: string }>('SELECT programme_id FROM student_programs WHERE student_id = $1', [row.student_id]);
+  if (active[0]?.programme_id !== row.programme_id) {
+    return 'پرداخت مربوط به برنامهٔ قبلی تأیید شد. آن برنامه در بایگانی قابل مشاهده است و برنامهٔ جدید خرید جداگانه دارد.';
+  }
+  return alreadyPaid ? 'پرداخت قبلاً با موفقیت تأیید شده است.' : 'پرداخت با موفقیت انجام شد.';
 }
 
 function validPaymentReference(value: unknown): boolean {
@@ -278,7 +374,7 @@ export async function verifyPayment(
     return {
       success: true,
       transaction: toTransaction(row),
-      message: 'پرداخت قبلاً با موفقیت تأیید شده است.',
+      message: await successMessage(db, row, true),
     };
   }
 
@@ -359,7 +455,7 @@ export async function verifyPayment(
   return {
     success: true,
     transaction: toTransaction(row),
-    message: 'پرداخت با موفقیت انجام شد و برنامهٔ تمرینی فعال گردید.',
+    message: await successMessage(db, row, false),
   };
 }
 

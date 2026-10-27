@@ -154,10 +154,6 @@ export function todayDayIndex(now: Date = new Date()): number {
   return (now.getDay() + 1) % 7;
 }
 
-export function emptyTargets(): Targets {
-  return { kcal: null, proteinG: null, carbsG: null, fatG: null };
-}
-
 /** Foods whose name has the typed word first, then names that start with it, then any match. */
 export function searchFoods(query: string, limit = 8): Food[] {
   const q = query.trim().toLowerCase();

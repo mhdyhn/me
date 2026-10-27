@@ -37,8 +37,9 @@ export function ChangePassword() {
   return (
     <AccountShell title={user.mustChangePassword ? 'رمز تازهٔ خود را انتخاب کنید' : 'تغییر رمز عبور'}>
       {user.mustChangePassword && (
-        <p className="account-muted">رمز فعلی را که مربی داده است وارد کنید. بعد از این مرحله فقط شما رمز جدید را می‌دانید.</p>
+        <p className="account-muted">رمز موقتی را که به شما داده شده وارد کنید. بعد از این مرحله فقط شما رمز جدید را می‌دانید.</p>
       )}
+      <p className="account-muted">با تغییر رمز، نشست همین دستگاه حفظ و نشست دستگاه‌های دیگر باطل می‌شود. برای ورود دوباره از رمز جدید استفاده کنید؛ اطلاعات محلی پاک نمی‌شود.</p>
       <form className="account-form" onSubmit={(event) => void submit(event)}>
         <label className="field">
           <span>رمز فعلی</span>

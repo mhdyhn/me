@@ -29,6 +29,8 @@ function Builder() {
   const [student, setStudent] = useState<PublicUser | null>(null);
   const [title, setTitle] = useState('');
   const [priceTomans, setPriceTomans] = useState(0);
+  const [currentProgram, setCurrentProgram] = useState<Programme | null>(null);
+  const [saveMode, setSaveMode] = useState<'edit' | 'new'>('new');
   const [days, setDays] = useState<ProgramDay[]>([]);
   const [activeDay, setActiveDay] = useState(0);
   const [muscle, setMuscle] = useState('همه');
@@ -62,9 +64,14 @@ function Builder() {
           setStudent(list.students.find((candidate) => candidate.id === id) ?? null);
         }
         if (progRes.program) {
+          setCurrentProgram(progRes.program);
+          setSaveMode('edit');
           setTitle(progRes.program.title);
           setPriceTomans(progRes.program.priceTomans ?? 0);
           setDays(progRes.program.days);
+        } else {
+          setCurrentProgram(null);
+          setSaveMode('new');
         }
         if (biometricsResult?.biometrics?.limitations) {
           setLimitations(biometricsResult.biometrics.limitations);
@@ -193,6 +200,20 @@ function Builder() {
   async function save() {
     const problem = validate();
     if (problem) return setSaveError(problem);
+    if (currentProgram && (!currentProgram.id || !Number.isInteger(currentProgram.version))) {
+      return setSaveError('سرور از شناسهٔ برنامه پشتیبانی نمی‌کند. پس از به‌روزرسانی سرور دوباره تلاش کنید.');
+    }
+    if (currentProgram && saveMode === 'new') {
+      const confirmed = await confirmModal({
+        title: 'ثبت برنامهٔ جدید',
+        message: priceTomans > 0
+          ? 'این یک برنامهٔ جدید و خرید جداگانه است. برنامهٔ قبلی در بایگانی شاگرد حفظ می‌شود. ادامه می‌دهید؟'
+          : 'این یک برنامهٔ جدید و رایگان است. برنامهٔ قبلی در بایگانی شاگرد حفظ می‌شود. ادامه می‌دهید؟',
+        confirmText: 'ثبت برنامهٔ جدید',
+        cancelText: 'انصراف',
+      });
+      if (!confirmed) return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -206,8 +227,15 @@ function Builder() {
           reps: normalizeReps(item.reps),
         })),
       }));
-      await api('PUT', `/students/${id}/program`, { title: title.trim(), days: cleanDays, priceTomans });
-      setMessage('برنامه ذخیره شد. شاگرد همین حالا آن را می‌بیند.');
+      const result = await api<{ program: Programme }>('PUT', `/students/${id}/program`, {
+        title: title.trim(), days: cleanDays, priceTomans,
+        saveMode: currentProgram ? saveMode : 'new',
+        expectedId: currentProgram?.id ?? null,
+        expectedVersion: currentProgram?.version ?? 0,
+      });
+      setCurrentProgram(result.program);
+      setSaveMode('edit');
+      setMessage('برنامه ذخیره شد. شاگرد همین حالا وضعیت آن را می‌بیند.');
     } catch (caught) {
       setSaveError(caught instanceof ApiError ? caught.message : 'برنامه ذخیره نشد. دوباره تلاش کنید.');
     } finally {
@@ -216,11 +244,14 @@ function Builder() {
   }
 
   async function deleteProgram() {
+    if (!currentProgram?.id || !Number.isInteger(currentProgram.version)) {
+      return setSaveError('ابتدا برنامهٔ فعلی را دوباره بارگذاری کنید.');
+    }
     const studentName = student ? student.displayName : 'این شاگرد';
     const ok = await confirmModal({
-      title: 'حذف کل برنامه تمرینی',
-      message: `برنامهٔ ${studentName} به طور کامل حذف شود؟ این کار قابل بازگشت نیست.`,
-      confirmText: 'حذف کامل برنامه',
+      title: 'برداشتن برنامهٔ فعال',
+      message: `برنامهٔ فعال ${studentName} برداشته شود؟ برنامه‌های خریداری‌شده در بایگانی شاگرد حفظ می‌شوند.`,
+      confirmText: 'برداشتن برنامه',
       cancelText: 'انصراف',
       variant: 'danger',
     });
@@ -228,12 +259,14 @@ function Builder() {
     setSaving(true);
     setSaveError(null);
     try {
-      await api('DELETE', `/students/${id}/program`, {});
+      await api('DELETE', `/students/${id}/program`, { expectedId: currentProgram.id, expectedVersion: currentProgram.version });
+      setCurrentProgram(null);
+      setSaveMode('new');
       setTitle('');
       setPriceTomans(0);
       setDays([]);
       setActiveDay(0);
-      setMessage('برنامهٔ شاگرد با موفقیت حذف شد.');
+      setMessage('برنامهٔ فعال برداشته شد؛ برنامه‌های خریداری‌شده در بایگانی شاگرد باقی می‌مانند.');
     } catch (caught) {
       setSaveError(caught instanceof ApiError ? caught.message : 'برنامه حذف نشد. دوباره تلاش کنید.');
     } finally {
@@ -460,15 +493,28 @@ function Builder() {
         )}
       </section>
 
+      {currentProgram && (
+        <fieldset className="builder-save-mode">
+          <legend>نوع ذخیره</legend>
+          <label>
+            <input type="radio" name="programme-save-mode" checked={saveMode === 'edit'} onChange={() => setSaveMode('edit')} />
+            <span><strong>ویرایش برنامهٔ فعلی</strong><small>خریدار قبلی دوباره هزینه نمی‌دهد.</small></span>
+          </label>
+          <label>
+            <input type="radio" name="programme-save-mode" checked={saveMode === 'new'} onChange={() => setSaveMode('new')} />
+            <span><strong>ثبت برنامهٔ جدید</strong><small>برنامهٔ جدید با قیمت خودش جداگانه فروخته می‌شود.</small></span>
+          </label>
+        </fieldset>
+      )}
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
       {message && <p className="form-success" role="status">{message}</p>}
       <div className="builder-save" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <button type="button" className="button button--primary" onClick={() => void save()} disabled={saving}>
           <Save size={16} /> {saving ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}
         </button>
-        {(days.length > 0 || title) && (
+        {currentProgram && (
           <button type="button" className="button button--ghost button--danger-text" onClick={() => void deleteProgram()} disabled={saving}>
-            <Trash2 size={16} /> حذف کامل برنامهٔ شاگرد
+            <Trash2 size={16} /> برداشتن برنامهٔ فعال
           </button>
         )}
       </div>

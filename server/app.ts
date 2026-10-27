@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
-import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
+import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
-import { deleteProgramme, loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
@@ -96,13 +96,13 @@ export function createApp(options: AppOptions) {
   const now = options.now ?? (() => new Date());
   const maxFailed = options.maxFailedLogins ?? 5;
   const lockMs = (options.lockMinutes ?? 15) * 60 * 1000;
-  const failures = new Map<string, { count: number; lockedUntil: number }>();
+  const failures = new Map<string, { count: number; lockedUntil: number; lastFailure: number }>();
   const allowedOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
 
   function cleanExpiredFailures(): void {
     const current = now().getTime();
     for (const [userKey, data] of failures.entries()) {
-      if (data.lockedUntil > 0 && data.lockedUntil <= current) {
+      if (data.lockedUntil > 0 ? data.lockedUntil <= current : data.lastFailure + lockMs <= current) {
         failures.delete(userKey);
       }
     }
@@ -122,10 +122,12 @@ export function createApp(options: AppOptions) {
 
   function recordFailure(username: string): void {
     cleanExpiredFailures();
-    const entry = failures.get(username) ?? { count: 0, lockedUntil: 0 };
+    const timestamp = now().getTime();
+    const entry = failures.get(username) ?? { count: 0, lockedUntil: 0, lastFailure: timestamp };
     entry.count += 1;
+    entry.lastFailure = timestamp;
     if (entry.count >= maxFailed) {
-      entry.lockedUntil = now().getTime() + lockMs;
+      entry.lockedUntil = timestamp + lockMs;
       entry.count = 0;
     }
     failures.set(username, entry);
@@ -188,8 +190,9 @@ export function createApp(options: AppOptions) {
         if (!user.isActive) {
           throw new HttpError(403, 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
         }
+        const token = await createSession(db, user.id, user.authVersion, now());
+        if (!token) throw new HttpError(401, 'وضعیت حساب تغییر کرده است؛ دوباره وارد شوید.');
         failures.delete(username);
-        const token = await createSession(db, user.id, now());
         return { status: 200, body: { token, user: toPublic(user) }, headers: { 'Set-Cookie': sessionCookie(token) } };
       },
     },
@@ -215,13 +218,15 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/me\/password$/,
       auth: 'signed-in',
-      handler: async ({ user, body }) => {
+      handler: async ({ user, token, body }) => {
         const input = requireObject(body);
         const current = requireText(input, 'currentPassword', 1, PASSWORD_MAX, 'رمز فعلی');
         const next = requireText(input, 'newPassword', PASSWORD_MIN, PASSWORD_MAX, 'رمز جدید');
         if (!verifyPassword(current, user!.passwordHash)) throw new HttpError(400, 'رمز فعلی درست نیست.');
         if (next === current) throw new HttpError(400, 'رمز جدید باید با رمز فعلی فرق داشته باشد.');
-        await updatePassword(db, user!.id, hashPassword(next), false, null);
+        if (!token || !(await changeOwnPassword(db, user!.id, user!.passwordHash, user!.authVersion, token, hashPassword(next), now()))) {
+          throw new HttpError(409, 'وضعیت حساب تغییر کرده است؛ دوباره وارد شوید و تلاش کنید.');
+        }
         return { status: 200, body: { ok: true } };
       },
     },
@@ -315,7 +320,6 @@ export function createApp(options: AppOptions) {
         if (students > 0) {
           throw new HttpError(409, `این مربی هنوز ${students} شاگرد دارد. ابتدا شاگردهایش را حذف کنید.`);
         }
-        await deleteSessionsForUser(db, coach.id);
         await deleteUser(db, coach.id);
         return { status: 200, body: { ok: true } };
       },
@@ -328,8 +332,9 @@ export function createApp(options: AppOptions) {
       handler: async ({ params }) => {
         const coach = await ownCoach(Number(params[0]));
         const password = generatePassword();
-        await updatePassword(db, coach.id, hashPassword(password), true, encryptSecret(secretKey, password));
-        await deleteSessionsForUser(db, coach.id);
+        if (!(await resetUserPassword(db, coach.id, hashPassword(password), encryptSecret(secretKey, password)))) {
+          throw new HttpError(404, 'مربی پیدا نشد.');
+        }
         return { status: 200, body: { username: coach.username, password } };
       },
     },
@@ -407,7 +412,10 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
-        return { status: 200, body: { program: await saveProgramme(db, student.id, user!.id, programme, now()) } };
+        const options = validateProgrammeSave(body);
+        // The programme belongs to the student's coach even when an admin edits it.
+        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
+        return { status: 200, body: { program: await saveProgramme(db, student.id, student.coachId, programme, options, now()) } };
       },
     },
 
@@ -415,9 +423,10 @@ export function createApp(options: AppOptions) {
       method: 'DELETE',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
-      handler: async ({ user, params }) => {
+      handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        await deleteProgramme(db, student.id);
+        const options = validateProgrammeSave(body);
+        await deleteProgramme(db, student.id, options.expectedId, options.expectedVersion);
         return { status: 200, body: { ok: true } };
       },
     },
@@ -569,6 +578,21 @@ export function createApp(options: AppOptions) {
 
     {
       method: 'GET',
+      pattern: /^\/api\/me\/programs\/archive$/,
+      auth: ['student'],
+      handler: async ({ user, url }) => {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor !== null && (!cursor || cursor.length > 80)) throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
+        return {
+          status: 200,
+          body: await listPurchasedProgrammes(db, user!.id, cursor),
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/me\/program$/,
       auth: ['student'],
       handler: async ({ user }) => {
@@ -577,12 +601,14 @@ export function createApp(options: AppOptions) {
         if (!prog) {
           return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
         }
-        const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id));
+        const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id, prog.id));
         if (!isPaid) {
           return {
             status: 200,
             body: {
               program: {
+                id: prog.id,
+                version: prog.version,
                 title: prog.title,
                 days: [],
                 priceTomans: prog.priceTomans,
@@ -653,7 +679,12 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/pay\/start$/,
       auth: ['student'],
-      handler: async ({ user, request, url }) => {
+      handler: async ({ user, request, url, body }) => {
+        const input = requireObject(body);
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
         const configuredOrigin = process.env.PAYMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, '');
         if (process.env.NODE_ENV === 'production') {
           try {
@@ -666,7 +697,7 @@ export function createApp(options: AppOptions) {
         const proto = request.headers['x-forwarded-proto'] || 'http';
         const host = request.headers['x-forwarded-host'] || request.headers.host || url.host;
         const origin = configuredOrigin || request.headers.origin || `${proto}://${host}`;
-        const result = await createPaymentRequest(db, user!.id, origin, now());
+        const result = await createPaymentRequest(db, user!.id, origin, { id: expectedId, version: input.expectedVersion as number }, now());
         return { status: 201, body: result };
       },
     },
@@ -818,7 +849,6 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        await deleteSessionsForUser(db, student.id);
         await deleteUser(db, student.id);
         return { status: 200, body: { ok: true } };
       },
@@ -831,8 +861,9 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const password = generatePassword();
-        await updatePassword(db, student.id, hashPassword(password), true, encryptSecret(secretKey, password));
-        await deleteSessionsForUser(db, student.id);
+        if (!(await resetUserPassword(db, student.id, hashPassword(password), encryptSecret(secretKey, password)))) {
+          throw new HttpError(404, 'شاگرد پیدا نشد.');
+        }
         return { status: 200, body: { username: student.username, password } };
       },
     },

@@ -11,6 +11,8 @@ const transactions = Array.from({ length: 8 }, (_, index) => ({
   createdAt: '2026-01-01T00:00:00Z', verifiedAt: '2026-01-01T00:00:00Z',
 }));
 const programme = {
+  id: 'program-1',
+  version: 1,
   title: `برنامهٔ آزمایشی ${long}`,
   priceTomans: 0,
   updatedAt: '2026-01-01T00:00:00Z',
@@ -22,7 +24,7 @@ const programme = {
 
 type RecordValue = { kind: string; key: string; version: number; deleted: boolean; value: unknown; updatedAt: string };
 
-async function mockAccount(page: Page, user: typeof student | typeof coach | typeof admin, paid = true, withHistory = false) {
+async function mockAccount(page: Page, user: typeof student | typeof coach | typeof admin, paid = true, withHistory = false, withArchive = false) {
   const records: RecordValue[] = withHistory ? [{
     kind: 'session', key: 'completed-session', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z',
     value: {
@@ -44,6 +46,7 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
     const path = new URL(request.url()).pathname;
     let json: unknown = {};
     if (path === '/api/me') json = { user };
+    else if (path === '/api/me/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [] };
     else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...programme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, coachName: coach.displayName };
     else if (path === '/api/coach/transactions' || path === '/api/admin/transactions') json = { transactions };
     else if (path === '/api/coach/iban') json = { iban: null };
@@ -114,7 +117,8 @@ for (const width of [320, 360, 681, 768]) {
     await expectNoPageOverflow(page);
     await page.getByRole('button', { name: 'بستن پنجره' }).click();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    // The app uses smooth scrolling; wait for the animation instead of reading its first frame.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await page.goto('/coach/students/5/progress', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.progress-session')).toContainText(long);
     await expectNoPageOverflow(page);
@@ -172,6 +176,28 @@ for (const width of [320, 360]) {
     await expect(page.getByText(/کد پیگیری/)).toHaveCount(8);
     await expectNoPageOverflow(page);
     await expectWithinViewport(page, 'input[aria-label="شماره شبای بانکی"]');
+  });
+}
+
+for (const width of [320, 1280]) {
+  test(`programme sale choices and purchase archive fit at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, coach);
+    await page.goto('/coach/students/5/program', { waitUntil: 'domcontentloaded' });
+    const edit = page.getByRole('radio', { name: /ویرایش برنامهٔ فعلی/ });
+    const create = page.getByRole('radio', { name: /ثبت برنامهٔ جدید/ });
+    await expect(edit).toBeChecked();
+    await create.check();
+    await expect(create).toBeChecked();
+    await expectNoPageOverflow(page);
+
+    await mockAccount(page, student, false, false, true);
+    await page.goto('/program', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: /پرداخت آنلاین و فعال‌سازی/ })).toBeVisible();
+    await page.getByText(/بایگانی برنامه‌های قبلی/).click();
+    await page.getByText(`برنامهٔ قبلی ${long}`).click();
+    await expect(page.locator('.programme-archive__item li')).toHaveCount(5);
+    await expectNoPageOverflow(page);
   });
 }
 
