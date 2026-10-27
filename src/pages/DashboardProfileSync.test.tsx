@@ -76,6 +76,16 @@ describe('dashboard profile sync recovery', () => {
     expect(screen.queryByLabelText('سن')).not.toBeInTheDocument();
   });
 
+  it('keeps the student home focused and routes optional detail to other sections', async () => {
+    mocks.api.mockReset().mockResolvedValue({ stored: { profile: mocks.profile, shareWithCoach: false } });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(await screen.findByText('آزمایش')).toBeInTheDocument();
+    expect(screen.queryByText('بهترین رکورد اخیر')).not.toBeInTheDocument();
+    expect(screen.queryByText('پروفایل تمرینی')).not.toBeInTheDocument();
+    expect(screen.queryByText('تداومت را حفظ کن')).not.toBeInTheDocument();
+  });
+
   it('shows a network error and retries profile upload without another opt-in', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
