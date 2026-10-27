@@ -1404,7 +1404,18 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .picker__head p { margin: 3px 0 0; font-size: 11px; }
 .picker__content { display: grid; gap: 8px; padding-top: 4px; }
 .picker__filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .4fr); align-items: end; gap: 10px; }
-.picker__muscle-filter { gap: 4px; font-size: 11px; }
+.picker__muscle-filter { gap: 7px; font-size: 12px; font-weight: 650; color: var(--text); }
+.picker__muscle-filter select {
+  width: 100%; min-height: 46px; padding: 10px 14px 10px 40px; border: 1px solid var(--line); border-radius: 12px;
+  appearance: none; color: var(--text); background-color: #FFFFFF;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235B2E91' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 14px center; background-size: 16px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 12px rgba(91, 46, 145, .06);
+  transition: border-color .18s, box-shadow .18s, background-color .18s;
+}
+.picker__muscle-filter select:hover { border-color: #A67BD9; background-color: #FAF7FD; }
+.picker__muscle-filter select:focus-visible { border-color: #A67BD9; box-shadow: 0 0 0 3px rgba(166, 123, 217, .16); }
+.picker__muscle-filter select option { color: #241338; background: #FFFFFF; }
 .picker__hint { margin: 0; color: var(--muted); font-size: 11px; }
 .picker__more { justify-self: center; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
