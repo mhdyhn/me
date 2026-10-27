@@ -47,8 +47,10 @@ vi.mock('../lib/motivationalQuotes', () => ({ useMotivationalQuote: () => ({ tit
 import { Dashboard } from './Dashboard';
 
 describe('dashboard profile sync recovery', () => {
+  const completeProfile = { ...mocks.profile };
+
   beforeEach(() => {
-    localStorage.setItem('meety:student-onboarding-skipped:student-sync-test', 'true');
+    Object.assign(mocks.profile, completeProfile);
     mocks.api.mockReset()
       .mockRejectedValueOnce(new Error('network unavailable'))
       .mockResolvedValueOnce({ stored: null })
@@ -59,7 +61,19 @@ describe('dashboard profile sync recovery', () => {
 
   afterEach(() => {
     cleanup();
-    localStorage.removeItem('meety:student-onboarding-skipped:student-sync-test');
+    Object.assign(mocks.profile, completeProfile);
+  });
+
+  it('opens the dashboard directly for a student with an incomplete profile', async () => {
+    Object.assign(mocks.profile, {
+      age: 0, heightCm: 0, weightKg: 0, primaryGoal: '', trainingDays: 0, sessionMinutes: 0,
+    });
+    mocks.api.mockReset().mockResolvedValue({ stored: null });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(await screen.findByText('آزمایش')).toBeInTheDocument();
+    expect(screen.queryByText(/گام ۱ از ۳/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('سن')).not.toBeInTheDocument();
   });
 
   it('shows a network error and retries profile upload without another opt-in', async () => {

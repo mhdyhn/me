@@ -2049,31 +2049,6 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 
 
 /* Student first-run profile setup */
-.student-onboarding-wrap { width: min(100%, 760px); margin: clamp(12px, 5vh, 52px) auto; }
-.student-onboarding { padding: clamp(21px, 4vw, 38px); }
-.student-onboarding__top { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
-.student-onboarding__eyebrow { color: var(--accent); font-size: 11px; font-weight: 750; }
-.student-onboarding__progress { display: flex; gap: 6px; }
-.student-onboarding__progress span { width: 26px; height: 4px; border-radius: 99px; background: var(--surface-raised); }
-.student-onboarding__progress span.is-complete { background: var(--accent); }
-.student-onboarding h1 { margin: 0; font-size: clamp(22px, 4vw, 30px); letter-spacing: -.04em; }
-.student-onboarding > .muted { margin: 8px 0 26px; font-size: 13px; line-height: 1.8; }
-.student-onboarding__form { display: grid; gap: 19px; }
-.student-onboarding__section-title { display: flex; align-items: center; gap: 9px; color: var(--accent); font-size: 13px; }
-.student-onboarding__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
-.student-onboarding__fields .field-control { min-width: 0; }
-.student-onboarding__fields .field-control:has(textarea) { grid-column: 1 / -1; }
-.student-onboarding__fields input, .student-onboarding__fields select, .student-onboarding__fields textarea { width: 100%; }
-.student-onboarding__actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding-top: 3px; }
-.student-onboarding__skip { margin-inline-start: auto; padding: 9px; border: 0; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; }
-.student-onboarding__skip:hover { color: var(--text); }
-.student-onboarding__privacy { margin: 0; color: var(--subtle); font-size: 10px; line-height: 1.7; }
-@media (max-width: 560px) {
-  .student-onboarding-wrap { margin: 0 auto; }
-  .student-onboarding__fields { grid-template-columns: 1fr; }
-  .student-onboarding__fields .field-control:has(textarea) { grid-column: auto; }
-  .student-onboarding__skip { width: 100%; margin-inline-start: 0; }
-}
 .student-onboarding__consent { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: rgba(255,255,255,.018); cursor: pointer; }
 .student-onboarding__consent input { flex: 0 0 auto; width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--accent); }
 .student-onboarding__consent strong, .student-onboarding__consent small { display: block; }
