@@ -35,7 +35,7 @@ export function Settings() {
     if (user?.role !== 'student') { setSharingLoaded(true); return () => { active = false; }; }
     setSharingLoaded(false);
     setSharingLoadError('');
-    api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
+    api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', `/me/profile?accountId=${user.id}`)
       .then(({ stored }) => {
         if (!active) return;
         const shared = stored?.shareWithCoach ?? false;
@@ -63,8 +63,8 @@ export function Settings() {
       // Sharing consent is separate from private sync and must never be guessed while offline.
       if (user?.role === 'student' && sharingLoaded && !sharingLoadError && serverSharing !== null && serverSharing !== shareWithCoach) {
         try {
-          if (shareWithCoach) await api('PUT', '/me/profile', { profile: draft, shareWithCoach: true });
-          else await api('POST', '/me/profile/sharing', { shareWithCoach: false });
+          if (shareWithCoach) await api('PUT', '/me/profile', { accountId: user.id, profile: draft, shareWithCoach: true });
+          else await api('POST', '/me/profile/sharing', { accountId: user.id, shareWithCoach: false });
           setServerSharing(shareWithCoach);
         } catch {
           setError(shareWithCoach

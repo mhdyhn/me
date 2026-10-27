@@ -230,7 +230,11 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/profile$/,
       auth: ['student'],
-      handler: async ({ user }) => ({ status: 200, body: { stored: await loadStudentProfile(db, user!.id) } }),
+      handler: async ({ user, url }) => {
+        const expected = url.searchParams.get('accountId');
+        if (expected !== null && expected !== String(user!.id)) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        return { status: 200, body: { stored: await loadStudentProfile(db, user!.id) } };
+      },
     },
 
     {
@@ -239,6 +243,7 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'انتخاب اشتراک پروفایل با مربی الزامی است.');
         const profile = validateStudentProfile(body);
         const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString());
@@ -252,6 +257,7 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'فیلد shareWithCoach باید بولین باشد.');
         const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString());
         return { status: 200, body: { shareWithCoach: input.shareWithCoach && exists } };
@@ -602,13 +608,17 @@ export function createApp(options: AppOptions) {
     {
       method: 'GET', pattern: /^\/api\/me\/personal-data$/,
       auth: 'signed-in',
-      handler: async ({ user, url }) => ({ status: 200, body: await listPersonalRecords(db, user!.id, url.searchParams.get('cursor')), headers: { 'Cache-Control': 'no-store' } }),
+      handler: async ({ user, url }) => {
+        if (url.searchParams.get('accountId') !== String(user!.id)) throw new HttpError(409, 'حساب همگام‌سازی تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        return { status: 200, body: await listPersonalRecords(db, user!.id, url.searchParams.get('cursor')), headers: { 'Cache-Control': 'no-store' } };
+      },
     },
     {
       method: 'POST', pattern: /^\/api\/me\/personal-data\/batch$/,
       auth: 'signed-in',
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== user!.id) throw new HttpError(409, 'حساب همگام‌سازی تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (!Array.isArray(input.changes) || input.changes.length < 1 || input.changes.length > 25) throw new HttpError(400, 'هر درخواست باید بین ۱ تا ۲۵ تغییر داشته باشد.');
         const changes = input.changes.map(validateChange);
         const identifiers = new Set(changes.map((change) => `${change.kind}:${change.key}`));

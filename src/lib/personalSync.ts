@@ -40,10 +40,11 @@ const metadataMatches = (current: PersonalSyncMetadata | undefined, expected: Pe
   current?.version === expected?.version && current?.signature === expected?.signature;
 const newOperationId = () => globalThis.crypto?.randomUUID?.() ?? `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-const apiTransport: SyncTransport = {
-  list: (cursor) => api('GET', `/me/personal-data${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
-  write: (changes) => api('POST', '/me/personal-data/batch', { changes }),
-};
+// Bind each engine to its original token and account; never let a later tab login retarget it.
+const apiTransport = (accountId: number, sessionToken: string): SyncTransport => ({
+  list: (cursor) => api('GET', `/me/personal-data?accountId=${accountId}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, undefined, undefined, sessionToken),
+  write: (changes) => api('POST', '/me/personal-data/batch', { accountId, changes }, undefined, sessionToken),
+});
 
 /** Per-item versions prevent a stale device from silently replacing a newer edit. */
 export class PersonalSyncEngine {
@@ -123,7 +124,7 @@ export class PersonalSyncEngine {
     let changed = false;
     const fn = async () => {
       if (!this.active() || !metadataMatches(await this.database.syncMetadata.get(recordId(local.kind, local.key)), base)) return;
-      if ((await this.local(local.kind, local.key)).signature !== local.signature) return;
+      if ((await this.local(local.kind, local.key)).signature !== local.signature || !this.active()) return;
       const updated = remoteSnapshot(local.kind, local.key, remote);
       if (healthKey) {
         if (updated.deleted) this.storage.removeItem(healthKey);
@@ -162,6 +163,7 @@ export class PersonalSyncEngine {
   }
 
   private async writeSafely(changes: PersonalChange[]): Promise<{ results: PersonalChangeResult[]; errors: string[] }> {
+    if (!this.active()) throw new Error('نشست تغییر کرده است.');
     try { return { ...(await this.transport.write(changes)), errors: [] }; }
     catch (error) {
       // One corrupt legacy record must not block the rest of a large batch.
@@ -307,9 +309,10 @@ export function schedulePersonalSync(): void {
 }
 
 export function startPersonalSync(user: { id: number }): () => void {
-  if (isOfflineBuild || !scopeMatchesAccount(user) || db.name !== `meety-personal-user-${user.id}`) return () => {};
-  const active = () => getStoredUser()?.id === user.id && Boolean(getToken()) && scopeMatchesAccount(user) && db.name === `meety-personal-user-${user.id}`;
-  currentEngine = new PersonalSyncEngine(db, window.localStorage, apiTransport, active);
+  const sessionToken = getToken();
+  if (isOfflineBuild || !sessionToken || !scopeMatchesAccount(user) || db.name !== `meety-personal-user-${user.id}`) return () => {};
+  const active = () => getStoredUser()?.id === user.id && getToken() === sessionToken && scopeMatchesAccount(user) && db.name === `meety-personal-user-${user.id}`;
+  currentEngine = new PersonalSyncEngine(db, window.localStorage, apiTransport(user.id, sessionToken), active);
   setState({ phase: 'syncing', conflicts: [], message: 'در حال بررسی اطلاعات سرور…', lastSyncAt: null });
   const onFocus = () => schedulePersonalSync();
   window.addEventListener(PERSONAL_DATA_CHANGED, onFocus);

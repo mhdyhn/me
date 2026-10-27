@@ -202,7 +202,7 @@ describe('student programme', () => {
         exercises: [],
       },
     ];
-    const saveRes = await call('POST', '/api/me/personal-data/batch', { changes: [{ kind: 'program', key: 'main', baseVersion: 0, operationId: 'program-test-create', deleted: false, value: myProgram }] }, adminToken);
+    const saveRes = await call('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ kind: 'program', key: 'main', baseVersion: 0, operationId: 'program-test-create', deleted: false, value: myProgram }] }, adminToken);
     expect(saveRes.status).toBe(200);
     expect(saveRes.json.results[0].status).toBe('saved');
     expect((await call('PUT', '/api/me/personal-program', { program: myProgram }, adminToken)).status).toBe(409);
@@ -214,7 +214,7 @@ describe('student programme', () => {
     expect(phoneRead.json.program[0].name).toBe('روز اول اختصاصی مدیر');
 
     // Delete personal program
-    const delRes = await call('POST', '/api/me/personal-data/batch', { changes: [{ kind: 'program', key: 'main', baseVersion: 1, operationId: 'program-test-delete', deleted: true, value: null }] }, adminToken);
+    const delRes = await call('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ kind: 'program', key: 'main', baseVersion: 1, operationId: 'program-test-delete', deleted: true, value: null }] }, adminToken);
     expect(delRes.status).toBe(200);
     expect(delRes.json.results[0].status).toBe('saved');
     const afterDel = await call('GET', '/api/me/personal-program', undefined, adminToken);

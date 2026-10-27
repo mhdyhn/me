@@ -153,7 +153,7 @@ describe('workout summaries', () => {
     await call('PUT', '/api/me/sessions', { sessions: [legacy, session('legacy-only')] }, studentToken);
     const full = { ...legacy, templateId: 'day-1', currentExerciseIndex: 0, currentSetIndex: 0, name: 'نسخهٔ تازه', notes: '', exercises: [] };
     const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'session', key: 'versioned-one', baseVersion: version, deleted, value, operationId });
-    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { changes: [item] }, studentToken);
+    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: studentId, changes: [item] }, studentToken);
     expect((await write(change(0, false, full, 'session-write-01'))).json.results[0].status).toBe('saved');
     await call('PUT', '/api/me/sessions', { sessions: [legacy] }, studentToken);
     const first = (await call('GET', `/api/students/${studentId}/sessions`, undefined, coachToken)).json.sessions;

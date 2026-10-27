@@ -35,43 +35,49 @@ describe('personal data sync', () => {
     const firstDevice = await login('owner', 'owner-pass-123');
     const secondDevice = await login('owner', 'owner-pass-123');
     const other = await login('other', 'other-pass-123');
-    expect((await request('GET', '/api/me/personal-data')).status).toBe(401);
-    const saved = await request('POST', '/api/me/personal-data/batch', { changes: [change(0, 80, 'op-initial-1')] }, firstDevice);
+    expect((await request('GET', '/api/me/personal-data?accountId=1')).status).toBe(401);
+    const saved = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(0, 80, 'op-initial-1')] }, firstDevice);
     expect(saved.json.results[0]).toMatchObject({ status: 'saved', current: { version: 1, value: { weightKg: 80 } } });
-    const read = await request('GET', '/api/me/personal-data', undefined, secondDevice);
+    const read = await request('GET', '/api/me/personal-data?accountId=1', undefined, secondDevice);
     expect(read.headers.get('cache-control')).toBe('no-store');
     expect(read.json.records).toMatchObject([{ version: 1, value: { weightKg: 80 } }]);
-    expect((await request('GET', '/api/me/personal-data', undefined, other)).json.records).toEqual([]);
+    expect((await request('GET', '/api/me/personal-data?accountId=2', undefined, other)).json.records).toEqual([]);
+    // A switched token must never retarget the former account's background sync.
+    expect((await request('GET', '/api/me/personal-data?accountId=1', undefined, other)).status).toBe(409);
+    expect((await request('GET', '/api/me/personal-data', undefined, other)).status).toBe(409);
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(0, 99, 'wrong-account-op')] }, other)).status).toBe(409);
+    expect((await request('POST', '/api/me/personal-data/batch', { changes: [change(0, 99, 'missing-account-op')] }, other)).status).toBe(409);
+    expect((await request('GET', '/api/me/personal-data?accountId=2', undefined, other)).json.records).toEqual([]);
 
     const concurrent = await Promise.all([
-      request('POST', '/api/me/personal-data/batch', { changes: [change(1, 81, 'op-device-one')] }, firstDevice),
-      request('POST', '/api/me/personal-data/batch', { changes: [change(1, 82, 'op-device-two')] }, secondDevice),
+      request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(1, 81, 'op-device-one')] }, firstDevice),
+      request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(1, 82, 'op-device-two')] }, secondDevice),
     ]);
     expect(concurrent.map((r) => r.json.results[0].status).sort()).toEqual(['conflict', 'saved']);
     const winner = concurrent.find((r) => r.json.results[0].status === 'saved')!.json.results[0];
     expect(winner.current.version).toBe(2);
     const retryOp = winner.current.value.weightKg === 81 ? 'op-device-one' : 'op-device-two';
-    const retry = await request('POST', '/api/me/personal-data/batch', { changes: [change(1, winner.current.value.weightKg, retryOp)] }, firstDevice);
+    const retry = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(1, winner.current.value.weightKg, retryOp)] }, firstDevice);
     expect(retry.json.results[0]).toMatchObject({ status: 'saved', current: { version: 2 } });
-    const deleted = await request('POST', '/api/me/personal-data/batch', { changes: [{ ...change(2, 80, 'op-delete-one'), deleted: true, value: null }] }, firstDevice);
+    const deleted = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...change(2, 80, 'op-delete-one'), deleted: true, value: null }] }, firstDevice);
     expect(deleted.json.results[0]).toMatchObject({ status: 'saved', current: { version: 3, deleted: true, value: null } });
-    const stale = await request('POST', '/api/me/personal-data/batch', { changes: [change(2, 79, 'op-stale-write')] }, secondDevice);
+    const stale = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(2, 79, 'op-stale-write')] }, secondDevice);
     expect(stale.json.results[0]).toMatchObject({ status: 'conflict', current: { version: 3, deleted: true } });
   });
 
   it('rejects malformed input and supports paginated histories', async () => {
     const token = await login('owner', 'owner-pass-123');
-    expect((await request('POST', '/api/me/personal-data/batch', { changes: [change(0, 9999, 'bad-weight-1')] }, token)).status).toBe(400);
-    expect((await request('POST', '/api/me/personal-data/batch', { changes: [{ ...change(0, 80, 'bad-kind-123'), kind: 'unknown' }] }, token)).status).toBe(400);
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [change(0, 9999, 'bad-weight-1')] }, token)).status).toBe(400);
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...change(0, 80, 'bad-kind-123'), kind: 'unknown' }] }, token)).status).toBe(400);
     await db.query(`INSERT INTO personal_data_records (user_id, kind, item_key, version, body, deleted, updated_at, last_operation_id)
       SELECT 1, 'bodyweight', 'item-' || n, 1, '{"id":"unused","date":"2026-10-27","weightKg":80}', 0, $1, 'seed-operation' FROM generate_series(1, 105) AS n`, [now.toISOString()]);
-    const page1 = await request('GET', '/api/me/personal-data', undefined, token);
+    const page1 = await request('GET', '/api/me/personal-data?accountId=1', undefined, token);
     expect(page1.json.records).toHaveLength(100);
     expect(page1.json.nextCursor).toBeTruthy();
-    const page2 = await request('GET', `/api/me/personal-data?cursor=${encodeURIComponent(page1.json.nextCursor)}`, undefined, token);
+    const page2 = await request('GET', `/api/me/personal-data?accountId=1&cursor=${encodeURIComponent(page1.json.nextCursor)}`, undefined, token);
     expect(page2.json.records).toHaveLength(5);
     expect(page2.json.nextCursor).toBeNull();
-    expect((await request('GET', '/api/me/personal-data?cursor=bad', undefined, token)).status).toBe(400);
+    expect((await request('GET', '/api/me/personal-data?accountId=1&cursor=bad', undefined, token)).status).toBe(400);
   });
 
   it('imports legacy server programs without overwriting a newer synced copy', async () => {

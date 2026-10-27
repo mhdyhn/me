@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MeetyDatabase } from './db';
+import { ApiError } from './api';
 import { PersonalSyncEngine, type SyncTransport } from './personalSync';
 import type { PersonalChange, PersonalChangeResult, PersonalRecord } from '../../shared/personalData';
 
@@ -104,6 +105,35 @@ describe('personal sync engine', () => {
     expect((await a.preferences.get('profile'))?.value).toEqual(profile(31));
     await one.synchronize(); await two.synchronize();
     expect((await b.preferences.get('profile'))?.value).toEqual(profile(31));
+  });
+
+  it('stops before writing if the account changes during asynchronous validation', async () => {
+    let active = true;
+    let reads = 0;
+    class SwitchingStorage extends MemoryStorage {
+      override getItem(key: string) {
+        if (key.endsWith('meety_ai_joint_status_v1') && ++reads === 2) active = false;
+        return super.getItem(key);
+      }
+    }
+    const storage = new SwitchingStorage();
+    storage.setItem(`${a.name}:meety_ai_joint_status_v1`, '["knees"]');
+    const engine = new PersonalSyncEngine(a, storage, server, () => active);
+    await expect(engine.synchronize()).rejects.toThrow('نشست تغییر کرده است');
+    expect(server.batches).toEqual([]);
+    expect(server.records.size).toBe(0);
+  });
+
+  it('does not retry a rejected batch after the account changes', async () => {
+    await a.bodyweights.bulkPut([weight('w1', 80), weight('w2', 81)]);
+    let active = true;
+    let calls = 0;
+    const transport: SyncTransport = {
+      list: server.list.bind(server),
+      write: async () => { calls++; active = false; throw new ApiError(400, 'invalid batch'); },
+    };
+    await expect(new PersonalSyncEngine(a, storageA, transport, () => active).synchronize()).rejects.toThrow('نشست تغییر کرده است');
+    expect(calls).toBe(1);
   });
 
   it('batches a large history without dropping older records', async () => {

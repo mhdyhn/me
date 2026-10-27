@@ -105,7 +105,7 @@ describe('settings profile sharing status', () => {
     fireEvent.click(checkbox);
     fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
     expect(await screen.findByText(/مربی ممکن است همچنان دسترسی داشته باشد/)).toBeInTheDocument();
-    expect(mocks.api).toHaveBeenLastCalledWith('POST', '/me/profile/sharing', { shareWithCoach: false });
+    expect(mocks.api).toHaveBeenLastCalledWith('POST', '/me/profile/sharing', { accountId: 12, shareWithCoach: false });
   });
 
 });

@@ -71,7 +71,7 @@ describe('student profile sharing', () => {
     await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
     const versioned = { ...profile, age: 31 };
     const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'profile', key: 'main', baseVersion: version, deleted, value, operationId });
-    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { changes: [item] }, student.token);
+    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [item] }, student.token);
     expect((await write(change(0, false, versioned, 'profile-write-01'))).json.results[0].status).toBe('saved');
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(31);
     await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
@@ -83,6 +83,16 @@ describe('student profile sharing', () => {
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
     expect((await call('POST', '/api/me/profile/sharing', { shareWithCoach: true }, student.token)).json.shareWithCoach).toBe(true);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(32);
+  });
+
+  it('refuses profile or sharing requests made with another account after a tab switch', async () => {
+    const owner = await coachSession();
+    const first = await createStudentAccount(owner.token);
+    const second = await createStudentAccount(owner.token);
+    expect((await call('GET', `/api/me/profile?accountId=${first.id}`, undefined, second.token)).status).toBe(409);
+    expect((await call('PUT', '/api/me/profile', { accountId: first.id, profile, shareWithCoach: true }, second.token)).status).toBe(409);
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: first.id, shareWithCoach: true }, second.token)).status).toBe(409);
+    expect((await call('GET', '/api/me/profile', undefined, second.token)).json.stored).toBeNull();
   });
 
   it('syncs only with explicit consent and limits the profile to the owning coach', async () => {
