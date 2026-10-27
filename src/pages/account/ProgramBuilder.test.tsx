@@ -78,6 +78,26 @@ describe('coach programme builder', () => {
     expect(sent.filter((call) => call.method === 'GET' && call.path === '/api/students/3/program')).toHaveLength(2);
   });
 
+  it('keeps pricing compact while retaining the editable price and payment split', async () => {
+    mockApi({
+      title: 'برنامهٔ پولی',
+      priceTomans: 250000,
+      updatedAt: 'x',
+      days: [],
+    });
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await screen.findByLabelText('عنوان برنامه');
+    const pricing = screen.getByText('تنظیمات قیمت').closest('details');
+    expect(pricing).not.toHaveAttribute('open');
+    await user.click(screen.getByText('تنظیمات قیمت'));
+    expect(pricing).toHaveAttribute('open');
+    expect(screen.getByLabelText('هزینهٔ برنامه (تومان)')).toHaveValue(250000);
+    expect(screen.getByText('سهم مربی · ۹۰٪')).toBeInTheDocument();
+    expect(screen.getByText('سهم مدیر · ۱۰٪')).toBeInTheDocument();
+  });
+
   it('keeps the movement picker closed until asked and shows a short result list', async () => {
     mockApi();
     renderBuilder();
