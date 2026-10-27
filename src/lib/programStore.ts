@@ -22,6 +22,19 @@ let activeProgram: WorkoutTemplate[] = usesOwnerData() ? ownerDefaultProgram : [
 let readOnly = false;
 let assignedMeta: AssignedMeta | null = null;
 const listeners = new Set<() => void>();
+export type AssignedProgramLoadState = 'idle' | 'loading' | 'ready' | 'error';
+let assignedProgramLoadState: AssignedProgramLoadState = 'idle';
+
+export const getAssignedProgramLoadState = (): AssignedProgramLoadState => assignedProgramLoadState;
+
+export function setAssignedProgramLoadState(state: AssignedProgramLoadState) {
+  if (assignedProgramLoadState === state) return;
+  assignedProgramLoadState = state;
+  listeners.forEach((listener) => listener());
+}
+
+export const useAssignedProgramLoadState = (): AssignedProgramLoadState =>
+  useSyncExternalStore(subscribe, getAssignedProgramLoadState, getAssignedProgramLoadState);
 
 /** A fresh, editable copy of the original RAGE programme. */
 export const originalProgramCopy = (): WorkoutTemplate[] => structuredClone(originalProgram);

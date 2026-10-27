@@ -1,121 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 const mocks = vi.hoisted(() => ({
-  api: vi.fn(),
-  saveProfile: vi.fn(),
-  getMyAiSettings: vi.fn(),
-  profile: {
-    age: 30,
-    sex: '',
-    heightCm: 180,
-    weightKg: 80,
-    primaryGoal: 'افزایش قدرت',
-    secondaryGoal: '',
-    trainingExperience: '',
-    trainingDays: 4,
-    sessionMinutes: 60,
-    equipment: '',
-    dailyActivity: '',
-    sleepHours: '',
-    stressLevel: 0,
-    injuries: '',
-    workingWeightReferences: [],
-  },
+  loadAssignedProgram: vi.fn(),
+  programLoadState: 'loading' as 'idle' | 'loading' | 'ready' | 'error',
 }));
 
-vi.mock('../lib/api', () => ({
-  api: mocks.api,
-  ApiError: class ApiError extends Error {},
-}));
 vi.mock('../context/GymProvider', () => ({
-  useGym: () => ({
-    sessions: [], bodyweights: [], profile: mocks.profile, loading: false,
-    saveProfile: mocks.saveProfile, activeSession: null,
-    completeActiveSession: vi.fn(), deleteSession: vi.fn(),
-  }),
+  useGym: () => ({ sessions: [], loading: false, activeSession: null }),
 }));
 vi.mock('../context/SessionContext', () => ({
-  useSession: () => ({ user: { id: 'student-sync-test', role: 'student' } }),
+  useSession: () => ({ user: { id: 27, role: 'student' } }),
 }));
-vi.mock('../lib/programStore', () => ({ useProgram: () => [], getWorkoutTemplate: () => undefined, getPrimaryWorkoutTemplates: () => [] }));
-vi.mock('../lib/studentAiBiometrics', () => ({ ALL_AI_MODULES: [], getMyAiSettings: mocks.getMyAiSettings }));
+vi.mock('../lib/programStore', () => ({
+  useProgram: () => [],
+  useAssignedProgramLoadState: () => mocks.programLoadState,
+  getWorkoutTemplate: () => undefined,
+  getPrimaryWorkoutTemplates: () => [],
+}));
+vi.mock('../lib/assignedProgram', () => ({ loadAssignedProgram: mocks.loadAssignedProgram }));
 vi.mock('../lib/motivationalQuotes', () => ({ useMotivationalQuote: () => ({ title: 'آزمایش', subtitle: 'متن آزمایشی' }) }));
 
 import { Dashboard } from './Dashboard';
 
-describe('dashboard profile sync recovery', () => {
-  const completeProfile = { ...mocks.profile };
-
+describe('student dashboard program loading', () => {
   beforeEach(() => {
-    Object.assign(mocks.profile, completeProfile);
-    mocks.api.mockReset()
-      .mockRejectedValueOnce(new Error('network unavailable'))
-      .mockResolvedValueOnce({ stored: null })
-      .mockResolvedValueOnce({});
-    mocks.saveProfile.mockReset().mockResolvedValue(undefined);
-    mocks.getMyAiSettings.mockReset().mockResolvedValue(null);
+    mocks.programLoadState = 'loading';
+    mocks.loadAssignedProgram.mockReset().mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
-    cleanup();
-    Object.assign(mocks.profile, completeProfile);
-  });
+  afterEach(cleanup);
 
-  it('opens the dashboard directly for a student with an incomplete profile', async () => {
-    Object.assign(mocks.profile, {
-      age: 0, heightCm: 0, weightKg: 0, primaryGoal: '', trainingDays: 0, sessionMinutes: 0,
-    });
-    mocks.api.mockReset().mockResolvedValue({ stored: null });
+  it('shows a loading state instead of prematurely saying the coach has not assigned a programme', () => {
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
-    expect(await screen.findByText('آزمایش')).toBeInTheDocument();
-    expect(screen.queryByText(/گام ۱ از ۳/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('سن')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('در حال دریافت برنامه از مربی');
+    expect(screen.queryByText('برنامهٔ تمرینی‌ات هنوز آماده نیست')).not.toBeInTheDocument();
+    expect(screen.queryByText(/همگام‌سازی پروفایل/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/پروفایل با حساب همگام است/)).not.toBeInTheDocument();
   });
 
-  it('keeps the student home visible while profile synchronization is still pending', () => {
-    mocks.api.mockReset().mockImplementation(() => new Promise(() => {}));
-    render(<MemoryRouter><Dashboard /></MemoryRouter>);
-
-    expect(screen.getByText('برنامهٔ تمرینی‌ات هنوز آماده نیست')).toBeInTheDocument();
-    expect(screen.getByText('آزمایش')).toBeInTheDocument();
-  });
-
-  it('keeps the student home focused and routes optional detail to other sections', async () => {
-    mocks.api.mockReset().mockResolvedValue({ stored: { profile: mocks.profile, shareWithCoach: false } });
-    render(<MemoryRouter><Dashboard /></MemoryRouter>);
-
-    expect(await screen.findByText('آزمایش')).toBeInTheDocument();
-    expect(screen.queryByText('بهترین رکورد اخیر')).not.toBeInTheDocument();
-    expect(screen.queryByText('پروفایل تمرینی')).not.toBeInTheDocument();
-    expect(screen.queryByText('تداومت را حفظ کن')).not.toBeInTheDocument();
-  });
-
-  it('shows a network error and retries profile upload without another opt-in', async () => {
+  it('offers a retry when the programme request fails', async () => {
+    mocks.programLoadState = 'error';
     const user = userEvent.setup();
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('همگام‌سازی پروفایل انجام نشد');
+    expect(screen.getByRole('alert')).toHaveTextContent('دریافت برنامه انجام نشد');
     await user.click(screen.getByRole('button', { name: 'تلاش دوباره' }));
-
-    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('PUT', '/me/profile', {
-      profile: mocks.profile,
-      shareWithCoach: true,
-    }));
-    expect(await screen.findByText(/پروفایل با حساب همگام است/)).toBeInTheDocument();
+    expect(mocks.loadAssignedProgram).toHaveBeenCalledOnce();
   });
 
-  it('does not turn profile sharing back on after the student disabled it', async () => {
-    mocks.api.mockReset().mockResolvedValue({ stored: { profile: mocks.profile, shareWithCoach: false } });
+  it('shows the no-program prompt only after the server confirms there is no assigned programme', () => {
+    mocks.programLoadState = 'ready';
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
-    expect(await screen.findByText('آزمایش')).toBeInTheDocument();
-    expect(mocks.api).toHaveBeenCalledTimes(1);
-    expect(mocks.api).toHaveBeenCalledWith('GET', '/me/profile');
-    expect(mocks.api).not.toHaveBeenCalledWith('PUT', '/me/profile', expect.anything());
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('برنامهٔ تمرینی‌ات هنوز آماده نیست')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /گفتگو با مربی/ })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { ApiError, api, type Programme, type ProgramItem } from './api';
 import type { WorkoutExercise, WorkoutTemplate } from '../types';
-import { setAssignedMeta, setAssignedProgram } from './programStore';
+import { setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from './programStore';
 
 /** Reads "8-12" or "8" into a range. Anything else falls back to 8–12. */
 export function parseReps(reps: string): { minReps: number; maxReps: number } {
@@ -48,6 +48,7 @@ export function assignedToTemplates(program: Programme): WorkoutTemplate[] {
 
 /** Loads the programme the coach assigned to the signed-in student. Read-only for the student. */
 export async function loadAssignedProgram(): Promise<void> {
+  setAssignedProgramLoadState('loading');
   try {
     const result = await api<{ program: Programme | null; coachName?: string | null; isPaid?: boolean }>('GET', '/me/program');
     if (result.program) {
@@ -66,8 +67,11 @@ export async function loadAssignedProgram(): Promise<void> {
       setAssignedMeta(null);
       setAssignedProgram([]);
     }
+    setAssignedProgramLoadState('ready');
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return;
-    console.error('Meety could not load the coach programme.', error);
+    setAssignedProgramLoadState('error');
+    if (!(error instanceof ApiError && error.status === 401)) {
+      console.error('Meety could not load the coach programme.', error);
+    }
   }
 }
