@@ -30,7 +30,7 @@ describe('complete application shell', () => {
     expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
     const mobile = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
     expect(mobile).toBeInTheDocument();
-    // A student keeps the whole app; the program and movements tabs show the coach's selection.
+    // The fixed bar is reserved for the student's core tasks; the movement library remains under More.
     expect(within(mobile).getByText('برنامه')).toBeInTheDocument();
     expect(within(mobile).getByText('حرکت‌ها')).toBeInTheDocument();
     expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();

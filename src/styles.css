@@ -117,6 +117,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .welcome-row h2 { margin: 9px 0 5px; font: 750 clamp(27px, 3vw, 38px)/1.12 var(--font-display); letter-spacing: -.065em; }
 .welcome-row > div > p:last-child { margin: 0; font-size: 12px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(235px, .83fr); gap: 17px; }
+.dashboard-grid--focused { align-items: stretch; }
+.dashboard-grid--single { grid-template-columns: minmax(0, 1fr); }
+.dashboard-no-program { grid-column: 1 / -1; display: grid; align-content: center; min-height: 220px; }
+.dashboard-recent-session { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.dashboard-recent-session__copy { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.dashboard-recent-session__copy small { color: var(--muted); font-size: 11px; }
+.dashboard-recent-session__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.next-workout-card--active { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); }
 .next-workout-card { position: relative; min-height: 329px; overflow: hidden; padding: 22px 24px 20px; border: 1px solid rgba(217, 246, 111, .17); border-radius: 18px; background: radial-gradient(circle at 86% 43%, rgba(217, 246, 111, .08), transparent 25%), linear-gradient(125deg, #1c241e, #171d1a 55%, #151a18); }
 .next-workout-card__top, .next-workout-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .day-chip { padding: 6px 9px; border: 1px solid rgba(217, 246, 111, .18); border-radius: 7px; color: var(--accent); background: rgba(217, 246, 111, .07); font-size: 12px; font-weight: 700; letter-spacing: .07em; }
