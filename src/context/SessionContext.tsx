@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, UNAUTHORIZED_EVENT, api, clearStoredUser, clearToken, getStoredUser, getToken, setStoredUser, setToken, type PublicUser } from '../lib/api';
-import { clearAccountScope, ensureAccountScope, isOfflineBuild } from '../lib/accountScope';
+import { ApiError, TOKEN_KEY, USER_KEY, UNAUTHORIZED_EVENT, api, clearStoredUser, clearToken, getStoredUser, getToken, setStoredUser, setToken, type PublicUser } from '../lib/api';
+import { SCOPE_KEY, clearAccountScope, ensureAccountScope, isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
+import { db } from '../lib/db';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { loadStoredProgram } from '../lib/programPersistence';
+import { PERSONAL_DATA_APPLIED } from '../lib/personalSyncEvents';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
 
@@ -85,6 +87,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Only the account identity matters here, not the object's identity.
   }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!user || user.role === 'student') return;
+    const refreshProgram = () => { void loadStoredProgram(); };
+    window.addEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
+    return () => window.removeEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
+  }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Any request that comes back 401 ends the session everywhere.
   useEffect(() => {
     const handle = () => {
@@ -96,6 +105,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.addEventListener(UNAUTHORIZED_EVENT, handle);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handle);
   }, []);
+
+  // Auth and scope are shared between tabs. Never keep another account's screen open after a switch.
+  useEffect(() => {
+    if (isOfflineBuild) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) return;
+      let switched = event.key === TOKEN_KEY && event.newValue === null;
+      if (event.key === SCOPE_KEY && user && event.newValue !== `user-${user.id}`) switched = true;
+      if (event.key === USER_KEY && user) {
+        try { switched = !event.newValue || (JSON.parse(event.newValue) as PublicUser).id !== user.id; }
+        catch { switched = true; }
+      }
+      if (switched) window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [user?.id]);
 
   const signIn = useCallback(async (username: string, password: string) => {
     const result = await api<{ token: string; user: PublicUser }>('POST', '/auth/login', { username, password });
@@ -135,9 +161,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStoredUser(nextUser);
   }, []);
 
+  // The database module opens before sign-in; don't render a new account over the previous database.
+  const accountReady = !user || isOfflineBuild || import.meta.env.MODE === 'test' ||
+    (scopeMatchesAccount(user) && db.name === `meety-personal-user-${user.id}`);
+  const visibleStatus: Status = accountReady ? status : 'loading';
   const value = useMemo(
-    () => ({ status, user, signIn, signOut, refresh, setUser: handleSetUser }),
-    [status, user, signIn, signOut, refresh, handleSetUser],
+    () => ({ status: visibleStatus, user, signIn, signOut, refresh, setUser: handleSetUser }),
+    [visibleStatus, user, signIn, signOut, refresh, handleSetUser],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

@@ -5,6 +5,7 @@ import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
 import { SectionHeading } from '../components/SectionHeading';
+import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
 import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
@@ -12,7 +13,7 @@ import { getBestSet, getExercisePerformances, getSessionTotals, getWeekCompariso
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
 export function Progress() {
-  const { sessions, bodyweights, profile, addBodyweight, deleteBodyweight, deleteSession } = useGym();
+  const { sessions, bodyweights, profile, addBodyweight, deleteBodyweight, deleteSession, loading } = useGym();
   const program = useProgram();
   const progressExercises = useMemo(() => {
     const byId = new Map(exercises.map((exercise) => [exercise.id, { id: exercise.id, name: exercise.name }]));
@@ -47,6 +48,10 @@ export function Progress() {
   const [weightDate, setWeightDate] = useState(dateInputValue());
   const [weightNote, setWeightNote] = useState('');
   const [formError, setFormError] = useState('');
+  const [historyError, setHistoryError] = useState('');
+  const [visibleSets, setVisibleSets] = useState(30);
+  const [visibleSessions, setVisibleSessions] = useState(20);
+  const [visibleWeights, setVisibleWeights] = useState(10);
 
   useEffect(() => {
     if (selectedExercise === 'barbell-bench-press' && defaultExerciseId !== 'barbell-bench-press') {
@@ -57,6 +62,7 @@ export function Progress() {
     }
   }, [defaultExerciseId, selectedExercise, sessions]);
   const performances = useMemo(() => getExercisePerformances(sessions, selectedExercise), [sessions, selectedExercise]);
+  const performanceSets = useMemo(() => performances.flatMap((performance) => performance.sets.map((set) => ({ performance, set }))), [performances]);
   const chartPoints = useMemo(() => [...performances].reverse().map((performance) => ({
     label: formatDate(performance.session.startedAt, { month: 'short', day: 'numeric' }),
     value: selectedMetric === 'weight'
@@ -94,11 +100,14 @@ export function Progress() {
     const value = Number(weightInput);
     if (!Number.isFinite(value) || value < 30 || value > 300) { setFormError('وزن بدن را بین ۳۰ تا ۳۰۰ کیلوگرم وارد کن.'); return; }
     if (!weightDate) { setFormError('برای این ثبت، تاریخ را انتخاب کن.'); return; }
-    await addBodyweight({ date: weightDate, weightKg: value, notes: weightNote.trim() || undefined });
-    setWeightInput(''); setWeightNote(''); setFormError('');
+    const stored = await addBodyweight({ date: weightDate, weightKg: value, notes: weightNote.trim() || undefined });
+    if (stored !== false) { setWeightInput(''); setWeightNote(''); }
+    setFormError(stored === false ? 'وزن در حافظهٔ دستگاه ذخیره نشد و فقط در این زبانه دیده می‌شود.' : '');
   };
 
   const handleDeleteWeight = async (id: string, weightKg: number) => {
+    const expected = bodyweights.find((entry) => entry.id === id);
+    if (!expected) return;
     if (!await confirmModal({
       title: 'حذف ثبت وزن',
       message: `ثبت وزن ${kg(weightKg)} حذف شود؟`,
@@ -106,10 +115,15 @@ export function Progress() {
       cancelText: 'انصراف',
       variant: 'danger',
     })) return;
-    await deleteBodyweight(id);
+    try {
+      const removed = await deleteBodyweight(id, expected);
+      setFormError(removed ? '' : 'حذف ثبت وزن روی دستگاه انجام نشد.');
+    } catch (error) { setFormError(error instanceof Error ? error.message : 'حذف ثبت وزن انجام نشد.'); }
   };
 
   const handleDeleteSession = async (id: string, name: string) => {
+    const expected = sessions.find((session) => session.id === id);
+    if (!expected) return;
     if (!await confirmModal({
       title: 'حذف جلسه تمرین',
       message: `جلسهٔ «${name}» از سوابق تمرین حذف شود؟ این کار قابل بازگشت نیست.`,
@@ -117,8 +131,13 @@ export function Progress() {
       cancelText: 'انصراف',
       variant: 'danger',
     })) return;
-    await deleteSession(id);
+    try {
+      const removed = await deleteSession(id, expected);
+      setHistoryError(removed ? '' : 'حذف جلسه روی دستگاه انجام نشد.');
+    } catch (error) { setHistoryError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); }
   };
+
+  if (loading) return <RouteLoading />;
 
   return (
     <div className="page-stack">
@@ -149,13 +168,14 @@ export function Progress() {
       </div>
 
       <section className="panel-card progression-panel">
-        <div className="progression-panel__header"><div><span className="eyebrow">سوابق حرکت</span><h2>یک حرکت را دنبال کن.</h2></div><div className="progression-panel__controls"><label className="select-with-icon"><span className="sr-only">انتخاب حرکت</span><select value={selectedExercise} onChange={(event) => setSelectedExercise(event.target.value)}>{progressExercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select><ChevronDown size={15} /></label><label className="select-with-icon"><span className="sr-only">انتخاب معیار نمودار</span><select value={selectedMetric} onChange={(event) => setSelectedMetric(event.target.value as 'weight' | 'reps' | 'volume')}><option value="weight">وزنهٔ کاری</option><option value="reps">مجموع تکرارها</option><option value="volume">حجم تمرین</option></select><ChevronDown size={15} /></label></div></div>
+        <div className="progression-panel__header"><div><span className="eyebrow">سوابق حرکت</span><h2>یک حرکت را دنبال کن.</h2></div><div className="progression-panel__controls"><label className="select-with-icon"><span className="sr-only">انتخاب حرکت</span><select value={selectedExercise} onChange={(event) => { setSelectedExercise(event.target.value); setVisibleSets(30); }}>{progressExercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}</select><ChevronDown size={15} /></label><label className="select-with-icon"><span className="sr-only">انتخاب معیار نمودار</span><select value={selectedMetric} onChange={(event) => setSelectedMetric(event.target.value as 'weight' | 'reps' | 'volume')}><option value="weight">وزنهٔ کاری</option><option value="reps">مجموع تکرارها</option><option value="volume">حجم تمرین</option></select><ChevronDown size={15} /></label></div></div>
         <p className="muted">{metricDescription}</p>
         <ProgressChart points={chartPoints} unit={metricUnit} label={`${selectedName} · ${metricName}`} />
         <div className="history-table-wrap">
-          <table className="history-table"><thead><tr><th>تاریخ</th><th>ست کاری</th><th>تکرار در ذخیره (RIR)</th><th>جلسه</th></tr></thead><tbody>{performances.flatMap((performance) => performance.sets.map((set) => ({ performance, set }))).map(({ performance, set }) => <tr key={`${performance.session.id}-${set.setNumber}`}><td>{formatDate(performance.session.startedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong></td><td>{faNumber(set.rir)}</td><td>{getWorkoutTemplate(performance.session.templateId)?.name ?? performance.session.name}</td></tr>)}</tbody></table>
+          <table className="history-table"><thead><tr><th>تاریخ</th><th>ست کاری</th><th>تکرار در ذخیره (RIR)</th><th>جلسه</th></tr></thead><tbody>{performanceSets.slice(0, visibleSets).map(({ performance, set }) => <tr key={`${performance.session.id}-${set.setNumber}`}><td>{formatDate(performance.session.startedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong></td><td>{faNumber(set.rir)}</td><td>{getWorkoutTemplate(performance.session.templateId)?.name ?? performance.session.name}</td></tr>)}</tbody></table>
           {!performances.length && <p className="history-table-empty">هنوز عملکردی برای «{selectedName}» ثبت نشده است. در حالت تمرین یک ست ثبت کن تا اینجا نمایش داده شود.</p>}
         </div>
+        {performanceSets.length > visibleSets && <button type="button" className="button button--secondary button--small history-more" onClick={() => setVisibleSets((count) => count + 30)}>نمایش {faNumber(Math.min(30, performanceSets.length - visibleSets))} ست دیگر</button>}
       </section>
 
       <section className="panel-card weekly-volume-panel">
@@ -185,7 +205,7 @@ export function Progress() {
           <div className="bodyweight-metrics"><div><span>فعلی</span><strong>{kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : 'وزن پایهٔ پروفایل'}</small></div><div><span>آغازین</span><strong>{firstLoggedWeight === null ? '—' : kg(firstLoggedWeight)}</strong><small>{firstLoggedWeight === null ? 'به ۲ ثبت وزن نیاز است' : 'اولین ثبت'}</small></div><div><span>میانگین ۷ روز</span><strong>{weeklyAverage === null ? '—' : kg(weeklyAverage)}</strong><small>{recentWeights.length ? `${faNumber(recentWeights.length)} بار ثبت` : 'ثبت تازه‌ای نیست'}</small></div></div>
           <ProgressChart points={weightPoints} unit=" کیلوگرم" label="وزن بدن" color="var(--blue)" />
           <div className="weight-log-list">
-            {bodyweights.slice(0, 10).map((entry) => (
+            {bodyweights.slice(0, visibleWeights).map((entry) => (
               <div key={entry.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
                 <div>
                   <span style={{ marginInlineEnd: 10 }}>{formatDate(`${entry.date}T00:00:00`, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
@@ -206,6 +226,7 @@ export function Progress() {
             ))}
             {!bodyweights.length && <p className="muted small-text">چند بار در شرایط مشابه وزن‌کشی کن تا روند واقعی‌ات مشخص شود.</p>}
           </div>
+          {bodyweights.length > visibleWeights && <button type="button" className="button button--secondary button--small history-more" onClick={() => setVisibleWeights((count) => count + 10)}>نمایش {faNumber(Math.min(10, bodyweights.length - visibleWeights))} ثبت وزن دیگر</button>}
         </div>
         <div className="panel-card bodyweight-form-card">
           <span className="eyebrow">ثبت وزن</span><h3>وزن بدن را وارد کن</h3><p className="muted">در شرایط مشابه وزن‌کشی کن و روند را در طول زمان بررسی کن.</p>
@@ -227,9 +248,11 @@ export function Progress() {
 
       <section className="panel-card workout-history-panel">
         <div className="section-heading"><div><span className="eyebrow">گزارش جلسه‌ها</span><h2>سوابق تمرین</h2></div><span className="small-count">{faNumber(completedSessions.length)} جلسه</span></div>
+        {historyError && <p role="alert" className="form-error">{historyError}</p>}
         {completedSessions.length ? (
+          <>
           <div className="session-history-list">
-            {completedSessions.map((session) => {
+            {completedSessions.slice(0, visibleSessions).map((session) => {
               const totals = getSessionTotals(session);
               const workoutName = getWorkoutTemplate(session.templateId)?.name ?? session.name;
               return (
@@ -263,6 +286,8 @@ export function Progress() {
               );
             })}
           </div>
+          {completedSessions.length > visibleSessions && <button type="button" className="button button--secondary button--small history-more" onClick={() => setVisibleSessions((count) => count + 20)}>نمایش {faNumber(Math.min(20, completedSessions.length - visibleSessions))} جلسهٔ دیگر</button>}
+          </>
         ) : <EmptyState title="سوابق تو با اولین جلسه شروع می‌شود" detail="تمرین‌های کامل‌شده، تعداد ست‌ها، مدت‌زمان و حجم اینجا جمع می‌شوند." action={<Link to="/program" className="inline-link">دیدن برنامه <ArrowRight size={14} /></Link>} />}
       </section>
     </div>

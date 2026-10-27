@@ -61,7 +61,7 @@ export function Program() {
     setFeedback(null);
     try {
       const days = template.buildWorkoutTemplates();
-      await saveProgram(days);
+      await saveProgram(days, workoutTemplates);
       setShowTemplateModal(false);
       setFeedback({ text: `«${template.title}» با موفقیت فعال شد.`, type: 'success' });
     } catch (err) {
@@ -75,7 +75,7 @@ export function Program() {
     setBusy(true);
     setFeedback(null);
     try {
-      await clearProgram();
+      await clearProgram(workoutTemplates);
       setShowDeleteModal(false);
       setFeedback({ text: 'برنامهٔ تمرینی فعلی با موفقیت حذف شد. یک نسخه پشتیبان حفظ شده است.', type: 'success' });
     } catch (err) {
@@ -89,7 +89,7 @@ export function Program() {
     setBusy(true);
     setFeedback(null);
     try {
-      await resetProgram();
+      await resetProgram(workoutTemplates);
       setShowDeleteModal(false);
       setFeedback({ text: 'برنامهٔ پیش‌فرض RAGE با موفقیت بازگردانی شد.', type: 'success' });
     } catch (err) {
@@ -199,7 +199,7 @@ export function Program() {
 
       {user?.role === 'admin' && (
         <details className="panel-card" style={{ padding: 16 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 700 }}>قوانین اجرا، تغذیه و ریکاوری برنامهٔ شخصی</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 700 }}>راهنمای عمومی اجرا و ریکاوری</summary>
           <ul style={{ margin: '12px 0 0', paddingInlineStart: 24, lineHeight: 1.9 }}>
             {adminProgramGuidelines.map((guideline) => <li key={guideline}>{guideline}</li>)}
           </ul>

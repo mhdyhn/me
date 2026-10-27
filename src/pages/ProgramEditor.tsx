@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { SectionHeading } from '../components/SectionHeading';
+import { DraftConflictNotice } from '../components/DraftConflictNotice';
+import { useGuardedDraft } from '../components/useGuardedDraft';
 import { exercises } from '../data/exercises';
 import { hasExerciseFigure, exerciseFigureSrc } from '../data/exerciseFigures';
 import {
@@ -36,7 +38,7 @@ export function ProgramEditor() {
   const [searchParams] = useSearchParams();
   const isBlankMode = searchParams.get('mode') === 'blank';
 
-  const [draft, setDraft] = useState<WorkoutTemplate[]>(() => {
+  const programDraft = useGuardedDraft(saved, () => {
     if (isBlankMode) {
       return [
         {
@@ -52,6 +54,7 @@ export function ProgramEditor() {
     }
     return structuredClone(saved);
   });
+  const { draft, setDraft, dirty } = programDraft;
 
   const [errors, setErrors] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(() =>
@@ -61,7 +64,6 @@ export function ProgramEditor() {
   );
   const [busy, setBusy] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   useEffect(() => {
     if (isBlankMode) {
@@ -160,6 +162,7 @@ export function ProgramEditor() {
   };
 
   const save = async () => {
+    if (programDraft.conflict) { setErrors(['ابتدا نسخهٔ تازه و پیش‌نویس را بررسی کن.']); return; }
     const finalized = finalizeProgram(draft);
     const problems = validateProgram(finalized);
     if (problems.length) {
@@ -169,7 +172,7 @@ export function ProgramEditor() {
     }
     setBusy(true);
     try {
-      await saveProgram(finalized);
+      await saveProgram(finalized, programDraft.base);
       setDraft(structuredClone(finalized));
       setErrors([]);
       setStatus('برنامه ذخیره شد. از این لحظه همهٔ صفحه‌ها همین برنامه را نشان می‌دهند.');
@@ -181,7 +184,7 @@ export function ProgramEditor() {
   };
 
   const discard = () => {
-    setDraft(structuredClone(saved));
+    programDraft.discard();
     setErrors([]);
     setStatus('تغییرات ذخیره‌نشده کنار گذاشته شد.');
   };
@@ -197,7 +200,7 @@ export function ProgramEditor() {
     if (!ok) return;
     setBusy(true);
     try {
-      await resetProgram();
+      await resetProgram(saved);
       setDraft(originalProgramCopy());
       setErrors([]);
       setStatus('برنامهٔ اصلی RAGE بازگردانی شد.');
@@ -220,11 +223,12 @@ export function ProgramEditor() {
           <button type="button" className="button button--ghost button--small button--danger-text" onClick={deleteAllDays} disabled={busy}><Trash2 size={14} /> حذف کل روزها</button>
         )}
         <button type="button" className="button button--secondary button--small" onClick={discard} disabled={busy || !dirty}><Undo2 size={14} /> کنار گذاشتن تغییرات</button>
-        <button type="button" className="button button--secondary button--small" onClick={() => void restoreOriginal()} disabled={busy}><RotateCcw size={14} /> بازگردانی برنامهٔ RAGE</button>
-        <button type="button" className="button button--primary button--small" onClick={() => void save()} disabled={busy || !dirty}><Save size={14} /> {busy ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}</button>
+        <button type="button" className="button button--secondary button--small" onClick={() => void restoreOriginal()} disabled={busy || programDraft.conflict}><RotateCcw size={14} /> بازگردانی برنامهٔ RAGE</button>
+        <button type="button" className="button button--primary button--small" onClick={() => void save()} disabled={busy || !dirty || programDraft.conflict}><Save size={14} /> {busy ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}</button>
         {dirty && <span className="field-hint">تغییرات ذخیره‌نشده داری.</span>}
       </div>
 
+      {programDraft.conflict && <DraftConflictNotice latest={saved} discard={programDraft.discard} acceptCurrent={programDraft.acceptCurrent} />}
       {errors.length > 0 && (
         <div className="program-editor__errors panel-card" role="alert">
           <strong>برنامه ذخیره نشد:</strong>

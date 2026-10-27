@@ -42,6 +42,21 @@ describe('app origin (Android build) calls the API', () => {
     expect(allowed).toContain('x-meety-session');
   });
 
+  it('rejects an untrusted origin, including preflight and credentialed requests', async () => {
+    const preflight = await fetch(`${base}/api/me`, { method: 'OPTIONS', headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'GET' } });
+    expect(preflight.status).toBe(403);
+    expect(preflight.headers.get('access-control-allow-origin')).toBeNull();
+    const request = await fetch(`${base}/api/me`, { headers: { Origin: 'https://untrusted.example', Cookie: 'meety_session=bad' } });
+    expect(request.status).toBe(403);
+    expect(request.headers.get('access-control-allow-credentials')).toBeNull();
+  });
+
+  it('accepts the application same-origin request', async () => {
+    const response = await fetch(`${base}/api/health`, { headers: { Origin: base } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe(base);
+  });
+
   it('keeps a session working when only the custom header is sent', async () => {
     const login = await fetch(`${base}/api/auth/login`, {
       method: 'POST',

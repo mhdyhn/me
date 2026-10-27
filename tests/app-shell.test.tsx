@@ -1,5 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { App } from '../src/App';
 import { db } from '../src/lib/db';
 
@@ -32,7 +33,10 @@ describe('complete application shell', () => {
     expect(mobile).toBeInTheDocument();
     // The fixed bar is reserved for the student's core tasks; the movement library remains under More.
     expect(within(mobile).getByText('برنامه')).toBeInTheDocument();
-    expect(within(mobile).getByText('حرکت‌ها')).toBeInTheDocument();
+    expect(within(mobile).queryByText('حرکت‌ها')).not.toBeInTheDocument();
+    await userEvent.setup().click(within(mobile).getByRole('button', { name: 'سایر بخش‌ها و امکانات' }));
+    const sheet = within(mobile).getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+    expect(within(sheet).getByText('حرکت‌ها')).toBeInTheDocument();
     expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();
   });
 

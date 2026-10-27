@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Trash2, X } from 'lucide-react';
+import { useModalFocus } from './useModalFocus';
 
 export interface ConfirmOptions {
   title?: string;
@@ -106,23 +107,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isOpen: false, resolve: undefined }));
   }
 
-  // Keyboard accessibility: Escape to cancel, Enter to confirm
-  useEffect(() => {
-    if (!state.isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleClose(false);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        handleClose(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.isOpen, state.resolve]);
+  const dialogRef = useModalFocus(state.isOpen, () => handleClose(false));
 
   const variant = state.variant ?? 'primary';
   const confirmText = state.confirmText ?? (variant === 'danger' ? 'حذف' : 'تأیید');
@@ -143,6 +128,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         >
           <div
             className="modal-content confirm-modal"
+            ref={dialogRef}
             onClick={(e) => e.stopPropagation()}
             tabIndex={-1}
           >
@@ -177,6 +163,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 className="button button--ghost confirm-modal__btn"
+                data-initial-focus
                 onClick={() => handleClose(false)}
               >
                 {cancelText}
@@ -185,7 +172,6 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 type="button"
                 className={`button confirm-modal__btn confirm-modal__btn--${variant}`}
                 onClick={() => handleClose(true)}
-                autoFocus
               >
                 {confirmText}
               </button>

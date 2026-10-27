@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
 import { HttpError } from './http.ts';
 
@@ -33,6 +34,7 @@ interface TransactionRow {
   card_pan: string | null;
   created_at: string;
   verified_at: string | null;
+  gateway_mode: 'sandbox' | 'live' | 'legacy';
 }
 
 export async function migratePayments(db: Db): Promise<void> {
@@ -49,13 +51,15 @@ export async function migratePayments(db: Db): Promise<void> {
       ref_id TEXT,
       card_pan TEXT,
       created_at TEXT NOT NULL,
-      verified_at TEXT
+      verified_at TEXT,
+      gateway_mode TEXT NOT NULL DEFAULT 'legacy'
     );
 
     CREATE INDEX IF NOT EXISTS idx_payment_student ON payment_transactions(student_id, status);
     CREATE INDEX IF NOT EXISTS idx_payment_coach ON payment_transactions(coach_id);
     CREATE INDEX IF NOT EXISTS idx_payment_authority ON payment_transactions(authority);
 
+    ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS gateway_mode TEXT NOT NULL DEFAULT 'legacy';
     ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS price_tomans INTEGER DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS iban TEXT;
   `);
@@ -66,7 +70,11 @@ export async function migratePayments(db: Db): Promise<void> {
  * Uses Math.floor on coach share and allocates remainder to admin so sum is always exactly 100%.
  */
 export function calculateCommission(amountTomans: number): { coachShare: number; adminShare: number } {
-  const coachPercent = Number(process.env.COACH_COMMISSION_PERCENT ?? 90);
+  const configuredPercent = process.env.COACH_COMMISSION_PERCENT;
+  const coachPercent = configuredPercent === undefined ? 90 : Number(configuredPercent);
+  if (configuredPercent?.trim() === '' || !Number.isFinite(coachPercent) || coachPercent < 0 || coachPercent > 100) {
+    throw new HttpError(503, 'درصد سهم مربی در سرور نامعتبر است.');
+  }
   const coachShare = Math.floor((amountTomans * coachPercent) / 100);
   const adminShare = amountTomans - coachShare;
   return { coachShare, adminShare };
@@ -84,16 +92,25 @@ export function normalizeIban(raw: string): string {
 /** Checks whether the student has completed payment for their program. */
 export async function isProgramPaid(db: Db, studentId: number): Promise<boolean> {
   const rows = await db.query<{ id: number }>(
-    "SELECT id FROM payment_transactions WHERE student_id = $1 AND status = 'paid' LIMIT 1",
-    [studentId]
+    "SELECT id FROM payment_transactions WHERE student_id = $1 AND status = 'paid' AND ($2 = 0 OR (gateway_mode <> 'sandbox' AND ref_id IS NOT NULL AND TRIM(ref_id) <> '' AND LOWER(TRIM(ref_id)) NOT IN ('undefined', 'null') AND UPPER(TRIM(ref_id)) NOT LIKE 'SANDBOX-%')) LIMIT 1",
+    [studentId, process.env.NODE_ENV === 'production' ? 1 : 0]
   );
   return rows.length > 0;
 }
 
+/** Simulation must never grant access on a production deployment. */
 export function isSandboxMode(): boolean {
-  const merchant = process.env.ZARINPAL_MERCHANT_ID;
-  const sandbox = process.env.ZARINPAL_SANDBOX;
-  return sandbox === 'true' || !merchant || merchant.toLowerCase() === 'sandbox' || process.env.NODE_ENV === 'test';
+  if (process.env.NODE_ENV === 'production') return false;
+  const merchant = process.env.ZARINPAL_MERCHANT_ID?.trim();
+  return process.env.ZARINPAL_SANDBOX === 'true' || !merchant || merchant.toLowerCase() === 'sandbox' || process.env.NODE_ENV === 'test';
+}
+
+function liveMerchantId(): string {
+  const merchant = process.env.ZARINPAL_MERCHANT_ID?.trim();
+  if (!merchant || merchant.toLowerCase() === 'sandbox' || (process.env.NODE_ENV === 'production' && process.env.ZARINPAL_SANDBOX === 'true')) {
+    throw new HttpError(503, 'درگاه پرداخت واقعی پیکربندی نشده است. لطفاً با پشتیبانی تماس بگیرید.');
+  }
+  return merchant;
 }
 
 function toTransaction(row: TransactionRow): PaymentTransaction {
@@ -150,16 +167,16 @@ export async function createPaymentRequest(
 
   const amount = info.price_tomans;
   const { coachShare, adminShare } = calculateCommission(amount);
-  const merchantId = process.env.ZARINPAL_MERCHANT_ID || 'sandbox';
+  const sandbox = isSandboxMode();
+  const merchantId = sandbox ? null : liveMerchantId();
   const callbackUrl = `${origin}/payment/callback`;
 
   let authority = '';
   let paymentUrl = '';
 
-  const sandbox = isSandboxMode();
   if (sandbox) {
-    // Sandbox / Test simulation mode
-    authority = `A000000000000000000000000000${Date.now().toString().slice(-8)}`;
+    // An unmistakable, collision-resistant identifier; never accepted as a live payment.
+    authority = `SANDBOX-${randomUUID()}`;
     paymentUrl = `${origin}/payment/sandbox-pay?Authority=${authority}&Amount=${amount}`;
   } else {
     // Production ZarinPal v4 request
@@ -188,10 +205,11 @@ export async function createPaymentRequest(
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       const data = (await res.json()) as { data?: { code: number; authority: string }; errors?: unknown[] };
-      if (data.data && data.data.code === 100 && data.data.authority) {
+      if (res.ok && data.data && data.data.code === 100 && /^[A-Za-z0-9_-]{5,100}$/.test(data.data.authority ?? '')) {
         authority = data.data.authority;
         paymentUrl = `https://payment.zarinpal.com/pg/StartPay/${authority}`;
       } else {
@@ -200,20 +218,26 @@ export async function createPaymentRequest(
       }
     } catch (err) {
       if (err instanceof HttpError) throw err;
-      console.error('Failed to connect to ZarinPal, using sandbox fallback:', err);
-      authority = `A000000000000000000000000000${Date.now().toString().slice(-8)}`;
-      paymentUrl = `${origin}/payment/sandbox-pay?Authority=${authority}&Amount=${amount}`;
+      console.error('Failed to connect to ZarinPal:', err);
+      throw new HttpError(502, 'اتصال به درگاه پرداخت برقرار نشد. لطفاً دوباره تلاش کنید.');
     }
   }
 
   await db.query(
     `INSERT INTO payment_transactions
-     (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
-    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString()]
+     (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, gateway_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)`,
+    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live']
   );
 
   return { authority, paymentUrl };
+}
+
+function validPaymentReference(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0;
+  if (typeof value !== 'string') return false;
+  const text = value.trim();
+  return text !== '' && !['undefined', 'null'].includes(text.toLowerCase()) && !text.toUpperCase().startsWith('SANDBOX-');
 }
 
 /**
@@ -240,6 +264,15 @@ export async function verifyPayment(
     throw new HttpError(404, 'تراکنش پرداخت یافت نشد.');
   }
 
+  // A database copied from a test environment must not grant a live entitlement.
+  if (process.env.NODE_ENV === 'production' && (row.gateway_mode === 'sandbox' || row.ref_id?.trim().toUpperCase().startsWith('SANDBOX-'))) {
+    throw new HttpError(503, 'تراکنش آزمایشی در محیط واقعی قابل تأیید نیست.');
+  }
+
+  if (process.env.NODE_ENV === 'production' && row.status === 'paid' && !validPaymentReference(row.ref_id)) {
+    throw new HttpError(503, 'تراکنش قدیمی شناسهٔ تأیید معتبر ندارد؛ با پشتیبانی تماس بگیرید.');
+  }
+
   // Idempotency: if already verified successfully, return without re-verifying
   if (row.status === 'paid') {
     return {
@@ -264,13 +297,18 @@ export async function verifyPayment(
   let verifiedRefId = '';
   let verifiedCardPan: string | null = null;
 
-  if (sandbox || authority.startsWith('A000000000000000000000000000')) {
-    // Sandbox / Test verification
-    verifiedRefId = `SANDBOX-${Date.now().toString().slice(-6)}`;
-    verifiedCardPan = '502229******1234';
+  // Old transactions are ambiguous. In production they can only pass real gateway verification.
+  // A transaction explicitly created as sandbox can never unlock a live deployment.
+  if (row.gateway_mode === 'sandbox' && !sandbox) {
+    throw new HttpError(503, 'تراکنش آزمایشی در محیط واقعی قابل تأیید نیست.');
+  }
+  const legacySandbox = row.gateway_mode === 'legacy' && authority.startsWith('A000000000000000000000000000');
+  if (sandbox && (row.gateway_mode === 'sandbox' || legacySandbox)) {
+    verifiedRefId = `SANDBOX-${randomUUID()}`;
+    verifiedCardPan = null;
   } else {
-    // Production ZarinPal v4 verification
-    const merchantId = process.env.ZARINPAL_MERCHANT_ID || 'sandbox';
+    // Even with a familiar-looking authority, live transactions must reach ZarinPal.
+    const merchantId = liveMerchantId();
     try {
       const zarinpalVerifyEndpoint = 'https://payment.zarinpal.com/pg/v4/payment/verify.json';
       const res = await fetch(zarinpalVerifyEndpoint, {
@@ -281,6 +319,7 @@ export async function verifyPayment(
           amount: row.amount_tomans,
           authority,
         }),
+        signal: AbortSignal.timeout(15000),
       });
 
       const body = (await res.json()) as {
@@ -288,7 +327,7 @@ export async function verifyPayment(
         errors?: unknown[];
       };
 
-      if (body.data && (body.data.code === 100 || body.data.code === 101)) {
+      if (res.ok && body.data && (body.data.code === 100 || body.data.code === 101) && validPaymentReference(body.data.ref_id)) {
         verifiedRefId = String(body.data.ref_id);
         verifiedCardPan = body.data.card_pan ?? null;
       } else {

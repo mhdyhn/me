@@ -2,8 +2,8 @@
  * Thin client for the Meety API. Paths are relative (`/api/...`): the browser talks to the
  * same origin, and the dev server or the production host forwards them to the API.
  */
-const TOKEN_KEY = 'meety.session-token';
-const USER_KEY = 'meety.session-user';
+export const TOKEN_KEY = 'meety.session-token';
+export const USER_KEY = 'meety.session-user';
 
 /** Empty on the website (same origin). The Android build sets it to the live server address. */
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');

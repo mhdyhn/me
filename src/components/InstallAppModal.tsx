@@ -1,15 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Download, Smartphone, X, Check, Apple, FileBox, ShieldAlert } from 'lucide-react';
+import { useModalFocus } from './useModalFocus';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+/** Only explicitly configured same-origin paths or HTTPS URLs can advertise an APK. */
+function configuredApkUrl(value: string | undefined): string | null {
+  const url = value?.trim();
+  if (!url || /[\u0000-\u001f\\]/.test(url)) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [activeTab, setActiveTab] = useState<'pwa' | 'apk' | 'ios'>('pwa');
+  const dialogRef = useModalFocus(isOpen, onClose);
+  const apkUrl = configuredApkUrl(import.meta.env.VITE_ANDROID_APK_URL);
 
   useEffect(() => {
     // Check if already installed in standalone mode safely
@@ -47,19 +63,19 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="modal-content install-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="install-modal-title">
+      <div className="modal-content install-modal" ref={dialogRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className="brand-mark" style={{ width: 34, height: 34 }}>
               <Smartphone size={18} />
             </span>
             <div>
-              <h2 style={{ fontSize: 18, margin: 0 }}>نصب مستقیم اپلیکیشن روی گوشی</h2>
+              <h2 id="install-modal-title" style={{ fontSize: 18, margin: 0 }}>نصب مستقیم اپلیکیشن روی گوشی</h2>
               <p className="muted" style={{ fontSize: 12, margin: '2px 0 0' }}>اجرای سریع، تمام‌صفحه و بدون نیاز به ورود به مرورگر</p>
             </div>
           </div>
-          <button type="button" className="button button--ghost" onClick={onClose} aria-label="بستن">
+          <button type="button" className="button button--ghost" data-initial-focus onClick={onClose} aria-label="بستن">
             <X size={18} />
           </button>
         </div>
@@ -108,13 +124,8 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
               </div>
             ) : (
               <div>
-                <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <button type="button" className="button button--primary button--large button--full" onClick={() => void handleInstallClick()} style={{ fontSize: 15, padding: '14px 20px', justifyContent: 'center' }}>
-                    <Smartphone size={19} /> نصب مستقیم اپلیکیشن روی گوشی
-                  </button>
-                </div>
                 <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 10, color: 'var(--muted)' }}>
-                  اگر دکمه بالا منوی نصب را باز نکرد، در مرورگر کروم یا سامسونگ اینترنت گوشی:
+                  نصب خودکار در این مرورگر در دسترس نیست. در کروم یا سامسونگ اینترنت گوشی می‌توانی از منوی مرورگر نصب کنی:
                 </p>
                 <ol style={{ paddingRight: 20, margin: 0, display: 'grid', gap: 8, fontSize: 12, lineHeight: 1.6 }}>
                   <li>روی <strong>منوی ۳ نقطه</strong> مرورگر گوشی ضربه بزنید.</li>
@@ -130,41 +141,37 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         {activeTab === 'apk' && (
           <div className="install-tab-pane">
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-              دانلود مستقیم فایل بستهٔ نصبی اندروید (<strong dir="ltr">meety.apk</strong>) نسخهٔ رسمی با سرور اختصاصی و مستقیم:
+              {apkUrl ? 'فایل اندروید را فقط از نشانی تأییدشدهٔ ارائه‌دهنده دریافت کنید.' : 'فایل اندروید تأییدشده برای این نسخه پیکربندی نشده است؛ فعلاً نسخهٔ وب نصب‌پذیر را استفاده کنید.'}
             </p>
 
             <div style={{ display: 'grid', gap: 12 }}>
-              <a
-                href="/meety.apk"
+              {apkUrl && <a
+                href={apkUrl}
                 download="meety.apk"
+                rel="noopener noreferrer"
                 className="button button--primary button--full"
                 style={{ textAlign: 'center', justifyContent: 'center', padding: '12px 16px', fontSize: 14 }}
               >
-                <Download size={18} /> دریافت مستقیم فایل meety.apk
-              </a>
+                <Download size={18} /> دریافت فایل اندروید
+              </a>}
 
-              {/* Security Warning & Play Protect Guide */}
+              {/* Downloaded packages should be verified rather than bypassing OS warnings. */}
               <div style={{ background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.28)', padding: 14, borderRadius: 12, fontSize: 12.5, lineHeight: 1.75 }}>
-                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#facc15', marginBottom: 6, fontSize: 13 }}>
-                  <ShieldAlert size={16} /> رفع هشدار امنیتی گوگل‌پلی (Play Protect) هنگام نصب:
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#684b10', marginBottom: 6, fontSize: 13 }}>
+                  <ShieldAlert size={16} /> امنیت فایل نصبی اندروید
                 </strong>
-                <p style={{ margin: '0 0 8px', color: 'var(--text-soft)' }}>
-                  نمایش هشدار امنیتی در گوشی‌های اندروید هنگام نصب مستقیم فایل APK طبیعی است، زیرا برنامه مستقیماً از وب‌سایت دانلود شده و از طریق گوگل‌پلی استور نیست. این فایل کاملاً امن و فاقد هرگونه بدافزار است:
+                <p style={{ margin: 0, color: 'var(--text)' }}>
+                  پیش از نصب فایل خارج از فروشگاه، منبع و امضای آن را بررسی کنید. اگر Play Protect هشدار داد، آن را نادیده نگیرید؛ در صورت تردید از نسخهٔ وب نصب‌پذیر استفاده کنید.
                 </p>
-                <ol style={{ paddingRight: 18, margin: 0, display: 'grid', gap: 6 }}>
-                  <li>اگر پیام <strong>«مسدود شد توسط سپر ایمنی Google Play»</strong> را دیدید، روی گزینهٔ <strong>«جزئیات بیشتر» (More details)</strong> ضربه بزنید.</li>
-                  <li>سپس گزینهٔ <strong>«به هر حال نصب شود» (Install anyway)</strong> را انتخاب کنید تا برنامه نصب شود.</li>
-                  <li>در صورت نمایش پنجره «اجازه نصب برنامه‌های ناشناخته»، روی <strong>«تنظیمات» (Settings)</strong> زده و گزینه <strong>«اجازه از این منبع» (Allow from this source)</strong> را فعال کنید.</li>
-                </ol>
               </div>
 
               {/* Recommendation to use 1-click PWA */}
               <div style={{ background: 'rgba(217, 246, 111, 0.08)', border: '1px solid rgba(217, 246, 111, 0.22)', padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.7 }}>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', marginBottom: 4 }}>
-                  <Smartphone size={14} /> نصب فوری بدون هیچ هشدار امنیتی:
+                  <Smartphone size={14} /> گزینهٔ نصب از مرورگر:
                 </strong>
-                <p style={{ margin: 0, color: 'var(--text-soft)' }}>
-                  اگر ترجیح می‌دهید هیچ هشدار امنیتی مشاهده نکنید، از تب اول در بالا یعنی <strong>«نصب مستقیم روی گوشی (یک‌کلیک)»</strong> استفاده کنید؛ اپلیکیشن بدون دانلود فایل و بدون هیچ هشدار امنیتی روی گوشی نصب می‌شود.
+                <p style={{ margin: 0, color: 'var(--text)' }}>
+                  اگر ترجیح می‌دهید هیچ هشدار امنیتی مشاهده نکنید، از تب اول در بالا یعنی <strong>«نصب مستقیم روی گوشی (یک‌کلیک)»</strong> استفاده کنید؛ در مرورگرهای پشتیبانی‌شده می‌توانید آن را به صفحهٔ اصلی اضافه کنید.
                 </p>
               </div>
             </div>

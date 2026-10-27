@@ -161,6 +161,30 @@ describe('bodyweight and nutrition persistence', () => {
     expect(screen.getByRole('img', { name: 'نمودار روند پرس سینه با هالتر · حجم تمرین' })).toBeInTheDocument();
   });
 
+  it('shows long session and set histories in pages without losing older entries', async () => {
+    await db.sessions.bulkPut(Array.from({ length: 45 }, (_, index) => completedSession(
+      `history-${index}`, new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+      [{ weightKg: 20, reps: 8 }, { weightKg: 21, reps: 8 }],
+    )));
+    await db.bodyweights.bulkPut(Array.from({ length: 15 }, (_, index) => ({ id: `weight-${index}`, date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10), weightKg: 70 + index })));
+    const user = userEvent.setup();
+    renderPage('/progress');
+    await screen.findByText('سوابق تمرین');
+    expect(document.querySelectorAll('.session-history-list details')).toHaveLength(20);
+    expect(document.querySelectorAll('.history-table tbody tr')).toHaveLength(30);
+    expect(document.querySelectorAll('.weight-log-list > div')).toHaveLength(10);
+    await user.click(screen.getByRole('button', { name: 'نمایش ۵ ثبت وزن دیگر' }));
+    expect(document.querySelectorAll('.weight-log-list > div')).toHaveLength(15);
+    await user.click(screen.getByRole('button', { name: 'نمایش ۲۰ جلسهٔ دیگر' }));
+    await user.click(screen.getByRole('button', { name: 'نمایش ۳۰ ست دیگر' }));
+    expect(document.querySelectorAll('.session-history-list details')).toHaveLength(40);
+    expect(document.querySelectorAll('.history-table tbody tr')).toHaveLength(60);
+    await user.click(screen.getByRole('button', { name: 'نمایش ۵ جلسهٔ دیگر' }));
+    await user.click(screen.getByRole('button', { name: 'نمایش ۳۰ ست دیگر' }));
+    expect(document.querySelectorAll('.session-history-list details')).toHaveLength(45);
+    expect(document.querySelectorAll('.history-table tbody tr')).toHaveLength(90);
+  });
+
   it('buckets completed sessions into Monday-start weeks, oldest first', () => {
     // Wednesday 2026-10-07 sits in the week that opened on Monday 2026-10-05.
     const now = new Date('2026-10-07T12:00:00.000Z');

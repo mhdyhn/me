@@ -1,5 +1,7 @@
 import { exercises } from '../data/exercises';
 import type { WorkoutSession } from '../types';
+import { personalStorageKey } from './accountScope';
+import { notifyPersonalDataChanged } from './personalSyncEvents';
 
 export type HealthTrackerSource = 'manual' | 'whoop' | 'oura' | 'apple_health';
 
@@ -10,6 +12,8 @@ export interface HealthMetrics {
   heartRateVariability: number; // ms (HRV)
   source: HealthTrackerSource;
   lastSyncedAt: string;
+  /** True for initial or simulated values, not readings from a device. */
+  isSample?: boolean;
 }
 
 export interface ReadinessResult {
@@ -98,6 +102,7 @@ export const DEFAULT_HEALTH_METRICS: HealthMetrics = {
   heartRateVariability: 65,
   source: 'manual',
   lastSyncedAt: new Date().toISOString(),
+  isSample: true,
 };
 
 /**
@@ -105,12 +110,28 @@ export const DEFAULT_HEALTH_METRICS: HealthMetrics = {
  */
 export function getStoredHealthMetrics(): HealthMetrics {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_METRICS);
+    const raw = localStorage.getItem(personalStorageKey(STORAGE_KEY_METRICS));
     if (!raw) return DEFAULT_HEALTH_METRICS;
-    const parsed = JSON.parse(raw) as Partial<HealthMetrics>;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return DEFAULT_HEALTH_METRICS;
+    const value = parsed as Partial<HealthMetrics>;
+    let usedDefault = false;
+    const inRange = (number: unknown, min: number, max: number, fallback: number) => {
+      if (typeof number === 'number' && Number.isFinite(number) && number >= min && number <= max) return number;
+      usedDefault = true;
+      return fallback;
+    };
+    const source = (['manual', 'whoop', 'oura', 'apple_health'] as const).find((item) => item === value.source);
+    const validDate = typeof value.lastSyncedAt === 'string' && !Number.isNaN(Date.parse(value.lastSyncedAt));
+    const sleepHours = inRange(value.sleepHours, 3, 14, DEFAULT_HEALTH_METRICS.sleepHours);
+    const sleepQualityScore = inRange(value.sleepQualityScore, 0, 100, DEFAULT_HEALTH_METRICS.sleepQualityScore);
+    const restingHeartRate = inRange(value.restingHeartRate, 40, 110, DEFAULT_HEALTH_METRICS.restingHeartRate);
+    const heartRateVariability = inRange(value.heartRateVariability, 20, 150, DEFAULT_HEALTH_METRICS.heartRateVariability);
     return {
-      ...DEFAULT_HEALTH_METRICS,
-      ...parsed,
+      sleepHours, sleepQualityScore, restingHeartRate, heartRateVariability,
+      source: source ?? 'manual',
+      lastSyncedAt: validDate ? value.lastSyncedAt! : DEFAULT_HEALTH_METRICS.lastSyncedAt,
+      isSample: usedDefault || !source || !validDate || source !== 'manual' || value.isSample !== false,
     };
   } catch {
     return DEFAULT_HEALTH_METRICS;
@@ -122,15 +143,20 @@ export function getStoredHealthMetrics(): HealthMetrics {
  */
 export function saveHealthMetrics(metrics: Partial<HealthMetrics>): HealthMetrics {
   const current = getStoredHealthMetrics();
+  const completeManualEntry = metrics.sleepHours !== undefined && metrics.sleepQualityScore !== undefined &&
+    metrics.restingHeartRate !== undefined && metrics.heartRateVariability !== undefined;
+  const source = metrics.source ?? current.source;
   const updated: HealthMetrics = {
     ...current,
     ...metrics,
+    isSample: source !== 'manual' || (metrics.isSample ?? (Boolean(current.isSample) && !completeManualEntry)),
     lastSyncedAt: new Date().toISOString(),
   };
   try {
-    localStorage.setItem(STORAGE_KEY_METRICS, JSON.stringify(updated));
+    localStorage.setItem(personalStorageKey(STORAGE_KEY_METRICS), JSON.stringify(updated));
+    notifyPersonalDataChanged();
   } catch {
-    // Ignore storage quota errors
+    throw new Error('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد.');
   }
   return updated;
 }
@@ -155,6 +181,7 @@ export function simulateTrackerSync(source: HealthTrackerSource): HealthMetrics 
     restingHeartRate: rhr,
     heartRateVariability: hrv,
     source,
+    isSample: true,
   });
 }
 
@@ -219,9 +246,9 @@ export function calculateReadinessScore(
       badgeClass: 'badge--success',
       color: '#10b981',
       dailyStrain,
-      recoveryTitle: 'سیستم عصبی و قلبی کاملاً آماده است',
+      recoveryTitle: 'برآورد آمادگی بالاست',
       coachRecommendation:
-        'شاخص‌های بازیابی بدنی شما در اوج است. امروز بهترین فرصت برای بیش‌باری تدریجی، افزایش وزنه در حرکات اصلی یا ثبت رکوردهای تازه است.',
+        'این فقط یک برآورد آموزشی از داده‌های واردشده است. برای بیش‌باری تدریجی به برنامه، فرم، احساس بدن و نظر مربی توجه کن و تنها به این عدد تکیه نکن.',
       source: metrics.source,
     };
   }
@@ -230,13 +257,13 @@ export function calculateReadinessScore(
     return {
       score,
       level: 'optimal',
-      levelLabel: 'آمادگی مطلوب و پایدار',
+      levelLabel: 'برآورد آمادگی متوسط رو به بالا',
       badgeClass: 'badge--info',
       color: '#3b82f6',
       dailyStrain,
-      recoveryTitle: 'بدن در تعادل مناسب قرار دارد',
+      recoveryTitle: 'برآورد آمادگی متوسط رو به بالاست',
       coachRecommendation:
-        'ریکاوری شما در محدودهٔ مطلوب است. برنامهٔ مربی را با تمرکز بر دامنه حرکتی کامل و حفظ فرم تمیز طبق روال عادی اجرا کن.',
+        'این شاخص وضعیت بدن را تأیید نمی‌کند. هنگام تمرین به احساس بدن، فرم حرکت و نظر مربی توجه کن.',
       source: metrics.source,
     };
   }
@@ -245,13 +272,13 @@ export function calculateReadinessScore(
     return {
       score,
       level: 'recovery',
-      levelLabel: 'نیاز به ریکاوری فعال (ناحیه زرد)',
+      levelLabel: 'برآورد آمادگی پایین‌تر (ناحیه زرد)',
       badgeClass: 'badge--warning',
       color: '#f59e0b',
       dailyStrain,
-      recoveryTitle: 'خستگی تجمعی در حال افزایش است',
+      recoveryTitle: 'برآورد آمادگی پایین‌تر است',
       coachRecommendation:
-        'فشار روزهای اخیر یا خواب کمتر روی شاخص‌های فیزیولوژیک اثر گذاشته است. توصیه می‌شود حجم تمرین را اندکی متعادل نگه‌داری و از ست‌های تا مرز ناتوانی مطلق پرهیز کنی.',
+        'این برآورد ممکن است تحت‌تأثیر خواب و سوابق تمرین باشد. اگر احساس خستگی یا ناراحتی داری، دربارهٔ شدت تمرین با مربی یا متخصص مشورت کن.',
       source: metrics.source,
     };
   }
@@ -259,13 +286,13 @@ export function calculateReadinessScore(
   return {
     score,
     level: 'fatigued',
-    levelLabel: 'خستگی بدنی بالا (ناحیه قرمز)',
+    levelLabel: 'برآورد آمادگی پایین (ناحیه قرمز)',
     badgeClass: 'badge--danger',
     color: '#ef4444',
     dailyStrain,
-    recoveryTitle: 'نیازمند استراحت یا موبیلیتی سبک',
+    recoveryTitle: 'برآورد آمادگی پایین است',
     coachRecommendation:
-      'سیستم عصبی و عضلانی به بازیابی نیاز دارد. انجام حرکات کششی، موبیلیتی مفاصل و خواب کافی امروز ارجحیت بالاتری نسبت به وزنه‌های سنگین دارد.',
+      'این عدد تشخیص خستگی نیست. اگر احساس ناخوشی یا درد داری تمرین را متوقف کن و از متخصص مناسب راهنمایی بگیر.',
     source: metrics.source,
   };
 }
@@ -618,8 +645,10 @@ export const HINGE_JOINT_ROUTINES: Record<JointKey, JointPrehabRoutine> = {
  */
 export function getStoredJointConcerns(): JointKey[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_JOINTS);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(personalStorageKey(STORAGE_KEY_JOINTS));
+    const value: unknown = raw ? JSON.parse(raw) : [];
+    const allowed: JointKey[] = ['knees', 'shoulders', 'lowerBack', 'neck', 'wristsElbows'];
+    return Array.isArray(value) ? [...new Set(value.filter((joint): joint is JointKey => allowed.includes(joint)))] : [];
   } catch {
     return [];
   }
@@ -627,9 +656,10 @@ export function getStoredJointConcerns(): JointKey[] {
 
 export function saveStoredJointConcerns(concerns: JointKey[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_JOINTS, JSON.stringify(concerns));
+    localStorage.setItem(personalStorageKey(STORAGE_KEY_JOINTS), JSON.stringify(concerns));
+    notifyPersonalDataChanged();
   } catch {
-    // Ignore storage quota errors
+    throw new Error('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد.');
   }
 }
 
@@ -728,7 +758,7 @@ export const MINDFUL_INSIGHTS: Record<MindfulHungerTrigger, MindfulInsight> = {
   boredom_habit: {
     trigger: 'boredom_habit',
     label: 'عادت یا رفع بی‌حوصلگی',
-    advice: 'این گرسنگی در سر شماست نه معده. ۵ دقیقه قدم بزن، آب بنوش، یا یک کار دستی کوتاه انجام بده. اگر بعد از ۱۰ دقیقه هنوز گرسنه بودی، یک میوه انتخاب کن.',
+    advice: 'به احساس گرسنگی و شرایط خود توجه کن. اگر مایل بودی چند دقیقه مکث یا فعالیتی آرام را امتحان کن؛ برای انتخاب غذا به نیاز بدنت و توصیهٔ متخصص توجه داشته باش.',
     color: '#3b82f6',
   },
   social_celebration: {
@@ -750,8 +780,14 @@ export interface MindfulLogEntry {
 
 export function getStoredMindfulLogs(): MindfulLogEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_MINDFUL);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(personalStorageKey(STORAGE_KEY_MINDFUL));
+    const value: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(value)) return [];
+    return value.filter((entry): entry is MindfulLogEntry =>
+      entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.foodName === 'string' &&
+      typeof entry.timestamp === 'string' && !Number.isNaN(Date.parse(entry.timestamp)) &&
+      Object.hasOwn(MINDFUL_INSIGHTS, entry.trigger) && Object.hasOwn(NOOM_CALORIC_CATEGORIES, entry.category),
+    ).slice(0, 100);
   } catch {
     return [];
   }
@@ -766,9 +802,10 @@ export function saveMindfulLog(entry: Omit<MindfulLogEntry, 'id' | 'timestamp'>)
   };
   const updated = [newEntry, ...logs].slice(0, 100);
   try {
-    localStorage.setItem(STORAGE_KEY_MINDFUL, JSON.stringify(updated));
+    localStorage.setItem(personalStorageKey(STORAGE_KEY_MINDFUL), JSON.stringify(updated));
+    notifyPersonalDataChanged();
   } catch {
-    // Ignore quota errors
+    throw new Error('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد.');
   }
   return newEntry;
 }
@@ -777,9 +814,10 @@ export function deleteMindfulLog(id: string): MindfulLogEntry[] {
   const logs = getStoredMindfulLogs();
   const updated = logs.filter((entry) => entry.id !== id);
   try {
-    localStorage.setItem(STORAGE_KEY_MINDFUL, JSON.stringify(updated));
+    localStorage.setItem(personalStorageKey(STORAGE_KEY_MINDFUL), JSON.stringify(updated));
+    notifyPersonalDataChanged();
   } catch {
-    // Ignore quota errors
+    throw new Error('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد.');
   }
   return updated;
 }

@@ -232,9 +232,16 @@ export async function saveBiometrics(
   const age = input.age !== undefined ? (input.age ? Math.max(10, Math.min(100, Math.round(input.age))) : null) : existing.age;
   const restingHr = input.restingHr !== undefined ? (input.restingHr ? Math.max(30, Math.min(180, Math.round(input.restingHr))) : null) : existing.restingHr;
   const maxHrMethod: MaxHrMethod = input.maxHrMethod ?? existing.maxHrMethod;
-  const maxHr = input.maxHr && maxHrMethod === 'custom'
-    ? Math.max(100, Math.min(240, Math.round(input.maxHr)))
-    : calculateMaxHeartRate(age, maxHrMethod, input.maxHr);
+  const customMax = input.maxHr !== undefined ? input.maxHr : existing.maxHrMethod === 'custom' ? existing.maxHr : null;
+  if (maxHrMethod === 'custom' && !customMax) {
+    throw new HttpError(400, 'برای روش ثبت مستقیم، ضربان بیشینه را وارد کنید.');
+  }
+  const maxHr = maxHrMethod === 'custom' && customMax
+    ? Math.max(100, Math.min(240, Math.round(customMax)))
+    : calculateMaxHeartRate(age, maxHrMethod);
+  if (restingHr !== null && (age !== null || maxHrMethod === 'custom') && restingHr >= maxHr) {
+    throw new HttpError(400, 'ضربان استراحت باید کمتر از ضربان بیشینه باشد.');
+  }
 
   const limitations = input.limitations !== undefined ? String(input.limitations).slice(0, 2000) : existing.limitations;
   const contraindicatedMovements = input.contraindicatedMovements ?? existing.contraindicatedMovements;

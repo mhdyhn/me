@@ -36,3 +36,10 @@ android/app/src/main/assets/capacitor.plugins.json
 
 # Local API data (PostgreSQL folder used without DATABASE_URL): never commit
 /server/data/
+
+# Android signing secrets
+*.keystore
+*.jks
+*.p12
+*.pfx
+android/key.properties

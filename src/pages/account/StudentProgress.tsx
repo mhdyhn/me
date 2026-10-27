@@ -4,7 +4,7 @@ import { ArrowLeft, HeartPulse, Search, Sparkles } from 'lucide-react';
 import { ApiError, api } from '../../lib/api';
 import { exerciseById } from '../../data/exercises';
 import { faNumber, formatDate } from '../../lib/format';
-import { calculateMuscleRecovery, calculateReadinessScore, DEFAULT_HEALTH_METRICS } from '../../lib/aiHealthEngine';
+import { calculateMuscleRecovery } from '../../lib/aiHealthEngine';
 import { runStudentDiagnostic } from '../../lib/studentDiagnostic';
 import type { WorkoutSession } from '../../types';
 import { RequireRole, PanelPage } from './AccountShell';
@@ -104,7 +104,6 @@ function StudentProgressScreen() {
     })),
   }));
 
-  const studentReadiness = calculateReadinessScore(DEFAULT_HEALTH_METRICS, mappedSessions);
   const studentMuscles = calculateMuscleRecovery(mappedSessions);
   const diagnostic = runStudentDiagnostic(visibleSessions);
 
@@ -141,30 +140,26 @@ function StudentProgressScreen() {
           <section className="coach-ai-panel">
             <div className="coach-ai-header">
               <div className="flex items-center gap-2">
-                <span className="badge badge--success" style={{ borderColor: `${studentReadiness.color}40`, color: studentReadiness.color }}>
-                  <Sparkles size={14} /> دستیار هوش مصنوعی مربی (Co-Pilot)
+                <span className="badge badge--neutral">
+                  <Sparkles size={14} /> خلاصهٔ آموزشی سوابق تمرین
                 </span>
-                <span className="muted text-xs">تحلیل Whoop & Fitbod</span>
               </div>
-              <span className="text-xs" style={{ color: studentReadiness.color, fontWeight: 700 }}>
-                {studentReadiness.levelLabel.split('(')[0]} ({faNumber(studentReadiness.score)}٪)
-              </span>
             </div>
 
             <div className="coach-ai-body">
               <div className="coach-ai-readiness">
-                <HeartPulse size={20} style={{ color: studentReadiness.color }} />
+                <HeartPulse size={20} className="icon-muted" />
                 <div>
-                  <strong>{studentReadiness.recoveryTitle}</strong>
+                  <strong>آمادگی روزانهٔ شاگرد در دسترس نیست</strong>
                   <p className="text-xs muted" style={{ margin: '2px 0 0' }}>
-                    {studentReadiness.coachRecommendation}
+                    دادهٔ واقعی خواب و ضربان دریافت نمی‌شود. برآورد عضلات تنها بر پایهٔ تمرین‌های ثبت‌شده است و تشخیص پزشکی یا مجوز تمرین سنگین نیست.
                   </p>
                 </div>
               </div>
 
               <div className="coach-ai-muscles">
                 <span className="text-xs muted block" style={{ marginBottom: 6 }}>
-                  وضعیت ترمیم عضلات شاگرد (تخمین هوشمند):
+                  برآورد آموزشی وضعیت عضلات از سوابق تمرین:
                 </span>
                 <div className="coach-muscles-chips">
                   {studentMuscles.map((m) => (

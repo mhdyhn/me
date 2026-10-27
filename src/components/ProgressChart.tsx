@@ -2,20 +2,42 @@ import { faNumber } from '../lib/format';
 
 interface Point { label: string; value: number }
 
+// Keep local minima and maxima in each bucket, as well as the first and last point.
+export function sampleChartIndices(points: Point[], limit = 200): number[] {
+  if (points.length <= limit || limit < 4) return points.map((_, index) => index);
+  const result = [0];
+  const buckets = Math.floor((limit - 2) / 2);
+  for (let bucket = 0; bucket < buckets; bucket++) {
+    const start = 1 + Math.floor((points.length - 2) * bucket / buckets);
+    const end = 1 + Math.floor((points.length - 2) * (bucket + 1) / buckets);
+    if (start >= end) continue;
+    let min = start;
+    let max = start;
+    for (let index = start + 1; index < end; index++) {
+      if (points[index]!.value < points[min]!.value) min = index;
+      if (points[index]!.value > points[max]!.value) max = index;
+    }
+    result.push(Math.min(min, max));
+    if (min !== max) result.push(Math.max(min, max));
+  }
+  result.push(points.length - 1);
+  return result;
+}
+
 export function ProgressChart({ points, unit, label, color = 'var(--accent)' }: { points: Point[]; unit: string; label: string; color?: string }) {
   const width = 560;
   const height = 180;
   const padding = { top: 16, right: 15, bottom: 28, left: 35 };
-  const values = points.map((point) => point.value);
-  const minValue = values.length ? Math.min(...values) : 0;
-  const maxValue = values.length ? Math.max(...values) : 1;
+  const minValue = points.length ? points.reduce((min, point) => Math.min(min, point.value), Infinity) : 0;
+  const maxValue = points.length ? points.reduce((max, point) => Math.max(max, point.value), -Infinity) : 1;
+  const displayIndices = sampleChartIndices(points);
   const range = maxValue - minValue || 1;
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const coordinates = points.map((point, index) => ({
+  const coordinates = displayIndices.map((index) => ({
     x: padding.left + (points.length === 1 ? innerWidth / 2 : (points.length - 1 - index) * (innerWidth / (points.length - 1))),
-    y: padding.top + innerHeight - ((point.value - minValue) / range) * innerHeight,
-    ...point,
+    y: padding.top + innerHeight - ((points[index]!.value - minValue) / range) * innerHeight,
+    ...points[index]!,
   }));
   const polyline = coordinates.map((point) => `${point.x},${point.y}`).join(' ');
   const format = (value: number) => `${faNumber(Number(value.toFixed(1)), { maximumFractionDigits: 1 })}${unit}`;
@@ -42,6 +64,7 @@ export function ProgressChart({ points, unit, label, color = 'var(--accent)' }: 
           </g>
         ))}
       </svg>
+      {displayIndices.length < points.length && <small className="field-hint">نمودار، خلاصه‌ای از {faNumber(points.length)} ثبت است؛ جزئیات کامل در سوابق در دسترس‌اند.</small>}
     </div>
   );
 }

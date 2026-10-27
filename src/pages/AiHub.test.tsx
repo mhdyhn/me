@@ -30,12 +30,14 @@ describe('AiHub Super-App Experience', () => {
   it('displays Whoop & Oura readiness score and allows simulating sync', () => {
     renderAiHub();
     expect(screen.getByText('آمادگی روز')).toBeDefined();
-    expect(screen.getByText(/همگام‌سازی Whoop/)).toBeDefined();
-    expect(screen.getByText(/همگام‌سازی Oura/)).toBeDefined();
+    expect(screen.getByText(/اتصال واقعی به ساعت یا حلقه وجود ندارد/)).toBeInTheDocument();
+    expect(screen.getByText('دادهٔ نمونهٔ اولیه')).toBeInTheDocument();
+    expect(screen.getByText(/شبیه‌سازی Whoop/)).toBeDefined();
+    expect(screen.getByText(/شبیه‌سازی Oura/)).toBeDefined();
 
     // Click Whoop sync
-    fireEvent.click(screen.getByText(/همگام‌سازی Whoop/));
-    expect(screen.getByText(/همگام‌شده با Whoop 4.0/)).toBeDefined();
+    fireEvent.click(screen.getByText(/شبیه‌سازی Whoop/));
+    expect(screen.getByText(/دادهٔ شبیه‌سازی‌شده \(whoop\)/)).toBeDefined();
   });
 
   it('switches to Fitbod muscle recovery tab and shows all muscle zones', () => {
@@ -79,4 +81,13 @@ describe('AiHub Super-App Experience', () => {
 
     expect(screen.getByText(/بینش روانشناسی Noom:/)).toBeDefined();
   });
+
+  it('does not show default 190 BPM or target zones as personal measurements', () => {
+    renderAiHub();
+    fireEvent.click(screen.getByRole('tab', { name: /پایش قلب و بیومتریک/ }));
+    expect(screen.getByText('سن یا ضربان بیشینه ثبت نشده است')).toBeInTheDocument();
+    expect(screen.getByText(/برای نمایش زون‌ها، مربی باید سن/)).toBeInTheDocument();
+    expect(screen.queryByText('۱۹۰')).not.toBeInTheDocument();
+  });
+
 });

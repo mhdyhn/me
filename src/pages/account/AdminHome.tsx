@@ -186,9 +186,9 @@ function AdminCoaches() {
           </div>
           <div className="admin-stat-item admin-stat-ai">
             <span className="badge badge--success">
-              <Sparkles size={12} /> اکوسیستم AI هوشمند
+              <Sparkles size={12} /> الگوهای آموزشی سلامت
             </span>
-            <span className="admin-stat-label">Whoop · Fitbod · Noom · Hinge فعال</span>
+            <span className="admin-stat-label">بدون اتصال به سرویس‌های خارجی</span>
           </div>
         </div>
 

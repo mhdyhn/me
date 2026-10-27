@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { App } from '../src/App';
 import { db } from '../src/lib/db';
 
@@ -100,7 +101,9 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(within(bar).getByText('برنامه')).toBeInTheDocument();
     expect(within(bar).getByText('پیشرفت')).toBeInTheDocument();
     expect(within(bar).queryByText('حرکت‌ها')).not.toBeInTheDocument();
-    expect(within(nav).getByText('مربی')).toBeInTheDocument(); // Chat with coach is in More
+    await userEvent.setup().click(within(bar).getByRole('button', { name: 'سایر بخش‌ها و امکانات' }));
+    const sheet = within(nav).getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+    expect(within(sheet).getByText('مربی')).toBeInTheDocument(); // Chat with coach is in More
     expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
     expect(within(nav).queryByText('مالی باشگاه')).not.toBeInTheDocument();
     await waitFor(() => expect(document.title).toContain('میتی'));

@@ -49,4 +49,18 @@ describe('coach student AI settings loading', () => {
     expect(await screen.findByRole('button', { name: /ذخیره تنظیمات هوش مصنوعی/ })).toBeEnabled();
     expect(mocks.getBiometrics).toHaveBeenCalledTimes(2);
   });
+
+  it('does not show a default heart rate as a personal measurement or save an empty custom peak', async () => {
+    mocks.getBiometrics.mockResolvedValue({
+      enabledModules: ['readiness'], age: null, restingHr: null, maxHrMethod: 'tanaka', maxHr: 190, limitations: '',
+    });
+    renderSettings();
+    expect(await screen.findByText(/سن معتبر یا ضربان بیشینهٔ ثبت‌شده لازم است/)).toBeInTheDocument();
+    expect(screen.queryByText('۱۸۰ ضربه در دقیقه (BPM)')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('روش محاسبه حداکثر ضربان (HR Max)'), { target: { value: 'custom' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیره تنظیمات هوش مصنوعی/ }));
+    expect(screen.getByText(/برای روش ثبت مستقیم، ضربان بیشینهٔ معتبر/)).toBeInTheDocument();
+    expect(mocks.saveBiometrics).not.toHaveBeenCalled();
+  });
+
 });

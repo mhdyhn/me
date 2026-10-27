@@ -51,13 +51,13 @@ describe('Mobile Bottom Sheet Toolbar Navigation', () => {
     const user = userEvent.setup();
 
     const moreButton = await screen.findByRole('button', { name: /سایر بخش‌ها و امکانات|بیشتر/ });
-    const sheet = screen.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
-
-    expect(sheet).not.toHaveClass('is-open');
+    expect(screen.queryByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' })).not.toBeInTheDocument();
 
     // Click "بیشتر"
     await user.click(moreButton);
+    const sheet = screen.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
     expect(sheet).toHaveClass('is-open');
+    expect(within(sheet).getByRole('button', { name: 'بستن منو' })).toHaveFocus();
     expect(within(sheet).getByText('هوش سلامتی')).toBeInTheDocument();
     expect(within(sheet).getByText('تغذیه')).toBeInTheDocument();
     expect(within(sheet).getByText('مربی')).toBeInTheDocument();
@@ -65,7 +65,8 @@ describe('Mobile Bottom Sheet Toolbar Navigation', () => {
     // Click close button
     const closeBtn = within(sheet).getByRole('button', { name: 'بستن منو' });
     await user.click(closeBtn);
-    expect(sheet).not.toHaveClass('is-open');
+    expect(screen.queryByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' })).not.toBeInTheDocument();
+    expect(moreButton).toHaveFocus();
   });
 
   it('keeps coach work in the main bar and leaves only secondary links in More', async () => {

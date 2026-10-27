@@ -8,10 +8,14 @@ if (!existsSync(path)) {
 }
 const html = await readFile(path, 'utf8');
 const info = await stat(path);
+const links = html.match(/<link\b[^>]*>/gi) ?? [];
+const styles = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => match[1]);
 const checks = [
   ['no 3D model embedded (the app has no model asset)', !html.includes('data:model/gltf-binary')],
-  ['no external module JS entrypoint', !/<script[^>]+src=["']https?:\/\//i.test(html) && !/<script[^>]+src=["']\/assets\//i.test(html)],
-  ['no external CSS entrypoint', !/<link[^>]+href=["']https?:\/\//i.test(html) && !/<link[^>]+href=["']\/assets\//i.test(html)],
+  ['no external module JS entrypoint', !/<script[^>]+src=["'](?:https?:\/\/|\/assets\/)/i.test(html)],
+  ['no external stylesheet entrypoint', !links.some((link) => /\brel=["']stylesheet["']/i.test(link))],
+  ['CSS build assets are inlined', styles.length > 0 && !styles.some((style) => /url\(["']?\/assets\//i.test(style))],
+  ['offline document does not preconnect to a server', !links.some((link) => /\brel=["'](?:preconnect|dns-prefetch)["']/i.test(link))],
   ['viewport metadata present', /name=["']viewport["']/i.test(html)],
   ['inline app script present (not an empty or [object Promise] placeholder)', /<script type="module">[\s\S]{100000,}?<\/script>/.test(html) && !html.includes('[object Promise]')],
 ];

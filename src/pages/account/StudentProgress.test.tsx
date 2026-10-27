@@ -9,8 +9,6 @@ vi.mock('./AccountShell', () => ({
   RequireRole: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../lib/aiHealthEngine', () => ({
-  DEFAULT_HEALTH_METRICS: {},
-  calculateReadinessScore: () => ({ color: '#fff', levelLabel: 'آماده', score: 80, recoveryTitle: 'وضعیت مناسب', coachRecommendation: 'ادامه بده' }),
   calculateMuscleRecovery: () => [],
 }));
 vi.mock('../../lib/studentDiagnostic', () => ({ runStudentDiagnostic: () => ({ statusColor: '#fff', statusLabel: 'ثابت' }) }));
@@ -41,6 +39,9 @@ describe('coach student progress date ranges', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('جلسهٔ این هفته')).toBeInTheDocument();
+    expect(screen.getByText('آمادگی روزانهٔ شاگرد در دسترس نیست')).toBeInTheDocument();
+    expect(screen.getByText(/دادهٔ واقعی خواب و ضربان دریافت نمی‌شود/)).toBeInTheDocument();
+    expect(screen.queryByText('وضعیت مناسب')).not.toBeInTheDocument();
     expect(screen.getByText('جلسهٔ این ماه')).toBeInTheDocument();
     expect(screen.getByText('جلسهٔ قدیمی')).toBeInTheDocument();
 

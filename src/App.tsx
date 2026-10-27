@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
@@ -7,7 +7,7 @@ import { GymProvider } from './context/GymProvider';
 import { isProgramReadOnly } from './lib/programStore';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { SessionProvider } from './context/SessionContext';
-import { SessionSync } from './components/SessionSync';
+import { PersonalSync } from './components/PersonalSync';
 import { ForRoles, RequireSignIn } from './pages/account/AccountShell';
 import { useSession } from './context/SessionContext';
 import type { ReactElement } from 'react';
@@ -82,13 +82,15 @@ function ExerciseRoute() {
 }
 
 export function App() {
+  // A local file has no server to rewrite pathname routes; hash routes work without one.
+  const Router = import.meta.env.MODE === 'offline' ? HashRouter : BrowserRouter;
   return (
     <ErrorBoundary>
       <GymProvider>
         <SessionProvider>
         <ConfirmProvider>
-        <SessionSync />
-        <BrowserRouter>
+        <PersonalSync />
+        <Router>
           <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="login" element={<Login />} />
@@ -126,7 +128,7 @@ export function App() {
             </Route>
           </Routes>
           </Suspense>
-        </BrowserRouter>
+        </Router>
         </ConfirmProvider>
         </SessionProvider>
       </GymProvider>

@@ -114,12 +114,25 @@ function StudentAiSettingsScreen() {
 
   const calculatedMax = calculateMaxHeartRate(numAge, maxHrMethod, numCustomMax);
   const liveZones: HeartRateZone[] = calculateHeartRateZones(calculatedMax, numRhr);
+  const hasValidMax = maxHrMethod === 'custom'
+    ? numCustomMax !== null && numCustomMax >= 100 && numCustomMax <= 240
+    : numAge !== null && numAge >= 10 && numAge <= 100;
 
   function toggleModule(key: AiModuleKey) {
     setEnabledModules((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
   async function handleSave() {
+    if (maxHrMethod === 'custom' && !hasValidMax) {
+      setErrorMessage('برای روش ثبت مستقیم، ضربان بیشینهٔ معتبر بین ۱۰۰ تا ۲۴۰ را وارد کنید.');
+      setSaveSuccess(false);
+      return;
+    }
+    if (hasValidMax && numRhr !== null && numRhr >= calculatedMax) {
+      setErrorMessage('ضربان استراحت باید کمتر از ضربان بیشینه باشد.');
+      setSaveSuccess(false);
+      return;
+    }
     setSaving(true);
     setSaveSuccess(false);
     setErrorMessage(null);
@@ -237,10 +250,10 @@ function StudentAiSettingsScreen() {
             const info = AI_MODULES_INFO[key];
             const isEnabled = enabledModules.includes(key);
             return (
-              <div
+              <label
                 key={key}
-                onClick={() => toggleModule(key)}
                 style={{
+                  display: 'block',
                   border: `1.5px solid ${isEnabled ? info.color : 'var(--color-border)'}`,
                   borderRadius: 12,
                   padding: '14px',
@@ -258,7 +271,7 @@ function StudentAiSettingsScreen() {
                   <input
                     type="checkbox"
                     checked={isEnabled}
-                    onChange={() => {}}
+                    onChange={() => toggleModule(key)}
                     style={{ width: 18, height: 18, cursor: 'pointer', accentColor: info.color }}
                   />
                 </div>
@@ -277,7 +290,7 @@ function StudentAiSettingsScreen() {
                     {isEnabled ? 'فعال برای شاگرد' : 'غیرفعال'}
                   </span>
                 </div>
-              </div>
+              </label>
             );
           })}
         </div>
@@ -290,8 +303,9 @@ function StudentAiSettingsScreen() {
           <h3 style={{ margin: 0 }}>پایش بیومتریک، ضربان بیشینه و زون‌های قلبی</h3>
         </div>
         <p className="muted small-text" style={{ marginBottom: 16 }}>
-          محاسبه خودکار حداکثر ضربان قلب (HR Max) و تفکیک زون‌های تمرینی ۵ گانه بر اساس فرمول کاروونن (HRR) به همراه ثبت محدودیت‌های فیزیکی.
+          زون‌ها فقط برآورد آموزشی بر پایهٔ اطلاعات ثبت‌شده هستند، نه تشخیص پزشکی یا تجویز شدت تمرین. کاروونن (HRR) تنها با ضربان استراحت معتبر استفاده می‌شود.
         </p>
+        {!hasValidMax && <p className="ai-data-notice" style={{ marginBottom: 16 }}>برای محاسبهٔ زون‌ها سن معتبر یا ضربان بیشینهٔ ثبت‌شده لازم است؛ مقدار پیش‌فرض نمایش داده نمی‌شود.</p>}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 16 }}>
           <label className="login-field">
@@ -370,10 +384,10 @@ function StudentAiSettingsScreen() {
           <div>
             <span className="muted text-xs">حداکثر ضربان محاسبه‌شده (HR Max):</span>
             <strong style={{ display: 'block', fontSize: '18px', color: '#ef4444' }}>
-              {faNumber(calculatedMax)} ضربه در دقیقه (BPM)
+              {hasValidMax ? `${faNumber(calculatedMax)} ضربه در دقیقه (BPM)` : '—'}
             </strong>
           </div>
-          {numRhr && (
+          {hasValidMax && numRhr !== null && numRhr > 0 && numRhr < calculatedMax && (
             <div>
               <span className="muted text-xs">ذخیره ضربان قلب (HRR - فرمول کاروونن):</span>
               <strong style={{ display: 'block', fontSize: '18px', color: '#06b6d4' }}>
@@ -386,7 +400,7 @@ function StudentAiSettingsScreen() {
         {/* Zones Preview */}
         <h4 style={{ margin: '14px 0 8px', fontSize: '14px' }}>زون‌های هدف تمرینات هوازی و استقامتی (Zones 1-5):</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-          {liveZones.map((z) => (
+          {(hasValidMax ? liveZones : []).map((z) => (
             <div
               key={z.zone}
               style={{
@@ -467,6 +481,7 @@ function StudentAiSettingsScreen() {
           </button>
         </div>
 
+        <p className="ai-data-notice" style={{ marginBottom: 16 }}>این گزارش برآورد آموزشی از اطلاعات موجود است، نه تشخیص یا درمان پزشکی؛ تصمیم را با بررسی مربی و در صورت نیاز متخصص بگیرید.</p>
         {diagnosticReport && (
           <div>
             {/* Status Summary Banner */}

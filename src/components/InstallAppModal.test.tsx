@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InstallAppModal } from './InstallAppModal';
 
 describe('InstallAppModal', () => {
-  it('renders modal with direct PWA install by default and no external GitHub links', async () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('offers PWA and does not advertise an unconfigured APK', async () => {
     const user = userEvent.setup();
     const handleClose = vi.fn();
     render(<InstallAppModal isOpen={true} onClose={handleClose} />);
@@ -14,18 +15,9 @@ describe('InstallAppModal', () => {
     expect(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /راهنمای آیفون \(iOS\)/ })).toBeInTheDocument();
 
-    // Verify no GitHub links exist in the modal
-    const allLinks = screen.queryAllByRole('link');
-    for (const link of allLinks) {
-      expect(link.getAttribute('href')).not.toContain('github.com');
-    }
-
-    // Switch to APK tab
     await user.click(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ }));
-    const apkLink = screen.getByRole('link', { name: /دریافت مستقیم فایل meety\.apk/ });
-    expect(apkLink).toBeInTheDocument();
-    expect(apkLink).toHaveAttribute('href', '/meety.apk');
-    expect(apkLink).toHaveAttribute('download', 'meety.apk');
+    expect(screen.getByText(/فایل اندروید تأییدشده برای این نسخه پیکربندی نشده است/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /دریافت فایل اندروید/ })).not.toBeInTheDocument();
   });
 
   it('switches to iOS tab properly', async () => {
@@ -47,4 +39,16 @@ describe('InstallAppModal', () => {
     await user.click(closeButtons[0]!);
     expect(handleClose).toHaveBeenCalled();
   });
+
+  it('offers only a configured HTTPS or same-origin APK address', async () => {
+    vi.stubEnv('VITE_ANDROID_APK_URL', 'https://downloads.example.com/meety.apk');
+    const user = userEvent.setup();
+    const view = render(<InstallAppModal isOpen={true} onClose={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ }));
+    expect(screen.getByRole('link', { name: /دریافت فایل اندروید/ })).toHaveAttribute('href', 'https://downloads.example.com/meety.apk');
+    vi.stubEnv('VITE_ANDROID_APK_URL', 'javascript:alert(1)');
+    view.rerender(<InstallAppModal isOpen={true} onClose={() => {}} />);
+    expect(screen.queryByRole('link', { name: /دریافت فایل اندروید/ })).not.toBeInTheDocument();
+  });
+
 });

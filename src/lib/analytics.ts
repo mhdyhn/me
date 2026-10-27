@@ -72,29 +72,35 @@ export const getRecentRecord = (sessions: WorkoutSession[]): RecordHighlight | n
   const completed = sessions
     .filter((session) => session.status === 'completed')
     .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+  const priorBest = new Map<string, { set: LoggedSet | null; invalid: boolean }>();
+  const isBetter = (candidate: LoggedSet, previous: LoggedSet) => candidate.weightKg > previous.weightKg
+    || (candidate.weightKg === previous.weightKg && candidate.reps > previous.reps);
   let latest: RecordHighlight | null = null;
 
-  completed.forEach((session, sessionIndex) => {
-    session.exercises.forEach((sessionExercise) => {
-      const label = exerciseName(sessionExercise.exerciseId);
-      const priorSets = completed
-        .slice(0, sessionIndex)
-        .flatMap((prior) => prior.exercises.find((item) => item.exerciseId === sessionExercise.exerciseId)?.sets ?? []);
-      sessionExercise.sets.forEach((set) => {
-        const isBest = priorSets.length > 0 && priorSets.every((prior) => set.weightKg > prior.weightKg || (set.weightKg === prior.weightKg && set.reps > prior.reps));
-        if (isBest) {
-          latest = {
-            exerciseId: sessionExercise.exerciseId,
-            exerciseName: label,
-            weightKg: set.weightKg,
-            reps: set.reps,
-            date: session.startedAt,
-            sessionId: session.id,
-          };
+  for (const session of completed) {
+    // Compare all sets with earlier sessions only, not other sets in the current session.
+    for (const exercise of session.exercises) {
+      const previous = priorBest.get(exercise.exerciseId);
+      if (!previous?.set || previous.invalid) continue;
+      for (const set of exercise.sets) {
+        if (Number.isFinite(set.weightKg) && Number.isFinite(set.reps) && isBetter(set, previous.set)) {
+          latest = { exerciseId: exercise.exerciseId, exerciseName: exerciseName(exercise.exerciseId), weightKg: set.weightKg, reps: set.reps, date: session.startedAt, sessionId: session.id };
         }
-      });
-    });
-  });
+      }
+    }
+    const seen = new Set<string>();
+    for (const exercise of session.exercises) {
+      // Older histories use the first matching exercise if an ID was duplicated.
+      if (seen.has(exercise.exerciseId)) continue;
+      seen.add(exercise.exerciseId);
+      const previous = priorBest.get(exercise.exerciseId) ?? { set: null, invalid: false };
+      for (const set of exercise.sets) {
+        if (!Number.isFinite(set.weightKg) || !Number.isFinite(set.reps)) previous.invalid = true;
+        else if (!previous.set || isBetter(set, previous.set)) previous.set = set;
+      }
+      priorBest.set(exercise.exerciseId, previous);
+    }
+  }
   return latest;
 };
 

@@ -94,7 +94,10 @@ export async function setStudentProfileSharing(db: Db, studentId: number, shareW
 
 export async function loadStudentProfile(db: Db, studentId: number): Promise<StoredStudentProfile | null> {
   const row = (await db.query<{ body: string; share_with_coach: number; updated_at: string }>(
-    'SELECT body, share_with_coach, updated_at FROM student_profiles WHERE student_id = $1', [studentId],
+    `SELECT CASE WHEN p.deleted = 0 THEN p.body ELSE s.body END AS body, s.share_with_coach,
+            CASE WHEN p.deleted = 0 THEN p.updated_at ELSE s.updated_at END AS updated_at
+       FROM student_profiles s LEFT JOIN personal_data_records p ON p.user_id = s.student_id AND p.kind = 'profile' AND p.item_key = 'main'
+       WHERE s.student_id = $1 AND (p.user_id IS NULL OR p.deleted = 0)`, [studentId],
   ))[0];
   if (!row) return null;
   return { profile: JSON.parse(row.body) as StudentProfile, shareWithCoach: row.share_with_coach === 1, updatedAt: row.updated_at };
