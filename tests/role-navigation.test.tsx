@@ -20,22 +20,23 @@ afterEach(() => {
 });
 
 describe('toolbar per role', () => {
-  it('a coach keeps the whole app and adds the student and add-program sections', async () => {
+  it('a coach lands on a focused roster and sees coach-first navigation', async () => {
     stubUser('coach');
     render(<App />);
     const mobile = await screen.findByRole('navigation', { name: 'ناوبری موبایل' });
-    for (const label of ['خانه', 'برنامه', 'حرکت‌ها', 'پیشرفت', 'تغذیه', 'شاگرد', 'افزودن برنامه']) {
+    for (const label of ['شاگردها', 'برنامه‌سازی', 'درآمدها']) {
       expect(within(mobile).getByText(label)).toBeInTheDocument();
     }
+    expect(await screen.findByRole('heading', { name: 'شاگردهای من' })).toBeInTheDocument();
   });
 
   it('the admin keeps the whole app and adds the coach section', async () => {
     stubUser('admin');
     render(<App />);
     const mobile = await screen.findByRole('navigation', { name: 'ناوبری موبایل' });
-    for (const label of ['خانه', 'برنامه', 'حرکت‌ها', 'پیشرفت', 'تغذیه', 'مربی']) {
+    for (const label of ['مربی‌ها', 'مالی باشگاه']) {
       expect(within(mobile).getByText(label)).toBeInTheDocument();
     }
-    expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();
+    expect(within(mobile).queryByText('شاگردها')).not.toBeInTheDocument();
   });
 });

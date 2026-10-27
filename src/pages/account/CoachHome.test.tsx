@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
@@ -33,6 +33,20 @@ describe('coach student list filters', () => {
     fireEvent.click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری شاگردها' }));
     expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
     expect(mocks.api).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps common student actions visible and groups administrative actions under More', async () => {
+    render(<MemoryRouter><CoachHome /></MemoryRouter>);
+    expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
+    const card = screen.getByText('سارا رضایی').closest('li');
+    if (!card) throw new Error('Student card fixture is missing.');
+
+    expect(within(card).getByRole('link', { name: /برنامه/ })).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: /پیشرفت/ })).toBeInTheDocument();
+    const more = within(card).getByText('بیشتر');
+    fireEvent.click(more);
+    expect(within(card).getByRole('link', { name: /تغذیه/ })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /رمز تازه/ })).toBeInTheDocument();
   });
 
   it('searches name and username, filters account status, and clears filters', async () => {

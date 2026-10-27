@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
+import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, MoreHorizontal, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { faNumber } from '../../lib/format';
@@ -208,39 +208,44 @@ function CoachStudents() {
                     isActive={student.isActive !== false}
                     actions={
                       <>
-                        <Link className="button button--ghost" to={`/coach/students/${student.id}/program`}>
+                        <Link className="button button--primary" to={`/coach/students/${student.id}/program`}>
                           <ListChecks size={16} /> برنامه
-                        </Link>
-                        <Link className="button button--ghost" to={`/coach/students/${student.id}/nutrition`}>
-                          <Apple size={16} /> تغذیه
                         </Link>
                         <Link className="button button--ghost" to={`/coach/students/${student.id}/progress`}>
                           <TrendingUp size={16} /> پیشرفت
                         </Link>
-                        <Link className="button button--ghost" to={`/coach/students/${student.id}/profile`}>
-                          <UserRound size={16} /> پروفایل
-                        </Link>
-                        <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
-                          <Sparkles size={16} /> هوش و پایش
-                        </Link>
                         <Link className="button button--ghost" to={`/coach/students/${student.id}/chat`}>
                           <MessageCircle size={16} /> گفتگو
                         </Link>
-                        <button
-                          type="button"
-                          className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
-                          onClick={() => void toggleStudentActive(student)}
-                          title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
-                        >
-                          {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
-                          {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
-                        </button>
-                        <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
-                          <KeyRound size={16} /> رمز تازه
-                        </button>
-                        <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
-                          <Trash2 size={16} /> حذف
-                        </button>
+                        <details className="person-card__more-actions">
+                          <summary aria-label={`بخش‌های دیگر برای ${student.displayName}`}><MoreHorizontal size={17} /> بیشتر</summary>
+                          <div className="person-card__more-actions-menu">
+                            <Link className="button button--ghost" to={`/coach/students/${student.id}/nutrition`}>
+                              <Apple size={16} /> تغذیه
+                            </Link>
+                            <Link className="button button--ghost" to={`/coach/students/${student.id}/profile`}>
+                              <UserRound size={16} /> پروفایل
+                            </Link>
+                            <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
+                              <Sparkles size={16} /> هوش و پایش
+                            </Link>
+                            <button
+                              type="button"
+                              className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
+                              onClick={() => void toggleStudentActive(student)}
+                              title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
+                            >
+                              {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
+                              {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                            </button>
+                            <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
+                              <KeyRound size={16} /> رمز تازه
+                            </button>
+                            <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
+                              <Trash2 size={16} /> حذف
+                            </button>
+                          </div>
+                        </details>
                       </>
                     }
                   />

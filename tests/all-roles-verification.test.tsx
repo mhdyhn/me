@@ -95,11 +95,12 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     render(<App />);
 
     const nav = await screen.findByRole('navigation', { name: 'ناوبری موبایل' });
-    expect(within(nav).getByText('خانه')).toBeInTheDocument();
-    expect(within(nav).getByText('برنامه')).toBeInTheDocument();
-    expect(within(nav).getByText('حرکت‌ها')).toBeInTheDocument();
-    expect(within(nav).getByText('پیشرفت')).toBeInTheDocument();
-    expect(within(nav).getByText('مربی')).toBeInTheDocument(); // Chat with coach link
+    const bar = nav.querySelector('.mobile-nav__bar') as HTMLElement;
+    expect(within(bar).getByText('خانه')).toBeInTheDocument();
+    expect(within(bar).getByText('برنامه')).toBeInTheDocument();
+    expect(within(bar).getByText('پیشرفت')).toBeInTheDocument();
+    expect(within(bar).queryByText('حرکت‌ها')).not.toBeInTheDocument();
+    expect(within(nav).getByText('مربی')).toBeInTheDocument(); // Chat with coach is in More
     expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
     expect(within(nav).queryByText('مالی باشگاه')).not.toBeInTheDocument();
     await waitFor(() => expect(document.title).toContain('میتی'));
@@ -116,8 +117,9 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(await screen.findByText('شاگرد نمونه')).toBeInTheDocument();
 
     const nav = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
-    expect(within(nav).getByText('شاگرد')).toBeInTheDocument();
-    expect(within(nav).getByText('افزودن برنامه')).toBeInTheDocument();
+    expect(within(nav).getByText('شاگردها')).toBeInTheDocument();
+    expect(within(nav).getByText('برنامه‌سازی')).toBeInTheDocument();
+    expect(within(nav).getByText('درآمدها')).toBeInTheDocument();
     expect(document.title).toContain('شاگردهای من');
   });
 
@@ -132,9 +134,9 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(await screen.findByText('مربی تست')).toBeInTheDocument();
 
     const nav = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
-    expect(within(nav).getByText('مربی')).toBeInTheDocument();
+    expect(within(nav).getByText('مربی‌ها')).toBeInTheDocument();
     expect(within(nav).getByText('مالی باشگاه')).toBeInTheDocument();
-    expect(within(nav).queryByText('شاگرد')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('شاگردها')).not.toBeInTheDocument();
     expect(document.title).toContain('مدیریت باشگاه و مربی‌ها');
   });
 });
