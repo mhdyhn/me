@@ -1,5 +1,7 @@
 import type { Db } from './db.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
+import { isValidReps, normalizeReps } from '../shared/repetitions.ts';
+export { normalizeReps } from '../shared/repetitions.ts';
 
 export interface ProgramItem {
   exerciseId: string;
@@ -25,25 +27,18 @@ export interface Programme {
 const MAX_DAYS = 7;
 const MAX_EXERCISES_PER_DAY = 15;
 const EXERCISE_ID = /^[a-z0-9-]{1,64}$/;
-const REPS = /^\d{1,2}(-\d{1,2})?$/;
 const DAY_NAME_MAX = 80;
-
-/** Normalizes Persian/Arabic digits, various dash types, and surrounding spaces to standard format (e.g. "8-12"). */
-export function normalizeReps(value: string): string {
-  let result = String(value ?? '')
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
-  result = result.replace(/[\u2013\u2014\u2212]/g, '-');
-  result = result.replace(/\s*-\s*/g, '-').trim();
-  return result;
-}
 
 /** Checks the coach's programme. Anything the app could not display safely is rejected here. */
 export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> {
   const body = requireObject(input);
   const title = requireText(body, 'title', 2, 80, 'عنوان برنامه');
   const rawPrice = body.priceTomans;
-  const priceTomans = typeof rawPrice === 'number' && Number.isInteger(rawPrice) && rawPrice >= 0 ? rawPrice : 0;
+  if (rawPrice !== undefined && rawPrice !== null &&
+      (typeof rawPrice !== 'number' || !Number.isSafeInteger(rawPrice) || rawPrice < 0 || rawPrice > 2147483647)) {
+    throw new HttpError(400, 'قیمت برنامه باید عدد صحیح و غیرمنفی و حداکثر ۲٬۱۴۷٬۴۸۳٬۶۴۷ تومان باشد.');
+  }
+  const priceTomans = typeof rawPrice === 'number' ? rawPrice : 0;
   if (!Array.isArray(body.days) || body.days.length < 1 || body.days.length > MAX_DAYS) {
     throw new HttpError(400, `برنامه باید بین ۱ تا ${MAX_DAYS} روز داشته باشد.`);
   }
@@ -61,7 +56,7 @@ export function validateProgramme(input: unknown): Omit<Programme, 'updatedAt'> 
       const muscle = rawMuscle.slice(0, 40);
       if (!Number.isInteger(item.sets) || (item.sets as number) < 1 || (item.sets as number) > 10) throw new HttpError(400, 'تعداد ست باید بین ۱ تا ۱۰ باشد.');
       const reps = normalizeReps(typeof item.reps === 'string' ? item.reps : String(item.reps ?? ''));
-      if (!REPS.test(reps)) throw new HttpError(400, 'تکرار باید مثل ۸ یا ۸-۱۲ باشد.');
+      if (!isValidReps(reps)) throw new HttpError(400, 'تکرار باید بین ۱ تا ۹۹ و مانند ۸ یا ۸-۱۲ باشد.');
       if (!Number.isInteger(item.restSeconds) || (item.restSeconds as number) < 0 || (item.restSeconds as number) > 600) {
         throw new HttpError(400, 'استراحت باید بین ۰ تا ۶۰۰ ثانیه باشد.');
       }

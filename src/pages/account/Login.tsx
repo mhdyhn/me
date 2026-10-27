@@ -6,28 +6,8 @@ import { useSession } from '../../context/SessionContext';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { homeFor } from './AccountShell';
 
-export const SAVED_CREDENTIALS_KEY = 'meety.saved-credentials';
-
-export interface SavedCredentials {
-  username: string;
-  password?: string;
-  remember: boolean;
-}
-
-export function getSavedCredentials(): SavedCredentials | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(SAVED_CREDENTIALS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.username === 'string') {
-      return parsed as SavedCredentials;
-    }
-  } catch {
-    // Ignore storage parse errors
-  }
-  return null;
-}
+export { SAVED_CREDENTIALS_KEY } from '../../lib/savedLogin';
+import { getSavedCredentials, SAVED_CREDENTIALS_KEY, type SavedCredentials } from '../../lib/savedLogin';
 
 /** Standalone sign-in screen. Nothing else in the app is reachable until this succeeds. */
 export function Login() {
@@ -36,7 +16,7 @@ export function Login() {
 
   const [savedCreds, setSavedCreds] = useState<SavedCredentials | null>(() => getSavedCredentials());
   const [username, setUsername] = useState(() => savedCreds?.username ?? '');
-  const [password, setPassword] = useState(() => savedCreds?.password ?? '');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(() => savedCreds?.remember ?? true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(() => {
@@ -72,12 +52,11 @@ export function Login() {
     try {
       const signedIn = await signIn(cleanUsername, password);
 
-      // Save or clear credentials for all roles (student, coach, admin)
+      // The browser's password manager can remember the password; the app stores only the username.
       try {
         if (rememberMe) {
           const payload: SavedCredentials = {
             username: cleanUsername,
-            password,
             remember: true,
           };
           window.localStorage.setItem(SAVED_CREDENTIALS_KEY, JSON.stringify(payload));
@@ -194,7 +173,7 @@ export function Login() {
                 onChange={(e) => setRememberMe(e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
               />
-              <span>ذخیره نام کاربری و رمز عبور</span>
+              <span>به‌خاطرسپاری نام کاربری</span>
             </label>
 
             {savedCreds && (
@@ -210,6 +189,7 @@ export function Login() {
             )}
           </div>
 
+          <p className="login-help">رمز در میتی ذخیره نمی‌شود؛ در صورت تمایل از مدیر رمز مرورگر استفاده کنید.</p>
           {error && <p className="login-error" role="alert">{error}</p>}
 
           <button type="submit" className="login-submit" disabled={busy}>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, ArrowRight, RotateCw } from 'lucide-react';
-import { api, type PaymentTransaction } from '../../lib/api';
+import { api, ApiError, type PaymentTransaction } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 import { loadAssignedProgram } from '../../lib/assignedProgram';
 
@@ -42,10 +42,10 @@ export function PaymentResult() {
         if (res.success) {
           void loadAssignedProgram();
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setSuccess(false);
-          setMessage('خطا در بررسی و تأیید وضعیت تراکنش.');
+          setMessage(error instanceof ApiError ? error.message : 'خطا در بررسی و تأیید وضعیت تراکنش.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -56,6 +56,8 @@ export function PaymentResult() {
       cancelled = true;
     };
   }, [authority, queryStatus]);
+
+  const simulated = authority.startsWith('SANDBOX-') || Boolean(transaction?.refId?.startsWith('SANDBOX-'));
 
   return (
     <div className="account-shell" style={{ maxWidth: 520, margin: '2rem auto', padding: '1.5rem' }}>
@@ -70,11 +72,11 @@ export function PaymentResult() {
           </>
         ) : success ? (
           <>
-            <div style={{ color: '#4ade80' }}>
+            <div style={{ color: '#087c57' }}>
               <CheckCircle2 size={56} />
             </div>
-            <h2 style={{ margin: 0, color: '#4ade80' }}>پرداخت با موفقیت انجام شد</h2>
-            <p style={{ margin: 0 }}>{message}</p>
+            <h2 style={{ margin: 0, color: '#087c57' }}>{simulated ? 'پرداخت آزمایشی با موفقیت شبیه‌سازی شد' : 'پرداخت با موفقیت انجام شد'}</h2>
+            <p style={{ margin: 0 }}>{simulated ? 'هیچ مبلغ واقعی منتقل نشده است.' : message}</p>
 
             {transaction && (
               <div
@@ -95,9 +97,9 @@ export function PaymentResult() {
                   <strong>{faNumber(transaction.amountTomans)} تومان</strong>
                 </div>
                 {transaction.refId && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span className="account-muted">کد پیگیری بانکی:</span>
-                    <strong dir="ltr">{transaction.refId}</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <span className="account-muted">{simulated ? 'شناسهٔ آزمایشی:' : 'کد پیگیری بانکی:'}</span>
+                    <strong dir="ltr" style={{ overflowWrap: 'anywhere' }}>{transaction.refId}</strong>
                   </div>
                 )}
                 {transaction.coachName && (
@@ -115,10 +117,10 @@ export function PaymentResult() {
           </>
         ) : (
           <>
-            <div style={{ color: '#f87171' }}>
+            <div style={{ color: '#a52d31' }}>
               <XCircle size={56} />
             </div>
-            <h2 style={{ margin: 0, color: '#f87171' }}>پرداخت ناموفق بود</h2>
+            <h2 style={{ margin: 0, color: '#a52d31' }}>پرداخت ناموفق بود</h2>
             <p className="account-muted" style={{ margin: 0 }}>
               {message || 'پرداخت توسط شما لغو شد یا درگاه بانکی عملیات را تأیید نکرد.'}
             </p>

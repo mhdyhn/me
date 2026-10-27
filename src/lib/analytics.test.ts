@@ -67,6 +67,19 @@ describe('training data integrity', () => {
     const later = { ...sampleSession, id: 'session-2', startedAt: '2026-10-10T08:00:00.000Z', completedAt: '2026-10-10T09:00:00.000Z', exercises: [{ exerciseId: 'barbell-bench-press', sets: [{ setNumber: 1, weightKg: 21, reps: 6, rir: 2, doneAt: '2026-10-10T08:10:00.000Z' }] }] };
     expect(getRecentRecord([sampleSession, later])).toMatchObject({ exerciseId: 'barbell-bench-press', weightKg: 21, reps: 6, sessionId: 'session-2' });
   });
+
+  it('compares against earlier sessions and scales to a long training history', () => {
+    const data = Array.from({ length: 5000 }, (_, index) => ({
+      ...sampleSession, id: `session-${index}`, startedAt: new Date(Date.UTC(2020, 0, 1 + index)).toISOString(),
+      exercises: [{ exerciseId: 'barbell-bench-press', sets: [
+        { setNumber: 1, weightKg: index + 20, reps: 8, rir: 2, doneAt: '' },
+        { setNumber: 2, weightKg: index + 19.5, reps: 8, rir: 2, doneAt: '' },
+      ] }],
+    }));
+    // The last qualifying set is compared to earlier sessions, not the first set in its own session.
+    expect(getRecentRecord(data)).toMatchObject({ sessionId: 'session-4999', weightKg: 5018.5 });
+  });
+
 });
 
 describe('double progression', () => {

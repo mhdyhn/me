@@ -127,4 +127,20 @@ describe('AI Modules and Student Biometrics API', () => {
 
     expect(forbidden.status).toBe(404);
   });
+
+  it('rejects an empty custom peak and incompatible resting heart rate while preserving a saved custom peak on partial updates', async () => {
+    const { coachToken, studentId } = await setupCoachAndStudent();
+    const path = `/api/students/${studentId}/ai-settings`;
+    const missing = await call('PUT', path, { maxHrMethod: 'custom', maxHr: null }, coachToken);
+    expect(missing.status).toBe(400);
+    const invalid = await call('PUT', path, { age: 100, restingHr: 160, maxHrMethod: 'tanaka' }, coachToken);
+    expect(invalid.status).toBe(400);
+    const valid = await call('PUT', path, { maxHrMethod: 'custom', maxHr: 195, restingHr: 60 }, coachToken);
+    expect(valid.status).toBe(200);
+    const partial = await call('PUT', path, { limitations: 'متن ثبت‌شده' }, coachToken);
+    expect(partial.status).toBe(200);
+    expect(partial.json.biometrics.maxHr).toBe(195);
+    expect(partial.json.biometrics.maxHrMethod).toBe('custom');
+  });
+
 });

@@ -20,8 +20,10 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppModal } from './InstallAppModal';
+import { useModalFocus } from './useModalFocus';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
+import { usePersonalSyncState } from './PersonalSync';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import type { Role } from '../lib/api';
 
@@ -76,10 +78,12 @@ export function Layout() {
   const location = useLocation();
   const { activeSession, storageWarning } = useGym();
   const { user, signOut } = useSession();
+  const personalSync = usePersonalSyncState();
   const quote = useMotivationalQuote();
   const navigate = useNavigate();
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const moreSheetRef = useModalFocus(showMoreSheet, () => setShowMoreSheet(false));
 
   const primaryTabs = user?.role === 'coach'
     ? coachPrimaryTabs
@@ -125,15 +129,6 @@ export function Layout() {
       document.title = baseTitle;
     }
   }, [location.pathname, user?.role]);
-
-  // Handle Escape key to close more sheet
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setShowMoreSheet(false);
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
 
   async function signOutAndLeave() {
     await signOut();
@@ -230,6 +225,7 @@ export function Layout() {
         </header>
 
         {storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}
+        {user && ['offline', 'conflict', 'error'].includes(personalSync.phase) && <div className="storage-warning" role="status">{personalSync.message} <NavLink to="/settings">بررسی همگام‌سازی</NavLink></div>}
         <main className="page-content" id="main-content"><Outlet /></main>
       </div>
 
@@ -246,6 +242,7 @@ export function Layout() {
             className={`mobile-nav__item${isMoreActive ? ' is-active' : ''}`}
             onClick={() => setShowMoreSheet(true)}
             aria-expanded={showMoreSheet}
+            aria-controls="mobile-more-sheet"
             aria-label="سایر بخش‌ها و امکانات"
           >
             <Menu size={20} strokeWidth={1.9} />
@@ -254,23 +251,29 @@ export function Layout() {
           </button>
         </div>
 
-        {/* Bottom Sheet Modal for secondary items */}
+        {/* A closed sheet is removed from the accessibility tree and keyboard order. */}
+        {showMoreSheet && <>
         <div
-          className={`mobile-sheet-backdrop${showMoreSheet ? ' is-open' : ''}`}
+          aria-hidden="true"
+          className="mobile-sheet-backdrop is-open"
           onClick={() => setShowMoreSheet(false)}
         />
         <div
-          className={`mobile-sheet${showMoreSheet ? ' is-open' : ''}`}
+          id="mobile-more-sheet"
+          ref={moreSheetRef}
+          tabIndex={-1}
+          className="mobile-sheet is-open"
           role="dialog"
           aria-modal="true"
           aria-label="سایر بخش‌ها و امکانات میتی"
         >
-          <div className="mobile-sheet__handle" onClick={() => setShowMoreSheet(false)} />
+          <div className="mobile-sheet__handle" aria-hidden="true" />
           <div className="mobile-sheet__head">
             <span className="mobile-sheet__title">سایر بخش‌ها و امکانات میتی</span>
             <button
               type="button"
               className="mobile-sheet__close"
+              data-initial-focus
               onClick={() => setShowMoreSheet(false)}
               aria-label="بستن منو"
             >
@@ -314,6 +317,7 @@ export function Layout() {
             </div>
           </div>
         </div>
+        </>}
       </nav>
 
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />

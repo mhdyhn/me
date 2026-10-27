@@ -1,12 +1,10 @@
 /**
  * Personal data (sessions, body weight, nutrition, profile, programme) lives in the browser.
- * Each account gets its own database so accounts sharing one browser never see each other's data.
- *
- * The developer's account (role `admin`) keeps the original database: that is where the personal
- * training history and profile already are. Every other account starts empty.
+ * Scopes avoid automatically showing another account's records; they are not a security boundary.
+ * Each signed-in account uses its own scope. Legacy owner data needs explicit import.
  */
 export const LEGACY_DB_NAME = 'meety-personal-coach';
-const SCOPE_KEY = 'meety.account-scope';
+export const SCOPE_KEY = 'meety.account-scope';
 const OWNER_SCOPE = 'owner';
 
 export const isOfflineBuild = import.meta.env.MODE === 'offline';
@@ -27,9 +25,20 @@ export function personalDbName(): string {
   return scope === OWNER_SCOPE ? LEGACY_DB_NAME : `meety-personal-${scope}`;
 }
 
+/** Use the same account boundary for personal localStorage records as for IndexedDB. */
+export function personalStorageKey(key: string): string {
+  return `${personalDbName()}:${key}`;
+}
+
 /** True when the current personal data is the developer's own (or the offline build's). */
 export function usesOwnerData(): boolean {
+  // Packaged owner defaults belong only to the legacy/offline scope; never assign them to every admin.
   return isOfflineBuild || readScope() === OWNER_SCOPE;
+}
+
+/** Never send records from the previous account's open database during the scope reload. */
+export function scopeMatchesAccount(user: { id: number }): boolean {
+  return !isOfflineBuild && readScope() === `user-${user.id}`;
 }
 
 /**
@@ -38,7 +47,7 @@ export function usesOwnerData(): boolean {
  */
 export function ensureAccountScope(user: { id: number; role: string }): boolean {
   if (isOfflineBuild || import.meta.env.MODE === 'test') return false;
-  const wanted = user.role === 'admin' ? OWNER_SCOPE : `user-${user.id}`;
+  const wanted = `user-${user.id}`;
   if (readScope() === wanted) return false;
   try {
     window.localStorage.setItem(SCOPE_KEY, wanted);

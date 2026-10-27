@@ -9,20 +9,10 @@ import { ApiError, api, type ProgramDay, type ProgramItem, type Programme, type 
 import { presetTemplates, type PresetTemplate } from '../../lib/programTemplates';
 import { faNumber } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
+import { isValidReps, normalizeReps } from '../../../shared/repetitions';
 
 const MAX_DAYS = 7;
 const MAX_EXERCISES = 15;
-const REPS_PATTERN = /^\d{1,2}(-\d{1,2})?$/;
-
-function normalizeReps(value: string): string {
-  let result = String(value ?? '')
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
-  result = result.replace(/[\u2013\u2014\u2212]/g, '-');
-  result = result.replace(/\s*-\s*/g, '-').trim();
-  return result;
-}
-
 const muscleOptions = ['همه', ...new Set(catalog.flatMap((exercise) => exercise.primaryMuscles))];
 
 export function ProgramBuilder() {
@@ -193,7 +183,7 @@ function Builder() {
       for (const item of day.exercises) {
         if (!Number.isInteger(item.sets) || item.sets < 1 || item.sets > 10) return `تعداد ست «${item.name}» باید بین ۱ تا ۱۰ باشد.`;
         const reps = normalizeReps(item.reps);
-        if (!REPS_PATTERN.test(reps)) return `تکرار «${item.name}» باید مثل ۸ یا ۸-۱۲ باشد.`;
+        if (!isValidReps(reps)) return `تکرار «${item.name}» باید بین ۱ تا ۹۹ و مثل ۸ یا ۸-۱۲ باشد.`;
         if (!Number.isInteger(item.restSeconds) || item.restSeconds < 0 || item.restSeconds > 600) return `استراحت «${item.name}» باید بین ۰ تا ۶۰۰ ثانیه باشد.`;
       }
     }

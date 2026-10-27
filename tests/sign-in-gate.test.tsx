@@ -21,10 +21,10 @@ describe('sign-in gate and credentials', () => {
     render(<App />);
     expect(await screen.findByRole('heading', { name: 'خوش آمدید' })).toBeInTheDocument();
     expect(screen.queryByText('جلسهٔ بعدی')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('ذخیره نام کاربری و رمز عبور')).toBeChecked();
+    expect(screen.getByLabelText('به‌خاطرسپاری نام کاربری')).toBeChecked();
   });
 
-  it('restores saved credentials on load and allows clearing them', async () => {
+  it('removes legacy plain-text passwords, keeps the username and allows clearing it', async () => {
     window.localStorage.setItem(
       SAVED_CREDENTIALS_KEY,
       JSON.stringify({ username: 'alireza', password: 'secret123Password', remember: true })
@@ -35,7 +35,8 @@ describe('sign-in gate and credentials', () => {
     const passwordInput = screen.getByLabelText('رمز عبور') as HTMLInputElement;
 
     expect(usernameInput.value).toBe('alireza');
-    expect(passwordInput.value).toBe('secret123Password');
+    expect(passwordInput.value).toBe('');
+    expect(JSON.parse(window.localStorage.getItem(SAVED_CREDENTIALS_KEY) ?? '{}')).toEqual({ username: 'alireza', remember: true });
 
     const clearBtn = screen.getByRole('button', { name: 'حذف ذخیره' });
     await userEvent.click(clearBtn);

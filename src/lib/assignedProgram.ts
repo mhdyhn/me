@@ -1,11 +1,13 @@
 import { ApiError, api, type Programme, type ProgramItem } from './api';
 import type { WorkoutExercise, WorkoutTemplate } from '../types';
 import { setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from './programStore';
+import { isValidReps, normalizeReps } from '../../shared/repetitions';
 
 /** Reads "8-12" or "8" into a range. Anything else falls back to 8–12. */
 export function parseReps(reps: string): { minReps: number; maxReps: number } {
-  const match = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec(reps.trim());
-  if (!match) return { minReps: 8, maxReps: 12 };
+  const normalized = normalizeReps(reps);
+  const match = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(normalized);
+  if (!match || !isValidReps(normalized)) return { minReps: 8, maxReps: 12 };
   const min = Number(match[1]);
   const max = match[2] ? Number(match[2]) : min;
   return { minReps: Math.min(min, max), maxReps: Math.max(min, max) };

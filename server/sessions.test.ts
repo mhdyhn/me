@@ -147,6 +147,24 @@ describe('workout summaries', () => {
     expect(read.json.sessions).toHaveLength(20);
   });
 
+  it('shows versioned sessions to the coach and does not resurrect a deleted legacy summary', async () => {
+    const { coachToken, studentToken, studentId } = await coachAndStudent();
+    const legacy = session('versioned-one');
+    await call('PUT', '/api/me/sessions', { sessions: [legacy, session('legacy-only')] }, studentToken);
+    const full = { ...legacy, templateId: 'day-1', currentExerciseIndex: 0, currentSetIndex: 0, name: 'نسخهٔ تازه', notes: '', exercises: [] };
+    const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'session', key: 'versioned-one', baseVersion: version, deleted, value, operationId });
+    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: studentId, changes: [item] }, studentToken);
+    expect((await write(change(0, false, full, 'session-write-01'))).json.results[0].status).toBe('saved');
+    await call('PUT', '/api/me/sessions', { sessions: [legacy] }, studentToken);
+    const first = (await call('GET', `/api/students/${studentId}/sessions`, undefined, coachToken)).json.sessions;
+    expect(first.find((item: { id: string }) => item.id === 'versioned-one').name).toBe('نسخهٔ تازه');
+    expect(first.some((item: { id: string }) => item.id === 'legacy-only')).toBe(true);
+    expect((await write(change(1, true, null, 'session-delete-02'))).json.results[0].status).toBe('saved');
+    const after = (await call('GET', `/api/students/${studentId}/sessions`, undefined, coachToken)).json.sessions;
+    expect(after.some((item: { id: string }) => item.id === 'versioned-one')).toBe(false);
+    expect(after.some((item: { id: string }) => item.id === 'legacy-only')).toBe(true);
+  });
+
   it('removes a deleted student\'s sessions with the account', async () => {
     const { coachToken, studentToken, studentId } = await coachAndStudent();
     await call('PUT', '/api/me/sessions', { sessions: [session('s-1')] }, studentToken);

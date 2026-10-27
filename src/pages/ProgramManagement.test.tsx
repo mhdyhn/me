@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { GymProvider } from '../context/GymProvider';
 import { SessionProvider } from '../context/SessionContext';
 import { setActiveProgram, setAssignedProgram, originalProgramCopy } from '../lib/programStore';
+import { db } from '../lib/db';
 import { Program } from './Program';
 
 function renderProgram() {
@@ -22,9 +23,12 @@ function renderProgram() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   window.localStorage.clear();
-  setActiveProgram(originalProgramCopy());
+  const program = originalProgramCopy();
+  await db.preferences.clear();
+  await db.preferences.put({ key: 'programTemplates', value: program });
+  setActiveProgram(program);
 });
 
 describe('manager program management', () => {
@@ -62,7 +66,8 @@ describe('manager program management', () => {
   });
 
   it('applies a preset template to replace or start a program', async () => {
-    // Start with empty program
+    // Start with empty program, both in the store and the persisted account data.
+    await db.preferences.put({ key: 'programTemplates', value: [] });
     setActiveProgram([]);
     renderProgram();
     const user = userEvent.setup();

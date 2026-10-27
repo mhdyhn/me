@@ -129,11 +129,19 @@ export async function saveSummaries(db: Db, studentId: number, summaries: Workou
   return summaries.length;
 }
 
-/** The newest summaries first, for the coach's progress page. */
+/** Full, versioned student sessions are authoritative; old summaries remain as a fallback. */
 export async function listSummaries(db: Db, studentId: number): Promise<WorkoutSummary[]> {
-  const rows = await db.query<{ body: string }>(
-    'SELECT body FROM workout_sessions WHERE student_id = $1 ORDER BY started_at DESC LIMIT $2',
-    [studentId, SESSIONS_PER_REQUEST],
-  );
-  return rows.map((row) => JSON.parse(row.body) as WorkoutSummary);
+  const [personal, legacy] = await Promise.all([
+    db.query<{ body: string }>(
+      `SELECT body FROM personal_data_records WHERE user_id = $1 AND kind = 'session' AND deleted = 0
+       ORDER BY body::jsonb->>'startedAt' DESC LIMIT $2`, [studentId, SESSIONS_PER_REQUEST],
+    ),
+    db.query<{ body: string }>(
+      `SELECT s.body FROM workout_sessions s WHERE s.student_id = $1
+       AND NOT EXISTS (SELECT 1 FROM personal_data_records p WHERE p.user_id = s.student_id AND p.kind = 'session' AND p.item_key = s.session_id)
+       ORDER BY s.started_at DESC LIMIT $2`, [studentId, SESSIONS_PER_REQUEST],
+    ),
+  ]);
+  return [...personal.map((row) => validateSummary(JSON.parse(row.body))), ...legacy.map((row) => JSON.parse(row.body) as WorkoutSummary)]
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, SESSIONS_PER_REQUEST);
 }

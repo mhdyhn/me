@@ -2,29 +2,15 @@ import type { WorkoutTemplate } from '../types';
 import { db } from './db';
 import { validateProgram } from './programRules';
 import { usesOwnerData } from './accountScope';
-import { getActiveProgram, isProgramReadOnly, originalProgramCopy, setActiveProgram } from './programStore';
-import { api } from './api';
+import { defaultPersonalProgram, isProgramReadOnly, originalProgramCopy, setActiveProgram } from './programStore';
 import { adminPersonalProgram } from '../data/adminProgram';
+import { notifyPersonalDataApplied, notifyPersonalDataChanged } from './personalSyncEvents';
+import { DraftChangedError, requireUnchanged } from './draftGuard';
 
 const PROGRAM_KEY = 'programTemplates';
 const BACKUP_KEY = 'programBackup';
-const ADMIN_SEED_KEY = 'adminPersonalProgramSeeded';
 
-async function hasAdminProgramSeedMarker(): Promise<boolean> {
-  if (!usesOwnerData() || import.meta.env.MODE === 'test') return true;
-  const record = await db.preferences.get(ADMIN_SEED_KEY);
-  return record?.value === true;
-}
-
-async function seedAdminPersonalProgram() {
-  const personalProgram = structuredClone(adminPersonalProgram);
-  await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
-  await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-  setActiveProgram(personalProgram);
-  await api('PUT', '/me/personal-program', { program: personalProgram }).catch(() => {});
-}
-
-/** Update labels in an existing admin programme without replacing its prescriptions or edits. */
+/** Update legacy labels when explicitly requested without replacing prescriptions or edits. */
 export function normalizeAdminProgramNames(
   program: WorkoutTemplate[],
   enabled = usesOwnerData() && import.meta.env.MODE !== 'test',
@@ -47,139 +33,48 @@ export function normalizeAdminProgramNames(
 const isProgramShape = (value: unknown): value is WorkoutTemplate[] =>
   Array.isArray(value) && value.length > 0 && value.every((day) => day && typeof day === 'object' && Array.isArray((day as WorkoutTemplate).exercises));
 
-const isLegacyOwnerDefault = (value: WorkoutTemplate[]) =>
-  usesOwnerData() && import.meta.env.MODE !== 'test' && JSON.stringify(value) === JSON.stringify(originalProgramCopy());
+/** Network synchronization is versioned and handled by the personal-data synchronizer. */
+export async function syncCloudProgram(): Promise<void> { notifyPersonalDataChanged(); }
 
-/**
- * Syncs personal program with the cloud server (for manager/coach or any logged-in user).
- * If cloud has a program, updates local storage. If cloud is empty and local has one, uploads local copy.
- */
-export async function syncCloudProgram() {
-  if (isProgramReadOnly()) return;
-  try {
-    const res = await api<{ program: WorkoutTemplate[] | null; updatedAt: string | null }>('GET', '/me/personal-program');
-    if (res.program !== null) {
-      if (Array.isArray(res.program)) {
-        if (isProgramShape(res.program) && validateProgram(res.program).length === 0 && isLegacyOwnerDefault(res.program)) {
-          const personalProgram = structuredClone(adminPersonalProgram);
-          await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
-          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-          setActiveProgram(personalProgram);
-          await api('PUT', '/me/personal-program', { program: personalProgram }).catch(() => {});
-          return;
-        }
-        if (res.program.length === 0) {
-          if (usesOwnerData() && !(await hasAdminProgramSeedMarker())) {
-            await seedAdminPersonalProgram();
-            return;
-          }
-          await db.preferences.put({ key: PROGRAM_KEY, value: [] });
-          setActiveProgram([]);
-          return;
-        }
-        if (isProgramShape(res.program) && validateProgram(res.program).length === 0) {
-          const { program, changed } = normalizeAdminProgramNames(res.program);
-          await db.preferences.put({ key: PROGRAM_KEY, value: program });
-          if (usesOwnerData() && changed) await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-          setActiveProgram(program);
-          if (changed) await api('PUT', '/me/personal-program', { program }).catch(() => {});
-          return;
-        }
-      }
-    } else {
-      // Cloud has no personal program yet: if this device has one, back it up to cloud
-      const current = getActiveProgram();
-      if (current && current.length > 0) {
-        await api('PUT', '/me/personal-program', { program: current }).catch(() => {});
-      }
-    }
-  } catch {
-    // Offline, guest, or unauthenticated: silently keep local program
-  }
-}
-
-/** Loads the account's own programme. The developer starts from the original programme; everyone else from an empty one. */
-export async function loadStoredProgram() {
+/** Load the local account's programme. A default is shown in memory, never blindly pushed to the server. */
+export async function loadStoredProgram(): Promise<void> {
   try {
     const record = await db.preferences.get(PROGRAM_KEY);
     if (isProgramReadOnly()) return;
     if (record !== undefined) {
-      const value = record?.value;
-      if (Array.isArray(value) && value.length === 0) {
-        if (usesOwnerData() && !(await hasAdminProgramSeedMarker())) {
-          await seedAdminPersonalProgram();
-          void syncCloudProgram();
-          return;
-        }
-        setActiveProgram([]);
-        void syncCloudProgram();
-        return;
-      }
-      if (isProgramShape(value) && validateProgram(value).length === 0) {
-        if (isLegacyOwnerDefault(value)) {
-          const personalProgram = structuredClone(adminPersonalProgram);
-          await db.preferences.put({ key: PROGRAM_KEY, value: personalProgram });
-          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-          setActiveProgram(personalProgram);
-          void syncCloudProgram();
-          return;
-        }
-        const { program, changed } = normalizeAdminProgramNames(value);
-        if (changed) {
-          await db.preferences.put({ key: PROGRAM_KEY, value: program });
-          await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-        }
-        setActiveProgram(program);
-        void syncCloudProgram();
-        return;
-      }
+      if (Array.isArray(record.value) && record.value.length === 0) { setActiveProgram([]); return; }
+      if (isProgramShape(record.value) && validateProgram(record.value).length === 0) { setActiveProgram(record.value); return; }
+      console.error('The saved personal programme is invalid; it was not replaced.');
+      return;
     }
-    if (usesOwnerData() && import.meta.env.MODE !== 'test') {
-      await seedAdminPersonalProgram();
-    } else {
-      setActiveProgram(usesOwnerData() ? originalProgramCopy() : []);
-      void syncCloudProgram();
-    }
+    setActiveProgram(structuredClone(defaultPersonalProgram()));
   } catch (error) {
     console.error('Meety could not read the saved programme.', error);
   }
 }
 
-/**
- * Saves a programme after validation. The previous programme is kept under a backup key
- * before it is replaced, so a bad edit can be recovered. Also syncs to cloud if connected.
- */
-export async function saveProgram(next: WorkoutTemplate[]) {
-  const { program } = normalizeAdminProgramNames(next);
-  const errors = validateProgram(program);
+async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[]): Promise<void> {
+  try {
+    await db.transaction('rw', db.preferences, async () => {
+      const record = await db.preferences.get(PROGRAM_KEY);
+      const current = record?.value ?? defaultPersonalProgram();
+      if (expected !== undefined) requireUnchanged(current, expected);
+      await db.preferences.put({ key: BACKUP_KEY, value: current });
+      await db.preferences.put({ key: PROGRAM_KEY, value: next });
+    });
+  } catch (error) {
+    if (error instanceof DraftChangedError) notifyPersonalDataApplied();
+    throw error;
+  }
+  setActiveProgram(next);
+  notifyPersonalDataChanged();
+}
+
+/** Save locally first; reject a stale editor in the same IndexedDB transaction. */
+export async function saveProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[]): Promise<void> {
+  const errors = validateProgram(next);
   if (errors.length) throw new Error(errors[0]);
-  await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
-  await db.preferences.put({ key: PROGRAM_KEY, value: program });
-  if (usesOwnerData() && import.meta.env.MODE !== 'test') await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-  setActiveProgram(program);
-
-  // Sync to cloud in background
-  try {
-    await api('PUT', '/me/personal-program', { program });
-  } catch (err) {
-    console.warn('Personal programme cloud sync deferred (offline or guest):', err);
-  }
+  await persistProgram(next, expected);
 }
-
-/** Clears/deletes the entire programme with backup preservation. Also syncs deletion to cloud. */
-export async function clearProgram() {
-  await db.preferences.put({ key: BACKUP_KEY, value: getActiveProgram() });
-  await db.preferences.put({ key: PROGRAM_KEY, value: [] });
-  if (usesOwnerData() && import.meta.env.MODE !== 'test') await db.preferences.put({ key: ADMIN_SEED_KEY, value: true });
-  setActiveProgram([]);
-
-  // Sync deletion to cloud in background
-  try {
-    await api('PUT', '/me/personal-program', { program: [] });
-  } catch (err) {
-    console.warn('Personal programme cloud clear deferred:', err);
-  }
-}
-
-/** Restores the original RAGE programme (the current one is kept as backup). */
-export const resetProgram = () => saveProgram(originalProgramCopy());
+export const clearProgram = (expected?: WorkoutTemplate[]) => persistProgram([], expected);
+export const resetProgram = (expected?: WorkoutTemplate[]) => saveProgram(originalProgramCopy(), expected);

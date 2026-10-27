@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
 import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
@@ -64,6 +64,36 @@ describe('student profile sharing', () => {
     trainingExperience: 'تازه‌کار', trainingDays: 3, sessionMinutes: 45, dailyActivity: 'فعالیت سبک',
     sleepHours: '۷ ساعت', stressLevel: 0, injuries: 'بدون محدودیت', equipment: 'باشگاه کامل', workingWeightReferences: [],
   };
+
+  it('uses the versioned profile for consented sharing and never revives a deleted one', async () => {
+    const owner = await coachSession();
+    const student = await createStudentAccount(owner.token);
+    await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
+    const versioned = { ...profile, age: 31 };
+    const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'profile', key: 'main', baseVersion: version, deleted, value, operationId });
+    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [item] }, student.token);
+    expect((await write(change(0, false, versioned, 'profile-write-01'))).json.results[0].status).toBe('saved');
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(31);
+    await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(31);
+    expect((await write(change(1, true, null, 'profile-delete-02'))).json.results[0].status).toBe('saved');
+    expect((await call('GET', '/api/me/profile', undefined, student.token)).json.stored).toBeNull();
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
+    expect((await write(change(2, false, { ...profile, age: 32 }, 'profile-write-03'))).json.results[0].status).toBe('saved');
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
+    expect((await call('POST', '/api/me/profile/sharing', { shareWithCoach: true }, student.token)).json.shareWithCoach).toBe(true);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(32);
+  });
+
+  it('refuses profile or sharing requests made with another account after a tab switch', async () => {
+    const owner = await coachSession();
+    const first = await createStudentAccount(owner.token);
+    const second = await createStudentAccount(owner.token);
+    expect((await call('GET', `/api/me/profile?accountId=${first.id}`, undefined, second.token)).status).toBe(409);
+    expect((await call('PUT', '/api/me/profile', { accountId: first.id, profile, shareWithCoach: true }, second.token)).status).toBe(409);
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: first.id, shareWithCoach: true }, second.token)).status).toBe(409);
+    expect((await call('GET', '/api/me/profile', undefined, second.token)).json.stored).toBeNull();
+  });
 
   it('syncs only with explicit consent and limits the profile to the owning coach', async () => {
     const owner = await coachSession();
@@ -570,6 +600,29 @@ describe('ZarinPal payments with multi-settlement', () => {
     return { token, id: created.json.user.id as number };
   }
 
+  it('filters invalid and sandbox references in actual production entitlement queries', async () => {
+    const coach = await coachSession();
+    const student = await studentSession(coach.token, 'شاگرد تست قدیمی');
+    await db.query(`INSERT INTO payment_transactions
+      (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, gateway_mode)
+      VALUES ($1, $2, 100, 90, 10, 'legacy-test', 'paid', NULL, $3, 'legacy')`, [student.id, coach.id, clock.toISOString()]);
+    const { isProgramPaid } = await import('./payments.ts');
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      expect(await isProgramPaid(db, student.id)).toBe(false);
+      await db.query("UPDATE payment_transactions SET ref_id = 'undefined' WHERE authority = 'legacy-test'");
+      expect(await isProgramPaid(db, student.id)).toBe(false);
+      await db.query("UPDATE payment_transactions SET ref_id = 'SANDBOX-123' WHERE authority = 'legacy-test'");
+      expect(await isProgramPaid(db, student.id)).toBe(false);
+      await db.query("UPDATE payment_transactions SET ref_id = '123456' WHERE authority = 'legacy-test'");
+      expect(await isProgramPaid(db, student.id)).toBe(true);
+      await db.query("UPDATE payment_transactions SET gateway_mode = 'sandbox' WHERE authority = 'legacy-test'");
+      expect(await isProgramPaid(db, student.id)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('calculates 90/10 commission split accurately with odd and edge amounts', async () => {
     const { calculateCommission } = await import('./payments.ts');
 
@@ -641,6 +694,11 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(startRes.json.paymentUrl).toBeDefined();
     const authority = startRes.json.authority as string;
 
+    // Another coach must not read or cancel this student's transaction by guessing its authority.
+    const otherCoach = await coachSession();
+    expect((await call('GET', `/api/pay/transaction/${authority}`, undefined, otherCoach.token)).status).toBe(404);
+    expect((await call('POST', '/api/pay/verify', { authority, status: 'NOK' }, otherCoach.token)).status).toBe(404);
+
     // Verify payment successfully
     const verifyRes = await call('POST', '/api/pay/verify', { authority, status: 'OK' }, student.token);
     expect(verifyRes.status).toBe(200);
@@ -675,7 +733,6 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(coachTransactions.json.transactions[0].coachShareTomans).toBe(180000);
 
     // Other coach does not see it
-    const otherCoach = await coachSession();
     const otherCoachTransactions = await call('GET', '/api/coach/transactions', undefined, otherCoach.token);
     expect(otherCoachTransactions.json.transactions).toHaveLength(0);
 

@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// A release must use a persistent, privately managed key; never generate one in CI.
+def keystorePath = System.getenv("KEYSTORE_PATH")
+def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+def keyAliasName = System.getenv("KEY_ALIAS")
+def releaseKeyPassword = System.getenv("KEY_PASSWORD")
+def releaseSigningReady = [keystorePath, keystorePassword, keyAliasName, releaseKeyPassword].every { it != null && !it.trim().isEmpty() } && file(keystorePath).isFile()
+
 android {
     namespace = "com.mhdyhn.meety"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -18,12 +25,11 @@ android {
     }
     signingConfigs {
         release {
-            def keystoreFile = file(System.getenv("KEYSTORE_PATH") ?: "meety-release.keystore")
-            if (keystoreFile.exists()) {
-                storeFile keystoreFile
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: "meety123456"
-                keyAlias System.getenv("KEY_ALIAS") ?: "meety"
-                keyPassword System.getenv("KEY_PASSWORD") ?: "meety123456"
+            if (releaseSigningReady) {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keyAliasName
+                keyPassword releaseKeyPassword
             }
         }
     }
@@ -33,6 +39,13 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+// Debug builds remain usable without a keystore; release tasks fail closed.
+gradle.taskGraph.whenReady { graph ->
+    if (!releaseSigningReady && graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') }) {
+        throw new GradleException("Release signing requires KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD.")
     }
 }
 

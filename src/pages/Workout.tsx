@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Dumbbell, Info, Minus, Pause, Play, Plus, Trash2, Trophy } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
+import { DraftConflictNotice } from '../components/DraftConflictNotice';
+import { useGuardedDraft } from '../components/useGuardedDraft';
+import { DraftChangedError, samePersonalValue } from '../lib/draftGuard';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
@@ -21,15 +24,25 @@ export function Workout() {
   const { sessions, loading, activeSession, startWorkout, saveSession, completeActiveSession, deleteSession } = useGym();
   useProgram();
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const previousTemplateId = useRef(templateId);
   const [summary, setSummary] = useState<WorkoutSession | null>(null);
   const [weightValue, setWeightValue] = useState('');
   const [repsValue, setRepsValue] = useState('');
   const [rirInput, setRirInput] = useState('2');
   const [setNote, setSetNote] = useState('');
-  const [notesDraft, setNotesDraft] = useState('');
+  const [setEditBase, setSetEditBase] = useState<WorkoutSession | null>(null);
+  const setEditBaseRef = useRef<WorkoutSession | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [timerBusy, setTimerBusy] = useState(false);
   const [formError, setFormError] = useState('');
   const [previewFrame, setPreviewFrame] = useState<FigureState>('start');
+
+  useEffect(() => {
+    if (previousTemplateId.current !== templateId) {
+      previousTemplateId.current = templateId;
+      setSessionId(null); setSummary(null); setEditBaseRef.current = null; setSetEditBase(null);
+    }
+  }, [templateId]);
 
   useEffect(() => {
     // Completing a session clears activeSession. Do not immediately create a fresh one while the summary is open.
@@ -38,10 +51,37 @@ export function Workout() {
       setSessionId(activeSession.id);
       return;
     }
+    // Do not recreate a session that another device just deleted or completed.
+    if (sessionId) return;
     void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
-  }, [template, loading, activeSession?.id, startWorkout, summary]);
+  }, [template, loading, activeSession?.id, startWorkout, summary, sessionId]);
 
-  const session = summary ?? (sessionId ? sessions.find((item) => item.id === sessionId) ?? null : activeSession);
+  const session = summary ? sessions.find((item) => item.id === summary.id) ?? summary : (sessionId ? sessions.find((item) => item.id === sessionId) ?? null : activeSession);
+  const notes = useGuardedDraft(session?.notes ?? '');
+  const notesDraft = notes.draft;
+  const setFormConflict = Boolean(setEditBase && !samePersonalValue(setEditBase, session));
+  const markSetEdit = () => {
+    if (!setEditBaseRef.current && session) { setEditBaseRef.current = session; setSetEditBase(session); }
+  };
+  const clearSetEdit = () => { setEditBaseRef.current = null; setSetEditBase(null); };
+  const safeSave = async (next: WorkoutSession, expected: WorkoutSession): Promise<boolean> => {
+    try {
+      const stored = await saveSession(next, expected);
+      if (!stored) setFormError('جلسه روی دستگاه ذخیره نشد؛ تغییرات خود را دوباره بررسی کن.');
+      else if (setEditBaseRef.current && samePersonalValue(setEditBaseRef.current, expected)) {
+        setEditBaseRef.current = next; setSetEditBase(next);
+      }
+      return stored;
+    } catch (error) {
+      setFormError(error instanceof DraftChangedError ? error.message : 'ذخیرهٔ جلسه انجام نشد.');
+      return false;
+    }
+  };
+  const saveNotes = async (current: WorkoutSession) => {
+    if (!notes.dirty) return;
+    if (notes.conflict) { setFormError('ابتدا نسخهٔ تازه و پیش‌نویس یادداشت را بررسی کن.'); return; }
+    if (await safeSave({ ...current, notes: notesDraft }, current)) setFormError('');
+  };
   const activeTemplate = session ? getWorkoutTemplate(session.templateId) : template;
   const currentExerciseIndex = session?.currentExerciseIndex ?? 0;
   const currentWorkoutExercise = activeTemplate?.exercises[currentExerciseIndex];
@@ -75,6 +115,7 @@ export function Workout() {
 
   useEffect(() => {
     if (!session || !prescription || !currentWorkoutExercise || summary) return;
+    if (setEditBaseRef.current && !samePersonalValue(setEditBaseRef.current, session)) return;
     const priorSameSession = session.exercises[currentExerciseIndex]?.sets.at(-1);
     const lastLogged = loggedSet;
     const previousWeight = previous?.sets[0]?.weightKg;
@@ -85,14 +126,18 @@ export function Workout() {
     setFormError('');
   }, [session?.id, currentExerciseIndex, session?.currentSetIndex, currentWorkoutExercise?.exerciseId, summary]);
 
-  useEffect(() => { setNotesDraft(session?.notes ?? ''); }, [session?.id]);
 
   if (!template) {
     return <EmptyState title="جلسه پیدا نشد" detail="این جلسه در برنامهٔ تمرینی فعلی نیست." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />;
   }
 
-  if (loading || (!session && !isDifferentActiveSession)) {
+  if (loading || (!session && !isDifferentActiveSession && !sessionId)) {
     return <div className="workout-loading"><span className="loader-dot" /><p>در حال آماده‌سازی جلسه…</p></div>;
+  }
+  if (!session && !isDifferentActiveSession && sessionId) {
+    return <div className="page-stack"><EmptyState title="جلسه در دستگاه دیگری تغییر کرد یا حذف شد" detail="برای جلوگیری از بازگرداندن ناخواسته، جلسهٔ تازه‌ای ساخته نشد." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />
+      {setEditBase && <p role="status">پیش‌نویس ذخیره‌نشدهٔ ست: {weightValue} کیلوگرم، {repsValue} تکرار، یادداشت: {setNote || '—'}</p>}
+      {notes.dirty && <p role="status">پیش‌نویس یادداشت: {notesDraft}</p>}</div>;
   }
 
   if (isDifferentActiveSession && activeSession) {
@@ -101,6 +146,7 @@ export function Workout() {
       <div className="workout-conflict panel-card">
         <span className="eyebrow">جلسهٔ دیگری در حال انجام است</span>
         <h2>تمرین روز قبل هنوز پایان نیافته است.</h2>
+        {formError && <p className="form-error" role="alert">{formError}</p>}
         <p>
           جلسهٔ <strong>{prevWorkoutName}</strong> همچنان باز است. شما می‌توانید این جلسهٔ جدید را آغاز کنید، جلسهٔ قبلی را به اتمام برسانید، یا آن را لغو کنید:
         </p>
@@ -109,8 +155,10 @@ export function Workout() {
             type="button"
             className="button button--primary"
             onClick={async () => {
-              await completeActiveSession(activeSession.id);
-              void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
+              try {
+                if (await completeActiveSession(activeSession.id)) void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
+                else setFormError('ذخیرهٔ جلسه انجام نشد.');
+              } catch (error) { setFormError(error instanceof Error ? error.message : 'ذخیرهٔ جلسه انجام نشد.'); }
             }}
           >
             <CheckCircle2 size={16} /> اتمام و ثبت جلسهٔ قبلی و شروع این روز
@@ -126,7 +174,7 @@ export function Workout() {
                 cancelText: 'انصراف',
                 variant: 'danger',
               })) {
-                await deleteSession(activeSession.id);
+                try { if (!await deleteSession(activeSession.id, activeSession)) { setFormError('حذف جلسه انجام نشد.'); return; } } catch (error) { setFormError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); return; }
                 void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
               }
             }}
@@ -163,10 +211,13 @@ export function Workout() {
             {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{programExerciseName(item.exerciseId) ?? getExerciseGuide(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
             <div className="volume-callout"><span>حجم کل تمرین</span><strong>{faNumber(Math.round(totals.volumeKg))} <small>کیلوگرم × تکرار</small></strong></div>
           </section>
-          <section className="panel-card summary-notes"><div className="card-topline"><span className="eyebrow">یادداشت‌های جلسه</span><Info size={16} className="icon-muted" /></div><label htmlFor="workout-notes">نکته‌ای هست که بخواهی یادت بماند؟</label><textarea id="workout-notes" value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} onBlur={() => void saveSession({ ...completed, notes: notesDraft })} placeholder="انرژی، نکتهٔ فرم حرکت یا تنظیم وسیله…" rows={5} /><span className="field-hint">همراه این تمرین ذخیره می‌شود.</span>
+          <section className="panel-card summary-notes"><div className="card-topline"><span className="eyebrow">یادداشت‌های جلسه</span><Info size={16} className="icon-muted" /></div><label htmlFor="workout-notes">نکته‌ای هست که بخواهی یادت بماند؟</label><textarea id="workout-notes" value={notesDraft} onChange={(event) => notes.setDraft(event.target.value)} onBlur={() => void saveNotes(completed)} placeholder="انرژی، نکتهٔ فرم حرکت یا تنظیم وسیله…" rows={5} /><span className="field-hint">همراه این تمرین ذخیره می‌شود.</span>
             {recordIsFromThisSession && latestRecord && <div className="summary-pr"><Trophy size={18} /><div><span className="eyebrow">ست برتر جدید</span><strong>{latestRecord.exerciseName} · {kg(latestRecord.weightKg)} × {faNumber(latestRecord.reps)}</strong></div></div>}
           </section>
         </div>
+        {setFormConflict && <p role="alert">جلسه در دستگاه دیگری تکمیل یا تغییر کرده است؛ پیش‌نویس ثبت‌نشدهٔ ست: {weightValue} کیلوگرم، {repsValue} تکرار، یادداشت: {setNote || '—'}</p>}
+        {notes.conflict && <DraftConflictNotice latest={session.notes} discard={notes.discard} acceptCurrent={notes.acceptCurrent} />}
+        {formError && <p className="form-error" role="alert">{formError}</p>}
         <div className="summary-actions"><Link to="/progress" className="button button--secondary">دیدن پیشرفت <ArrowRight size={16} /></Link><Link to="/" className="button button--primary">بازگشت به صفحهٔ اصلی <ArrowRight size={16} /></Link></div>
       </div>
     );
@@ -176,14 +227,14 @@ export function Workout() {
 
   const goToNextStep = async () => {
     if (!session || !activeTemplate || !prescription) return;
+    if (notes.conflict) { setFormError('ابتدا پیش‌نویس یادداشت را بررسی کن.'); return; }
     const nextSet = session.currentSetIndex + 1;
     const sameExerciseHasMore = nextSet < prescription.sets;
     const isLastExercise = currentExerciseIndex >= activeTemplate.exercises.length - 1;
 
     if (isFinalSet || (isLastExercise && !sameExerciseHasMore)) {
       const completed: WorkoutSession = { ...session, status: 'completed', completedAt: new Date().toISOString(), restTimer: undefined, notes: notesDraft };
-      setSummary(completed);
-      await saveSession(completed);
+      if (await safeSave(completed, session)) setSummary(completed);
       return;
     }
     const updated: WorkoutSession = {
@@ -193,12 +244,12 @@ export function Workout() {
       restTimer: undefined,
       notes: notesDraft,
     };
-    await saveSession(updated);
-    setNow(Date.now());
+    if (await safeSave(updated, session)) { clearSetEdit(); setNow(Date.now()); setFormError(''); }
   };
 
   const handleFinishWorkout = async () => {
     if (!session) return;
+    if (notes.conflict) { setFormError('ابتدا پیش‌نویس یادداشت را بررسی کن.'); return; }
     const hasAnySets = session.exercises.some((e) => e.sets.length > 0);
     if (!hasAnySets) {
       if (await confirmModal({
@@ -227,8 +278,7 @@ export function Workout() {
       restTimer: undefined,
       notes: notesDraft,
     };
-    setSummary(completed);
-    await saveSession(completed);
+    if (await safeSave(completed, session)) setSummary(completed);
   };
 
   const handleExitClick = async () => {
@@ -246,7 +296,8 @@ export function Workout() {
         variant: 'danger',
       });
       if (discard) {
-        await deleteSession(session.id);
+        try { if (!await deleteSession(session.id, session)) { setFormError('حذف جلسه انجام نشد.'); return; } }
+        catch (error) { setFormError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); return; }
       }
       navigate('/');
       return;
@@ -259,6 +310,7 @@ export function Workout() {
       variant: 'primary',
     });
     if (choice) {
+      if (notes.conflict) { setFormError('ابتدا پیش‌نویس یادداشت را بررسی کن.'); return; }
       const completed: WorkoutSession = {
         ...session,
         status: 'completed',
@@ -266,8 +318,7 @@ export function Workout() {
         restTimer: undefined,
         notes: notesDraft,
       };
-      setSummary(completed);
-      await saveSession(completed);
+      if (await safeSave(completed, session)) setSummary(completed);
     } else {
       navigate('/');
     }
@@ -276,6 +327,7 @@ export function Workout() {
   const handleLogSet = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!session || !prescription) return;
+    if (setFormConflict || notes.conflict) { setFormError('ابتدا نسخهٔ تازه و پیش‌نویس را بررسی کن.'); return; }
     const weight = Number(weightValue);
     const reps = Number(repsValue);
     const rir = Number(rirInput);
@@ -290,20 +342,20 @@ export function Workout() {
       ...currentExercise,
       sets: [...currentExercise.sets.filter((set) => set.setNumber !== setNumber), logged].sort((a, b) => a.setNumber - b.setNumber),
     };
-    await saveSession({
+    const stored = await safeSave({
       ...session,
       exercises: updatedExercises,
       restTimer: { endsAt: Date.now() + prescription.restSeconds * 1000, pausedRemainingSeconds: null },
       notes: notesDraft,
-    });
-    setNow(Date.now());
-    setFormError('');
+    }, setEditBase ?? session);
+    if (stored) { clearSetEdit(); setNow(Date.now()); setFormError(''); }
   };
 
-  const updateTimer = (timer: RestTimerState | undefined) => {
-    if (!session) return;
-    void saveSession({ ...session, restTimer: timer });
-    setNow(Date.now());
+  const updateTimer = async (timer: RestTimerState | undefined) => {
+    if (!session || timerBusy) return;
+    setTimerBusy(true);
+    try { if (await safeSave({ ...session, restTimer: timer }, session)) setNow(Date.now()); }
+    finally { setTimerBusy(false); }
   };
 
   const togglePause = () => {
@@ -396,13 +448,22 @@ export function Workout() {
             {previous && <div className="last-time-card"><span className="eyebrow">دفعهٔ قبل · {formatDate(previous.session.startedAt, { month: 'short', day: 'numeric' })}</span><div>{previous.sets.map((set) => <span key={set.setNumber}>{kg(set.weightKg)} × {faNumber(set.reps)}<small> · {faNumber(set.rir)} تکرار در ذخیره</small></span>)}</div></div>}
             {!previous && suggestedReference !== undefined && <div className="reference-hint"><Info size={14} /><span>وزنهٔ تقریبی پروفایل: حدود {kg(suggestedReference)} · این مقدار تأیید نشده و فقط برای شناخت وزنهٔ کاری است؛ پیش از ثبت بررسی‌اش کن. این عدد نه ست قبلی است و نه رکورد یک‌تکرار بیشینه.</span></div>}
 
+            {setFormConflict && <DraftConflictNotice latest={session} discard={() => {
+              clearSetEdit();
+              const last = session.exercises[currentExerciseIndex]?.sets.find((set) => set.setNumber === setNumber);
+              const prior = session.exercises[currentExerciseIndex]?.sets.at(-1);
+              setWeightValue(last ? String(last.weightKg) : prior ? String(prior.weightKg) : previous?.sets[0] ? String(previous.sets[0].weightKg) : '');
+              setRepsValue(last ? String(last.reps) : String(prescription.minReps));
+              setRirInput(last ? String(last.rir) : String(rirValue(prescription.targetRirLabel)));
+              setSetNote(last?.notes ?? ''); setFormError('');
+            }} acceptCurrent={() => { setEditBaseRef.current = session; setSetEditBase(session); setFormError(''); }} />}
             <form className="set-log-form" onSubmit={(event) => void handleLogSet(event)}>
               <div className="set-input-grid">
-                <label className="field-control"><span>وزنه <small>کیلوگرم</small></span><div className="input-with-unit"><input aria-label="وزنه به کیلوگرم" type="number" min="0" step="0.5" inputMode="decimal" value={weightValue} onChange={(event) => setWeightValue(event.target.value)} disabled={Boolean(loggedSet)} placeholder="۰" required /><span>کیلوگرم</span></div></label>
-                <label className="field-control"><span>تکرار</span><input aria-label="تعداد تکرار" type="number" min="1" max="100" step="1" inputMode="numeric" value={repsValue} onChange={(event) => setRepsValue(event.target.value)} disabled={Boolean(loggedSet)} required /></label>
-                <label className="field-control"><span>تکرار در ذخیره <bdi dir="ltr">(RIR)</bdi></span><select aria-label="تکرار در ذخیره (RIR)" value={rirInput} onChange={(event) => setRirInput(event.target.value)} disabled={Boolean(loggedSet)}>{[0, 1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{faNumber(value)} تکرار در ذخیره</option>)}</select></label>
+                <label className="field-control"><span>وزنه <small>کیلوگرم</small></span><div className="input-with-unit"><input aria-label="وزنه به کیلوگرم" type="number" min="0" step="0.5" inputMode="decimal" value={weightValue} onChange={(event) => { markSetEdit(); setWeightValue(event.target.value); }} disabled={Boolean(loggedSet)} placeholder="۰" required /><span>کیلوگرم</span></div></label>
+                <label className="field-control"><span>تکرار</span><input aria-label="تعداد تکرار" type="number" min="1" max="100" step="1" inputMode="numeric" value={repsValue} onChange={(event) => { markSetEdit(); setRepsValue(event.target.value); }} disabled={Boolean(loggedSet)} required /></label>
+                <label className="field-control"><span>تکرار در ذخیره <bdi dir="ltr">(RIR)</bdi></span><select aria-label="تکرار در ذخیره (RIR)" value={rirInput} onChange={(event) => { markSetEdit(); setRirInput(event.target.value); }} disabled={Boolean(loggedSet)}>{[0, 1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{faNumber(value)} تکرار در ذخیره</option>)}</select></label>
               </div>
-              <label className="field-control field-control--note"><span>یادداشت ست <small>اختیاری</small></span><input value={setNote} onChange={(event) => setSetNote(event.target.value)} disabled={Boolean(loggedSet)} placeholder="نکتهٔ فرم، تنظیم وسیله یا حس این ست…" /></label>
+              <label className="field-control field-control--note"><span>یادداشت ست <small>اختیاری</small></span><input value={setNote} onChange={(event) => { markSetEdit(); setSetNote(event.target.value); }} disabled={Boolean(loggedSet)} placeholder="نکتهٔ فرم، تنظیم وسیله یا حس این ست…" /></label>
               {formError && <p className="form-error" role="alert">{formError}</p>}
               {!loggedSet ? <button className="button button--primary button--large button--full" type="submit">ثبت ست و شروع استراحت <ArrowRight size={17} /></button> : <div className="set-logged-confirm"><CheckCircle2 size={18} /><span>ست {faNumber(setNumber)} ثبت شد · {kg(loggedSet.weightKg)} × {faNumber(loggedSet.reps)} · {faNumber(loggedSet.rir)} تکرار در ذخیره</span></div>}
             </form>
@@ -413,8 +474,8 @@ export function Workout() {
               <div className="rest-timer-head"><div><span className="eyebrow">{remainingSeconds === 0 ? 'استراحت تمام شد' : 'برای ست بعدی ریکاوری کن'}</span><strong>زمان‌سنج استراحت</strong></div><span className="timer-readout">{timerLabel(remainingSeconds)}</span></div>
               <div className="timer-track"><span style={{ width: `${Math.max(0, Math.min(100, (remainingSeconds / prescription.restSeconds) * 100))}%` }} /></div>
               <div className="timer-controls">
-                <div className="timer-adjusters"><button aria-label="کم‌کردن ۱۵ ثانیه" onClick={() => adjustTimer(-15)}><Minus size={14} /> ۱۵ ثانیه</button><button aria-label="افزودن ۱۵ ثانیه" onClick={() => adjustTimer(15)}><Plus size={14} /> ۱۵ ثانیه</button></div>
-                <div className="timer-main-controls"><button className="button button--quiet button--small" onClick={togglePause}>{session.restTimer?.pausedRemainingSeconds !== null ? <><Play size={14} /> ادامه</> : <><Pause size={14} /> مکث</>}</button><button className="button button--quiet button--small" onClick={skipRest}>پایان استراحت</button></div>
+                <div className="timer-adjusters"><button aria-label="کم‌کردن ۱۵ ثانیه" disabled={timerBusy} onClick={() => adjustTimer(-15)}><Minus size={14} /> ۱۵ ثانیه</button><button aria-label="افزودن ۱۵ ثانیه" disabled={timerBusy} onClick={() => adjustTimer(15)}><Plus size={14} /> ۱۵ ثانیه</button></div>
+                <div className="timer-main-controls"><button className="button button--quiet button--small" disabled={timerBusy} onClick={togglePause}>{session.restTimer?.pausedRemainingSeconds !== null ? <><Play size={14} /> ادامه</> : <><Pause size={14} /> مکث</>}</button><button className="button button--quiet button--small" disabled={timerBusy} onClick={skipRest}>پایان استراحت</button></div>
               </div>
               {remainingSeconds === 0 && <button className="button button--primary button--large button--full next-set-button" onClick={() => void goToNextStep()}>{isFinalSet ? 'پایان تمرین' : session.currentSetIndex + 1 < prescription.sets ? 'ست بعدی' : 'حرکت بعدی'} <ArrowRight size={17} /></button>}
             </section>
@@ -422,7 +483,8 @@ export function Workout() {
             <button className="button button--primary button--large button--full next-set-button" onClick={() => void goToNextStep()}>{isFinalSet ? 'پایان تمرین' : session.currentSetIndex + 1 < prescription.sets ? 'ست بعدی' : 'حرکت بعدی'} <ArrowRight size={17} /></button>
           ) : null}
 
-          <details className="workout-notes-disclosure"><summary>یادداشت جلسه <span>اختیاری</span></summary><textarea value={notesDraft} onChange={(event) => setNotesDraft(event.target.value)} onBlur={() => void saveSession({ ...session, notes: notesDraft })} rows={3} placeholder="انرژی، تمرکز یا نکته‌ای برای یادآوری…" /></details>
+          {notes.conflict && <DraftConflictNotice latest={session.notes} discard={notes.discard} acceptCurrent={notes.acceptCurrent} />}
+          <details className="workout-notes-disclosure"><summary>یادداشت جلسه <span>اختیاری</span></summary><textarea value={notesDraft} onChange={(event) => notes.setDraft(event.target.value)} onBlur={() => void saveNotes(session)} rows={3} placeholder="انرژی، تمرکز یا نکته‌ای برای یادآوری…" /></details>
         </main>
 
         <aside className="workout-sidebar">

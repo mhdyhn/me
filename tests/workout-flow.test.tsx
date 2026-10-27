@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -43,13 +43,16 @@ describe('workout flow', () => {
     expect(document.querySelector('.timer-readout')).toHaveTextContent('۰۲:۳۰');
 
     await user.click(screen.getByRole('button', { name: /مکث/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /افزودن ۱۵ ثانیه/ })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: /افزودن ۱۵ ثانیه/ }));
-    expect(document.querySelector('.timer-readout')).toHaveTextContent('۰۲:۴۵');
+    await waitFor(() => expect(document.querySelector('.timer-readout')).toHaveTextContent('۰۲:۴۵'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /ادامه/ })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: /ادامه/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /پایان استراحت/ })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: /پایان استراحت/ }));
-    expect(screen.getByRole('button', { name: 'ست بعدی' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'ست بعدی' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'ست بعدی' }));
-    expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲');
+    await waitFor(() => expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲'));
   });
 
   it('trains a programmed movement using the programme name', async () => {
@@ -95,7 +98,7 @@ describe('workout flow', () => {
     await user.click(screen.getByRole('button', { name: /ثبت ست و شروع استراحت/i }));
     await screen.findByText(/ست ۳ ثبت شد · ۱۰ کیلوگرم × ۱۰/);
     await user.click(screen.getByRole('button', { name: /پایان استراحت/ }));
-    await user.click(screen.getByRole('button', { name: 'پایان تمرین' }));
+    await user.click(await screen.findByRole('button', { name: 'پایان تمرین' }));
 
     expect(await screen.findByText(/تمرین کامل شد/)).toBeInTheDocument();
     expect(screen.getByText('خلاصهٔ جلسه')).toBeInTheDocument();

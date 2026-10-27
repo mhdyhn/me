@@ -3,7 +3,7 @@ import type { Db } from './db.ts';
 import { createSession, deleteSession, deleteSessionsForUser, generatePassword, generateUsername, hashPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, updatePassword, type Role, type StoredUser } from './users.ts';
-import { deletePersonalProgramme, deleteProgramme, loadPersonalProgramme, loadProgramme, savePersonalProgramme, saveProgramme, validateProgramme } from './programs.ts';
+import { deleteProgramme, loadProgramme, saveProgramme, validateProgramme } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
@@ -11,6 +11,7 @@ import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, valid
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 import { loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
 import { loadStudentProfile, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
+import { applyPersonalChange, getPersonalRecord, listPersonalRecords, validateChange } from './personalData.ts';
 
 export interface AppOptions {
   db: Db;
@@ -51,6 +52,24 @@ const PASSWORD_MAX = 128;
 const NAME_MIN = 2;
 const NAME_MAX = 60;
 
+// Capacitor's local origin and explicitly configured web clients may use the API cross-origin.
+const NATIVE_ORIGINS = new Set(['https://localhost', 'capacitor://localhost']);
+
+function isAllowedOrigin(origin: string, request: IncomingMessage, configured: Set<string>): boolean {
+  if (NATIVE_ORIGINS.has(origin) || configured.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const host = request.headers.host?.toLowerCase();
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.origin === origin && url.host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
+}
+
+function canViewTransaction(user: StoredUser, transaction: { studentId: number; coachId: number }): boolean {
+  return user.role === 'admin' || (user.role === 'student' && user.id === transaction.studentId) || (user.role === 'coach' && user.id === transaction.coachId);
+}
+
 /** Routes a student may still call before changing a generated password. */
 const ALWAYS_ALLOWED = new Set(['/api/me', '/api/me/password', '/api/auth/logout']);
 
@@ -78,6 +97,7 @@ export function createApp(options: AppOptions) {
   const maxFailed = options.maxFailedLogins ?? 5;
   const lockMs = (options.lockMinutes ?? 15) * 60 * 1000;
   const failures = new Map<string, { count: number; lockedUntil: number }>();
+  const allowedOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
 
   function cleanExpiredFailures(): void {
     const current = now().getTime();
@@ -210,7 +230,11 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/profile$/,
       auth: ['student'],
-      handler: async ({ user }) => ({ status: 200, body: { stored: await loadStudentProfile(db, user!.id) } }),
+      handler: async ({ user, url }) => {
+        const expected = url.searchParams.get('accountId');
+        if (expected !== null && expected !== String(user!.id)) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        return { status: 200, body: { stored: await loadStudentProfile(db, user!.id) } };
+      },
     },
 
     {
@@ -219,6 +243,7 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'انتخاب اشتراک پروفایل با مربی الزامی است.');
         const profile = validateStudentProfile(body);
         const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString());
@@ -232,6 +257,7 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'فیلد shareWithCoach باید بولین باشد.');
         const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString());
         return { status: 200, body: { shareWithCoach: input.shareWithCoach && exists } };
@@ -578,39 +604,48 @@ export function createApp(options: AppOptions) {
       },
     },
 
-    // Personal workout program cloud sync (for admin, coach, or any signed-in user)
+    // Per-account personal data. Each item has a server version and is updated conditionally.
     {
-      method: 'GET',
-      pattern: /^\/api\/me\/personal-program$/,
+      method: 'GET', pattern: /^\/api\/me\/personal-data$/,
       auth: 'signed-in',
-      handler: async ({ user }) => {
-        const result = await loadPersonalProgramme(db, user!.id);
-        return { status: 200, body: { program: result ? result.program : null, updatedAt: result ? result.updatedAt : null } };
+      handler: async ({ user, url }) => {
+        if (url.searchParams.get('accountId') !== String(user!.id)) throw new HttpError(409, 'حساب همگام‌سازی تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        return { status: 200, body: await listPersonalRecords(db, user!.id, url.searchParams.get('cursor')), headers: { 'Cache-Control': 'no-store' } };
       },
     },
-
     {
-      method: 'PUT',
-      pattern: /^\/api\/me\/personal-program$/,
+      method: 'POST', pattern: /^\/api\/me\/personal-data\/batch$/,
       auth: 'signed-in',
       handler: async ({ user, body }) => {
         const input = requireObject(body);
-        if (!Array.isArray(input.program)) {
-          throw new HttpError(400, 'برنامه باید به صورت آرایه باشد.');
-        }
-        await savePersonalProgramme(db, user!.id, input.program, now());
-        return { status: 200, body: { ok: true, updatedAt: now().toISOString() } };
+        if (input.accountId !== user!.id) throw new HttpError(409, 'حساب همگام‌سازی تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        if (!Array.isArray(input.changes) || input.changes.length < 1 || input.changes.length > 25) throw new HttpError(400, 'هر درخواست باید بین ۱ تا ۲۵ تغییر داشته باشد.');
+        const changes = input.changes.map(validateChange);
+        const identifiers = new Set(changes.map((change) => `${change.kind}:${change.key}`));
+        if (identifiers.size !== changes.length) throw new HttpError(400, 'دادهٔ تکراری در درخواست وجود دارد.');
+        const results = await Promise.all(changes.map((change) => applyPersonalChange(db, user!.id, change, now().toISOString())));
+        return { status: 200, body: { results }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
+    // Legacy clients may read the programme, but must update before making an unversioned write.
     {
-      method: 'DELETE',
-      pattern: /^\/api\/me\/personal-program$/,
+      method: 'GET', pattern: /^\/api\/me\/personal-program$/,
       auth: 'signed-in',
       handler: async ({ user }) => {
-        await deletePersonalProgramme(db, user!.id);
-        return { status: 200, body: { ok: true } };
+        const result = await getPersonalRecord(db, user!.id, 'program', 'main');
+        return { status: 200, body: { program: result && !result.deleted ? result.value : null, updatedAt: result?.updatedAt ?? null, version: result?.version ?? 0 }, headers: { 'Cache-Control': 'no-store' } };
       },
+    },
+    {
+      method: 'PUT', pattern: /^\/api\/me\/personal-program$/,
+      auth: 'signed-in',
+      handler: async () => { throw new HttpError(409, 'نسخهٔ برنامه قدیمی است؛ صفحه را به‌روزرسانی کن تا همگام‌سازی امن انجام شود.'); },
+    },
+    {
+      method: 'DELETE', pattern: /^\/api\/me\/personal-program$/,
+      auth: 'signed-in',
+      handler: async () => { throw new HttpError(409, 'نسخهٔ برنامه قدیمی است؛ صفحه را به‌روزرسانی کن تا همگام‌سازی امن انجام شود.'); },
     },
 
     // Payment endpoints
@@ -619,9 +654,18 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/pay\/start$/,
       auth: ['student'],
       handler: async ({ user, request, url }) => {
+        const configuredOrigin = process.env.PAYMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, '');
+        if (process.env.NODE_ENV === 'production') {
+          try {
+            const publicUrl = new URL(configuredOrigin ?? '');
+            if (publicUrl.protocol !== 'https:' || publicUrl.origin !== configuredOrigin) throw new Error('invalid payment origin');
+          } catch {
+            throw new HttpError(503, 'نشانی بازگشت درگاه پرداخت پیکربندی نشده است.');
+          }
+        }
         const proto = request.headers['x-forwarded-proto'] || 'http';
         const host = request.headers['x-forwarded-host'] || request.headers.host || url.host;
-        const origin = request.headers.origin || `${proto}://${host}`;
+        const origin = configuredOrigin || request.headers.origin || `${proto}://${host}`;
         const result = await createPaymentRequest(db, user!.id, origin, now());
         return { status: 201, body: result };
       },
@@ -631,9 +675,11 @@ export function createApp(options: AppOptions) {
       method: 'POST',
       pattern: /^\/api\/pay\/verify$/,
       auth: 'signed-in',
-      handler: async ({ body }) => {
+      handler: async ({ body, user }) => {
         const input = requireObject(body);
         const authority = requireText(input, 'authority', 5, 100, 'شناسه ارجاع پرداخت');
+        const transaction = await getTransactionByAuthority(db, authority);
+        if (!transaction || !canViewTransaction(user!, transaction)) throw new HttpError(404, 'تراکنش یافت نشد.');
         const status = typeof input.status === 'string' ? input.status : 'OK';
         const result = await verifyPayment(db, authority, status, now());
         return { status: 200, body: result };
@@ -662,10 +708,10 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/pay\/transaction\/([^/]+)$/,
       auth: 'signed-in',
-      handler: async ({ params }) => {
+      handler: async ({ params, user }) => {
         const authority = decodeURIComponent(params[0]!);
         const transaction = await getTransactionByAuthority(db, authority);
-        if (!transaction) throw new HttpError(404, 'تراکنش یافت نشد.');
+        if (!transaction || !canViewTransaction(user!, transaction)) throw new HttpError(404, 'تراکنش یافت نشد.');
         return { status: 200, body: { transaction } };
       },
     },
@@ -855,16 +901,18 @@ export function createApp(options: AppOptions) {
   }
 
   return async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    // The mobile app or web client calls this API, potentially cross-origin (Capacitor, preview, etc.).
     const origin = String(request.headers.origin ?? '');
     if (origin) {
+      response.setHeader('Vary', 'Origin');
+      if (!isAllowedOrigin(origin, request, allowedOrigins)) {
+        send(response, 403, { error: 'این مبدأ اجازهٔ دسترسی به سرور را ندارد.' });
+        return;
+      }
       response.setHeader('Access-Control-Allow-Origin', origin);
-      // X-Meety-Session is the fallback session header the app sends; the browser blocks it unless listed here.
       response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Meety-Session');
-      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       response.setHeader('Access-Control-Allow-Credentials', 'true');
       response.setHeader('Access-Control-Max-Age', '600');
-      response.setHeader('Vary', 'Origin');
     }
     if (request.method === 'OPTIONS') {
       response.writeHead(204).end();
@@ -877,7 +925,7 @@ export function createApp(options: AppOptions) {
     }
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' ? SESSIONS_BODY_BYTES : undefined;
+      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' ? SESSIONS_BODY_BYTES : undefined;
       const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);
@@ -931,6 +979,3 @@ function send(response: ServerResponse, status: number, body: unknown, headers: 
   });
   response.end(payload);
 }
-
-/** Origins of the native app shells that may call the API. Capacitor on Android uses https://localhost. */
-

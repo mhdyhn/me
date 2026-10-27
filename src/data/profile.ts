@@ -77,7 +77,7 @@ export const defaultNutritionGoals: NutritionGoals = {
   proteinG: Math.round(77 * 1.95),
 };
 
-/** A blank profile for a new account: the developer's own details are never shown to anyone else. */
+/** New accounts start blank in the UI; bundled owner defaults are still public source code. */
 export const blankProfile: UserProfile = {
   age: 0,
   sex: '',

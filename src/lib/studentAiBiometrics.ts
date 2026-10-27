@@ -1,4 +1,5 @@
-import { api } from './api';
+import { ApiError, api, getStoredUser } from './api';
+import { personalStorageKey } from './accountScope';
 
 export type AiModuleKey = 'recovery' | 'muscles' | 'hinge' | 'noom';
 export const ALL_AI_MODULES: AiModuleKey[] = ['recovery', 'muscles', 'hinge', 'noom'];
@@ -43,23 +44,23 @@ export const AI_MODULES_INFO: Record<AiModuleKey, AiModuleInfo> = {
   recovery: {
     key: 'recovery',
     title: 'آمادگی و ریکاوری روزانه',
-    subtitle: 'موتور Whoop & Oura',
-    description: 'تحلیل نمره آمادگی روزانه (Readiness)، کیفیت خواب، ضربان استراحت و نرخ فشار (Strain).',
+    subtitle: 'با الهام از Whoop و Oura؛ بدون اتصال',
+    description: 'برآورد آموزشی بر پایهٔ ورودی دستی یا دادهٔ نمونه، نه اندازه‌گیری واقعی دستگاه.',
     color: '#10b981',
     icon: 'HeartPulse',
   },
   muscles: {
     key: 'muscles',
     title: 'نقشه ترمیم و خستگی عضلات',
-    subtitle: 'الگوریتم Fitbod',
-    description: 'محاسبه درصد بازسازی ۷ گروه عضلانی، خستگی تجمعی و زمان لازم تا ریکاوری کامل فیبرها.',
+    subtitle: 'با الهام از Fitbod؛ بدون اتصال',
+    description: 'نمایش برآورد تقریبی برای ۷ گروه عضلانی بر اساس سوابق ثبت‌شده؛ نه سنجش بازیابی فیبرها.',
     color: '#06b6d4',
     icon: 'Activity',
   },
   hinge: {
     key: 'hinge',
     title: 'پیشگیری از آسیب و سلامت مفاصل',
-    subtitle: 'پروتکل‌های Hinge Health',
+    subtitle: 'تمرین‌های نمونه با الهام از Hinge Health',
     description: 'روتین‌های تخصصی پریهب (Prehab) برای زانو، کمر، شانه، گردن و مچ‌ها متناسب با حرکات برنامه.',
     color: '#8b5cf6',
     icon: 'ShieldAlert',
@@ -67,7 +68,7 @@ export const AI_MODULES_INFO: Record<AiModuleKey, AiModuleInfo> = {
   noom: {
     key: 'noom',
     title: 'تغذیه آگاهانه و چگالی کالری',
-    subtitle: 'روانشناسی تغذیه Noom',
+    subtitle: 'الگوی آموزشی با الهام از Noom',
     description: 'طبقه‌بندی رنگی غذاها بر اساس چگالی کالری و ثبت آگاهانه محرک‌های هیجانی غذا خوردن.',
     color: '#f59e0b',
     icon: 'Apple',
@@ -166,7 +167,7 @@ const STORAGE_KEY_STUDENT_BIOMETRICS_PREFIX = 'meety.student-biometrics-';
 
 export function getLocalFallbackBiometrics(studentId: number): StudentBiometricsData {
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY_STUDENT_BIOMETRICS_PREFIX}${studentId}`);
+    const raw = localStorage.getItem(personalStorageKey(`${STORAGE_KEY_STUDENT_BIOMETRICS_PREFIX}${studentId}`));
     if (raw) return JSON.parse(raw);
   } catch {}
 
@@ -187,21 +188,16 @@ export function getLocalFallbackBiometrics(studentId: number): StudentBiometrics
 
 export function saveLocalFallbackBiometrics(data: StudentBiometricsData): void {
   try {
-    localStorage.setItem(`${STORAGE_KEY_STUDENT_BIOMETRICS_PREFIX}${data.studentId}`, JSON.stringify(data));
+    localStorage.setItem(personalStorageKey(`${STORAGE_KEY_STUDENT_BIOMETRICS_PREFIX}${data.studentId}`), JSON.stringify(data));
   } catch {}
 }
 
 export async function getStudentBiometrics(studentId: number): Promise<StudentBiometricsData> {
-  try {
-    const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('GET', `/students/${studentId}/ai-settings`);
-    if (res && res.biometrics) {
-      saveLocalFallbackBiometrics(res.biometrics);
-      return res.biometrics;
-    }
-    return getLocalFallbackBiometrics(studentId);
-  } catch {
-    return getLocalFallbackBiometrics(studentId);
-  }
+  // A coach needs a current server authorization; cached data must not override 403/404.
+  const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('GET', `/students/${studentId}/ai-settings`);
+  if (!res?.biometrics) throw new ApiError(0, 'اطلاعات بیومتریک از سرور دریافت نشد.');
+  saveLocalFallbackBiometrics(res.biometrics);
+  return res.biometrics;
 }
 
 export async function saveStudentBiometricsApi(
@@ -216,46 +212,23 @@ export async function saveStudentBiometricsApi(
     contraindicatedMovements?: string[];
   },
 ): Promise<StudentBiometricsData> {
-  try {
-    const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('PUT', `/students/${studentId}/ai-settings`, data);
-    if (res && res.biometrics) {
-      saveLocalFallbackBiometrics(res.biometrics);
-      return res.biometrics;
-    }
-  } catch {
-    // fallback below
-  }
-
-  const current = getLocalFallbackBiometrics(studentId);
-  const age = data.age !== undefined ? data.age : current.age;
-  const restingHr = data.restingHr !== undefined ? data.restingHr : current.restingHr;
-  const maxHrMethod = data.maxHrMethod ?? current.maxHrMethod;
-  const maxHr = data.maxHr && maxHrMethod === 'custom'
-    ? data.maxHr
-    : calculateMaxHeartRate(age, maxHrMethod, data.maxHr);
-  const updated: StudentBiometricsData = {
-    ...current,
-    ...data,
-    age,
-    restingHr,
-    maxHrMethod,
-    maxHr,
-    zones: calculateHeartRateZones(maxHr, restingHr),
-    updatedAt: new Date().toISOString(),
-  };
-  saveLocalFallbackBiometrics(updated);
-  return updated;
+  // Never report success for a local-only edit: there is no background queue for this data.
+  const res = await api<{ studentName?: string; biometrics: StudentBiometricsData }>('PUT', `/students/${studentId}/ai-settings`, data);
+  if (!res?.biometrics) throw new ApiError(0, 'تأیید ذخیره از سرور دریافت نشد.');
+  saveLocalFallbackBiometrics(res.biometrics);
+  return res.biometrics;
 }
 
 export async function getMyAiSettings(): Promise<StudentBiometricsData> {
+  const studentId = getStoredUser()?.id ?? 0;
   try {
     const res = await api<{ biometrics: StudentBiometricsData }>('GET', '/me/ai-settings');
-    if (res && res.biometrics) {
-      saveLocalFallbackBiometrics(res.biometrics);
-      return res.biometrics;
-    }
-    return getLocalFallbackBiometrics(0);
-  } catch {
-    return getLocalFallbackBiometrics(0);
+    if (!res?.biometrics) throw new ApiError(0, 'تنظیمات از سرور دریافت نشد.');
+    saveLocalFallbackBiometrics(res.biometrics);
+    return res.biometrics;
+  } catch (error) {
+    // Only an unreachable server permits local use. An explicit access denial must not.
+    if (error instanceof ApiError && error.status !== 0 && error.status < 500) throw error;
+    return getLocalFallbackBiometrics(studentId);
   }
 }

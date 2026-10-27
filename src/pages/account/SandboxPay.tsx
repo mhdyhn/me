@@ -21,33 +21,33 @@ export function SandboxPay() {
         className="panel-card"
         style={{
           border: '1px solid #eab308',
-          background: '#141410',
+          background: '#fff',
           padding: '2rem 1.5rem',
           display: 'grid',
           gap: '1.25rem',
           borderRadius: 20,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#facc15' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#684b10' }}>
           <ShieldCheck size={28} />
           <div>
-            <h2 style={{ margin: 0, fontSize: 17, color: '#fef08a' }}>شبیه‌ساز درگاه پرداخت زرین‌پال (Sandbox)</h2>
-            <small style={{ color: '#ca8a04' }}>محیط آزمایش پرداخت بدون کسر پول واقعی</small>
+            <h2 style={{ margin: 0, fontSize: 17, color: '#684b10' }}>شبیه‌ساز درگاه پرداخت زرین‌پال (Sandbox)</h2>
+            <small style={{ color: '#684b10' }}>محیط آزمایش پرداخت بدون کسر پول واقعی</small>
           </div>
         </div>
 
-        <div style={{ background: '#1c1c16', padding: '1rem', borderRadius: 12, border: '1px solid #2d2a1e', fontSize: 14 }}>
+        <div style={{ background: 'var(--surface-soft)', padding: '1rem', borderRadius: 12, border: '1px solid var(--line)', fontSize: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span className="account-muted">مبلغ تراکنش:</span>
             <strong style={{ fontSize: 16, color: 'var(--text)' }}>{faNumber(amount)} تومان</strong>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <span className="account-muted">شناسه مرجع (Authority):</span>
-            <code style={{ fontSize: 11, color: '#a1a1aa' }}>{authority}</code>
+            <code style={{ fontSize: 11, color: 'var(--text)', overflowWrap: 'anywhere', textAlign: 'left' }}>{authority}</code>
           </div>
         </div>
 
-        <p style={{ margin: 0, fontSize: 13, color: '#d4d4d8', lineHeight: 1.6 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
           این صفحه برای بررسی و تست جریان خرید، تسهیم ۹۰/۱۰ و بازگشایی خودکار برنامه طراحی شده است. می‌توانید نتیجهٔ دلخواه خود را برای آزمودن سیستم انتخاب کنید:
         </p>
 
@@ -63,7 +63,7 @@ export function SandboxPay() {
           <button
             type="button"
             className="button button--ghost"
-            style={{ width: '100%', justifyContent: 'center', color: '#f87171' }}
+            style={{ width: '100%', justifyContent: 'center', color: '#a52d31' }}
             onClick={handleCancel}
           >
             <X size={18} /> انصراف از پرداخت (لغو)

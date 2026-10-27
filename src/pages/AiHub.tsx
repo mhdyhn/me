@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { confirmModal } from '../components/ConfirmModal';
+import { DraftConflictNotice } from '../components/DraftConflictNotice';
+import { samePersonalValue } from '../lib/draftGuard';
 import {
   Activity,
   AlertCircle,
@@ -23,6 +25,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
+import { PERSONAL_DATA_APPLIED } from '../lib/personalSyncEvents';
 import {
   calculateMuscleRecovery,
   calculateReadinessScore,
@@ -63,14 +66,18 @@ export function AiHub() {
   const weekdayNames = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
   const todayName = weekdayNames[new Date().getDay()];
   const todayWorkout = program.find((workout) => workout.dayLabel === todayName || workout.dayLabel.startsWith(`${todayName}:`));
-  const adminOffDayLabel = user?.role === 'admin' && !todayWorkout
-    ? todayName === 'سه‌شنبه' ? 'روز استراحت برنامه' : todayName === 'جمعه' ? 'والیبال (فعالیت غیرِ وزنه‌ای)' : 'بدون جلسهٔ وزنه در برنامه'
-    : `امروز (${todayName}) جلسهٔ تمرینی ثبت‌شده‌ای ندارد`;
+  const adminOffDayLabel = `امروز (${todayName}) جلسهٔ تمرینی ثبت‌شده‌ای ندارد`;
   const [activeTab, setActiveTab] = useState<ActiveTab>('recovery');
   const [metrics, setMetrics] = useState<HealthMetrics>(getStoredHealthMetrics);
   const [activeJoints, setActiveJoints] = useState<JointKey[]>(getStoredJointConcerns);
   const [mindfulLogs, setMindfulLogs] = useState<MindfulLogEntry[]>(getStoredMindfulLogs);
   const [biometricsData, setBiometricsData] = useState<StudentBiometricsData | null>(null);
+
+  useEffect(() => {
+    const refresh = () => { setMetrics(getStoredHealthMetrics()); setActiveJoints(getStoredJointConcerns()); setMindfulLogs(getStoredMindfulLogs()); };
+    window.addEventListener(PERSONAL_DATA_APPLIED, refresh);
+    return () => window.removeEventListener(PERSONAL_DATA_APPLIED, refresh);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -92,6 +99,9 @@ export function AiHub() {
   }, []);
 
   const enabledModules = biometricsData?.enabledModules ?? ALL_AI_MODULES;
+  const hasBiometricMax = Boolean(biometricsData && (biometricsData.maxHrMethod === 'custom'
+    ? biometricsData.maxHr >= 100 && biometricsData.maxHr <= 240
+    : biometricsData.age !== null && biometricsData.age >= 10 && biometricsData.age <= 100));
 
   // Noom input state
   const [foodInput, setFoodInput] = useState('');
@@ -101,6 +111,9 @@ export function AiHub() {
 
   // Manual metrics edit modal/drawer toggle
   const [isEditingMetrics, setIsEditingMetrics] = useState(false);
+  const [metricsBase, setMetricsBase] = useState<HealthMetrics>(metrics);
+  const [metricsError, setMetricsError] = useState('');
+  const [healthSaveError, setHealthSaveError] = useState('');
   const [editSleep, setEditSleep] = useState(metrics.sleepHours.toString());
   const [editSleepQuality, setEditSleepQuality] = useState(metrics.sleepQualityScore.toString());
   const [editRhr, setEditRhr] = useState(metrics.restingHeartRate.toString());
@@ -129,51 +142,78 @@ export function AiHub() {
   const proteinMaxG = Math.round(currentWeightKg * 2.2);
 
   const handleSync = (source: HealthTrackerSource) => {
-    const updated = simulateTrackerSync(source);
-    setMetrics(updated);
-    setEditSleep(updated.sleepHours.toString());
-    setEditSleepQuality(updated.sleepQualityScore.toString());
-    setEditRhr(updated.restingHeartRate.toString());
-    setEditHrv(updated.heartRateVariability.toString());
+    setMetricsError('');
+    try {
+      const updated = simulateTrackerSync(source);
+      setMetrics(updated);
+      setHealthSaveError('');
+    } catch {
+      setHealthSaveError('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد. فضای ذخیره‌سازی یا تنظیمات مرورگر را بررسی کن.');
+    }
   };
 
   const handleSaveManual = (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = saveHealthMetrics({
-      sleepHours: parseFloat(editSleep) || 7.5,
-      sleepQualityScore: parseInt(editSleepQuality, 10) || 80,
-      restingHeartRate: parseInt(editRhr, 10) || 60,
-      heartRateVariability: parseInt(editHrv, 10) || 65,
-      source: 'manual',
-    });
-    setMetrics(updated);
-    setIsEditingMetrics(false);
+    const current = getStoredHealthMetrics();
+    if (!samePersonalValue(current, metricsBase)) {
+      setMetrics(current);
+      setMetricsError('ابتدا نسخهٔ تازه و پیش‌نویس را بررسی کن.');
+      return;
+    }
+    const values = [editSleep, editSleepQuality, editRhr, editHrv];
+    const sleepHours = Number(editSleep);
+    const sleepQualityScore = Number(editSleepQuality);
+    const restingHeartRate = Number(editRhr);
+    const heartRateVariability = Number(editHrv);
+    if (values.some((value) => !value.trim()) || [sleepHours, sleepQualityScore, restingHeartRate, heartRateVariability].some((value) => !Number.isFinite(value)) ||
+        sleepHours < 3 || sleepHours > 14 || sleepQualityScore < 0 || sleepQualityScore > 100 ||
+        restingHeartRate < 40 || restingHeartRate > 110 || heartRateVariability < 20 || heartRateVariability > 150) {
+      setMetricsError('لطفاً همهٔ شاخص‌ها را در بازهٔ مجاز وارد کن.');
+      return;
+    }
+    try {
+      const updated = saveHealthMetrics({ sleepHours, sleepQualityScore, restingHeartRate, heartRateVariability, source: 'manual' });
+      setMetricsError('');
+      setHealthSaveError('');
+      setMetrics(updated);
+      setIsEditingMetrics(false);
+    } catch {
+      setHealthSaveError('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد. فضای ذخیره‌سازی یا تنظیمات مرورگر را بررسی کن.');
+    }
   };
 
   const toggleJoint = (joint: JointKey) => {
-    const next = activeJoints.includes(joint)
-      ? activeJoints.filter((j) => j !== joint)
-      : [...activeJoints, joint];
-    setActiveJoints(next);
-    saveStoredJointConcerns(next);
+    const current = getStoredJointConcerns();
+    const next = current.includes(joint) ? current.filter((j) => j !== joint) : [...current, joint];
+    try {
+      saveStoredJointConcerns(next);
+      setActiveJoints(next);
+      setHealthSaveError('');
+    } catch {
+      setHealthSaveError('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد. فضای ذخیره‌سازی یا تنظیمات مرورگر را بررسی کن.');
+    }
   };
 
   const handleAddMindfulLog = (e: React.FormEvent) => {
     e.preventDefault();
     if (!foodInput.trim()) return;
 
-    const category = classifyFoodCaloricDensity(foodInput);
-    const newEntry = saveMindfulLog({
-      foodName: foodInput.trim(),
-      trigger: selectedTrigger,
-      category,
-      notes: foodNote.trim() || undefined,
-    });
-
-    setMindfulLogs([newEntry, ...mindfulLogs]);
-    setFoodInput('');
-    setFoodNote('');
-    setLastLoggedFeedback(MINDFUL_INSIGHTS[selectedTrigger].advice);
+    try {
+      const category = classifyFoodCaloricDensity(foodInput);
+      saveMindfulLog({
+        foodName: foodInput.trim(),
+        trigger: selectedTrigger,
+        category,
+        notes: foodNote.trim() || undefined,
+      });
+      setHealthSaveError('');
+      setMindfulLogs(getStoredMindfulLogs());
+      setFoodInput('');
+      setFoodNote('');
+      setLastLoggedFeedback(MINDFUL_INSIGHTS[selectedTrigger].advice);
+    } catch {
+      setHealthSaveError('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد. فضای ذخیره‌سازی یا تنظیمات مرورگر را بررسی کن.');
+    }
   };
 
   const handleDeleteMindfulLog = async (id: string, foodName: string) => {
@@ -184,8 +224,13 @@ export function AiHub() {
       cancelText: 'انصراف',
       variant: 'danger',
     })) return;
-    const remaining = deleteMindfulLog(id);
-    setMindfulLogs(remaining);
+    try {
+      const remaining = deleteMindfulLog(id);
+      setMindfulLogs(remaining);
+      setHealthSaveError('');
+    } catch {
+      setHealthSaveError('ذخیرهٔ دادهٔ سلامت روی این دستگاه انجام نشد. فضای ذخیره‌سازی یا تنظیمات مرورگر را بررسی کن.');
+    }
   };
 
   return (
@@ -196,13 +241,19 @@ export function AiHub() {
           <p className="eyebrow">اکوسیستم هوش مصنوعی سلامتی و عملکرد</p>
           <h2>مغز هوشمند میتی<span className="accent-dot">.</span></h2>
           <p className="muted">
-            تلفیق هوشمند شاخص‌های فیزیولوژی (Whoop & Oura)، ریکاوری عضلانی (Fitbod)، حرکات اصلاحی (Hinge Health) و عادات رفتاری تغذیه (Noom)
+            الگوهای آموزشی الهام‌گرفته از Whoop و Oura، Fitbod، Hinge Health و Noom؛ بدون اتصال به این سرویس‌ها
           </p>
         </div>
         <Link className="text-link desktop-only" to="/program">
           دیدن برنامهٔ ورزشی <ArrowRight size={15} />
         </Link>
       </section>
+
+      <p className="ai-data-notice" role="note">
+        این بخش آموزشی و تخمینی است، نه ابزار تشخیص پزشکی. اتصال واقعی به ساعت یا حلقه وجود ندارد؛ دکمه‌های دستگاه فقط دادهٔ نمونه می‌سازند. برای تصمیم دربارهٔ سلامت یا شدت تمرین تنها به این برآورد تکیه نکن.
+      </p>
+
+      {healthSaveError && <p className="form-error" role="alert">{healthSaveError}</p>}
 
       {/* Primary Tab Navigation */}
       <div className="ai-tabs-bar" role="tablist" aria-label="بخش‌های هوش سلامتی">
@@ -300,10 +351,9 @@ export function AiHub() {
                 <div className="ai-tag-row">
                   <span className={`badge ${readiness.badgeClass}`}>{readiness.levelLabel}</span>
                   <span className="badge badge--neutral">
-                    {metrics.source === 'whoop' && 'همگام‌شده با Whoop 4.0'}
-                    {metrics.source === 'oura' && 'همگام‌شده با Oura Ring Gen3'}
-                    {metrics.source === 'apple_health' && 'همگام‌شده با Apple Health'}
-                    {metrics.source === 'manual' && 'ثبت دستی کاربر'}
+                    {metrics.isSample
+                      ? metrics.source === 'manual' ? 'دادهٔ نمونهٔ اولیه' : `دادهٔ شبیه‌سازی‌شده (${metrics.source})`
+                      : 'ثبت دستی کاربر'}
                   </span>
                 </div>
                 <h3>{readiness.recoveryTitle}</h3>
@@ -349,7 +399,7 @@ export function AiHub() {
                   onClick={() => handleSync('whoop')}
                   title="شبیه‌سازی دریافت داده از بند سلامتی Whoop"
                 >
-                  <Zap size={14} /> همگام‌سازی Whoop
+                  <Zap size={14} /> شبیه‌سازی Whoop
                 </button>
                 <button
                   type="button"
@@ -357,20 +407,31 @@ export function AiHub() {
                   onClick={() => handleSync('oura')}
                   title="شبیه‌سازی دریافت داده از حلقه هوشمند Oura"
                 >
-                  <Watch size={14} /> همگام‌سازی Oura
+                  <Watch size={14} /> شبیه‌سازی Oura
                 </button>
                 <button
                   type="button"
                   className="button button--small button--secondary"
                   onClick={() => handleSync('apple_health')}
-                  title="همگام‌سازی با ساعت و تلفن همراه"
+                  title="شبیه‌سازی دادهٔ سلامت؛ اتصال واقعی وجود ندارد"
                 >
-                  <Apple size={14} /> Health Connect
+                  <Apple size={14} /> شبیه‌سازی Apple Health
                 </button>
                 <button
                   type="button"
                   className="button button--small button--ghost"
-                  onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                  onClick={() => {
+                    if (!isEditingMetrics) {
+                      const current = getStoredHealthMetrics();
+                      setMetrics(current); setMetricsBase(current);
+                      setEditSleep(current.isSample ? '' : current.sleepHours.toString());
+                      setEditSleepQuality(current.isSample ? '' : current.sleepQualityScore.toString());
+                      setEditRhr(current.isSample ? '' : current.restingHeartRate.toString());
+                      setEditHrv(current.isSample ? '' : current.heartRateVariability.toString());
+                      setMetricsError('');
+                    }
+                    setIsEditingMetrics(!isEditingMetrics);
+                  }}
                 >
                   {isEditingMetrics ? 'بستن' : 'ویرایش دستی'}
                 </button>
@@ -381,6 +442,7 @@ export function AiHub() {
             {isEditingMetrics && (
               <form onSubmit={handleSaveManual} className="ai-manual-form">
                 <h4>تنظیم دستی شاخص‌های فیزیولوژیک</h4>
+                {metrics.isSample && <p className="muted small-text">برای جلوگیری از ثبت اعداد نمونه به نام خودت، هر چهار مقدار را دستی وارد کن.</p>}
                 <div className="ai-form-grid">
                   <label className="field">
                     <span>مدت زمان خواب (ساعت)</span>
@@ -398,7 +460,7 @@ export function AiHub() {
                     <span>کیفیت خواب (۰ تا ۱۰۰٪)</span>
                     <input
                       type="number"
-                      min="20"
+                      min="0"
                       max="100"
                       value={editSleepQuality}
                       onChange={(e) => setEditSleepQuality(e.target.value)}
@@ -428,6 +490,15 @@ export function AiHub() {
                     />
                   </label>
                 </div>
+                {!samePersonalValue(metrics, metricsBase) && <DraftConflictNotice latest={metrics} discard={() => {
+                  setMetricsBase(metrics);
+                  setEditSleep(metrics.isSample ? '' : metrics.sleepHours.toString());
+                  setEditSleepQuality(metrics.isSample ? '' : metrics.sleepQualityScore.toString());
+                  setEditRhr(metrics.isSample ? '' : metrics.restingHeartRate.toString());
+                  setEditHrv(metrics.isSample ? '' : metrics.heartRateVariability.toString());
+                  setMetricsError('');
+                }} acceptCurrent={() => { setMetricsBase(metrics); setMetricsError(''); }} />}
+                {metricsError && <p className="form-error" role="alert">{metricsError}</p>}
                 <div className="form-actions">
                   <button type="submit" className="button button--primary button--small">
                     محاسبه مجدد آمادگی
@@ -443,7 +514,7 @@ export function AiHub() {
             <div>
               <strong>نحوهٔ عملکرد موتور فیزیولوژی Whoop & Oura در میتی:</strong>
               <p>
-                میزان آمادگی روزانه (Readiness) ترکیبی از شاخص اتونومیک سیستم عصبی (HRV)، استراحت قلب در حالت خواب، و فشار تجمعی جلسات گذشته است. نمره بالای ۸۰٪ نشان‌دهندهٔ زمان ایده‌آل برای بیش‌باری تدریجی و سنگین‌ترین ست‌هاست.
+                این شاخص یک محاسبهٔ تقریبی بر پایهٔ ورودی‌های صفحه و تعداد ست‌های ثبت‌شده است؛ اعتبار پزشکی یا ارتباط رسمی با دستگاه‌های نام‌برده ندارد و نباید مبنای افزایش وزنه یا تشخیص وضعیت بدن باشد.
               </p>
             </div>
           </div>
@@ -512,8 +583,8 @@ export function AiHub() {
                     </span>
                     <span className="text-xs muted">
                       {m.hoursUntilFull === 0
-                        ? '۱۰۰٪ آماده'
-                        : `~${faNumber(m.hoursUntilFull)} ساعت تا بازیابی`}
+                        ? '۱۰۰٪ برآوردشده'
+                        : `~${faNumber(m.hoursUntilFull)} ساعت تا بازیابی تخمینی`}
                     </span>
                   </div>
 
@@ -530,13 +601,13 @@ export function AiHub() {
 
             <div className="muscle-legend">
               <span className="legend-item">
-                <span className="legend-dot bg-success" /> ۸۰ تا ۱۰۰٪: آماده تمرین سنگین
+                <span className="legend-dot bg-success" /> ۸۰ تا ۱۰۰٪: برآورد بازیابی بالا
               </span>
               <span className="legend-item">
                 <span className="legend-dot bg-warning" /> ۵۵ تا ۷۹٪: ریکاوری متوسط
               </span>
               <span className="legend-item">
-                <span className="legend-dot bg-danger" /> کمتر از ۵۵٪: فیبرهای عضلانی خسته
+                <span className="legend-dot bg-danger" /> کمتر از ۵۵٪: برآورد بازیابی پایین
               </span>
             </div>
           </div>
@@ -813,11 +884,11 @@ export function AiHub() {
                 <span className="eyebrow">فیزیولوژی و سیستم قلبی-عروقی</span>
                 <h3>پایش بیومتریک و زون‌های تمرینی قلب</h3>
               </div>
-              <span className="badge badge--neutral">محاسبه علمی بر پایه HRR</span>
+              <span className="badge badge--neutral">برآورد آموزشی ضربان</span>
             </div>
 
             <p className="muted" style={{ fontSize: '13px', lineHeight: 1.6, marginBottom: 20 }}>
-              ضربان قلب و زون‌های ۵ گانهٔ تمرینی، شدت تلاش سیستم هوازی و بی‌هوازی شما را تعیین می‌کنند. تمرین در هر زون، اثر انطباقی فیزیولوژیک متفاوتی بر میتوکندری‌ها، چربی‌سوزی، و آستانه اسید لاکتیک ایجاد می‌کند.
+              این زون‌ها فقط از اطلاعات ثبت‌شده تخمین زده می‌شوند و جای اندازه‌گیری، توصیهٔ پزشکی یا تجویز شدت تمرین را نمی‌گیرند.
             </p>
 
             {/* Quick Stats Grid */}
@@ -839,11 +910,11 @@ export function AiHub() {
               >
                 <span className="muted text-xs block">حداکثر ضربان قلب (HR Max)</span>
                 <strong style={{ fontSize: '24px', color: '#ef4444' }}>
-                  {faNumber(biometricsData?.maxHr ?? 190)}
+                  {hasBiometricMax && biometricsData ? faNumber(biometricsData.maxHr) : '—'}
                   <small style={{ fontSize: '13px', fontWeight: 400, marginInlineStart: 4 }}>BPM</small>
                 </strong>
                 <span className="muted text-xs block" style={{ marginTop: 4 }}>
-                  روش: {biometricsData?.maxHrMethod === 'fox' ? 'فرمول فاکس (۲۲۰ - سن)' : biometricsData?.maxHrMethod === 'custom' ? 'رکورد تست بیشینه' : 'فرمول تاناکا (۲۰۸ - ۰٫۷×سن)'}
+                  {hasBiometricMax ? `روش: ${biometricsData?.maxHrMethod === 'fox' ? 'فرمول فاکس (۲۲۰ - سن)' : biometricsData?.maxHrMethod === 'custom' ? 'رکورد ثبت‌شده' : 'فرمول تاناکا (۲۰۸ - ۰٫۷×سن)'}` : 'سن یا ضربان بیشینه ثبت نشده است'}
                 </span>
               </div>
 
@@ -908,9 +979,10 @@ export function AiHub() {
             )}
 
             {/* Target Zones Detailed Breakdown */}
+            {!hasBiometricMax && <p className="ai-data-notice">برای نمایش زون‌ها، مربی باید سن یا ضربان بیشینهٔ ثبت‌شده را وارد کند.</p>}
             <h4 style={{ margin: '0 0 12px', fontSize: '15px' }}>زون‌های هدف تمرین و محدوده ضربان قلب (HR Zones):</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(biometricsData?.zones ?? []).map((z) => (
+              {(hasBiometricMax ? biometricsData?.zones ?? [] : []).map((z) => (
                 <div
                   key={z.zone}
                   style={{

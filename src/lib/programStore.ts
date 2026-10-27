@@ -18,7 +18,8 @@ export interface AssignedMeta {
 }
 
 const ownerDefaultProgram = import.meta.env.MODE === 'test' ? originalProgram : adminPersonalProgram;
-let activeProgram: WorkoutTemplate[] = usesOwnerData() ? ownerDefaultProgram : [];
+export const defaultPersonalProgram = (): WorkoutTemplate[] => usesOwnerData() ? ownerDefaultProgram : [];
+let activeProgram: WorkoutTemplate[] = defaultPersonalProgram();
 let readOnly = false;
 let assignedMeta: AssignedMeta | null = null;
 const listeners = new Set<() => void>();
