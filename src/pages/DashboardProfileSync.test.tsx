@@ -76,6 +76,14 @@ describe('dashboard profile sync recovery', () => {
     expect(screen.queryByLabelText('سن')).not.toBeInTheDocument();
   });
 
+  it('keeps the student home visible while profile synchronization is still pending', () => {
+    mocks.api.mockReset().mockImplementation(() => new Promise(() => {}));
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(screen.getByText('برنامهٔ تمرینی‌ات هنوز آماده نیست')).toBeInTheDocument();
+    expect(screen.getByText('آزمایش')).toBeInTheDocument();
+  });
+
   it('keeps the student home focused and routes optional detail to other sections', async () => {
     mocks.api.mockReset().mockResolvedValue({ stored: { profile: mocks.profile, shareWithCoach: false } });
     render(<MemoryRouter><Dashboard /></MemoryRouter>);

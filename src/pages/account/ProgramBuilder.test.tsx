@@ -208,6 +208,31 @@ describe('coach programme builder', () => {
 });
 
 describe('ordering in the builder', () => {
+  it('renames a day, moves it, and saves the new day order', async () => {
+    const sent = mockApi({
+      title: 'برنامه',
+      updatedAt: 'x',
+      days: [
+        { name: 'روز اول', exercises: [{ exerciseId: 'day-one-exercise', name: 'اسکوات', muscle: 'پا', sets: 3, reps: '8-12', restSeconds: 90 }] },
+        { name: 'روز دوم', exercises: [{ exerciseId: 'day-two-exercise', name: 'پرس', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] },
+      ],
+    });
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('tab', { name: /روز دوم/ }));
+    const name = screen.getByRole('textbox', { name: 'نام روز' });
+    await user.clear(name);
+    await user.type(name, 'پایین‌تنه');
+    await user.click(screen.getByRole('button', { name: 'جابه‌جایی روز به بالا' }));
+    expect(screen.getByRole('tab', { name: /پایین‌تنه/ })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
+    await screen.findByText(/برنامه ذخیره شد/);
+
+    const put = sent.find((call) => call.method === 'PUT')!;
+    expect((put.body as { days: Array<{ name: string }> }).days.map((day) => day.name)).toEqual(['پایین‌تنه', 'روز اول']);
+  });
+
   it('moves an exercise up and the saved order follows', async () => {
     const sent = mockApi({
       title: 'برنامه',

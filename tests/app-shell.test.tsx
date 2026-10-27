@@ -6,12 +6,12 @@ import { db } from '../src/lib/db';
 beforeEach(async () => {
   // The app sits behind sign-in: pretend a signed-in student session is present.
   window.localStorage.setItem('meety.session-token', 'test-session-token-000000000000');
-  vi.stubGlobal('fetch', async () =>
-    new Response(JSON.stringify({ user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }),
-  );
+  vi.stubGlobal('fetch', async (input: string) => {
+    const body = input.includes('/api/me/program')
+      ? { program: { title: 'برنامهٔ تست', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز اول', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] }, coachName: 'مربی' }
+      : { user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } };
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
   window.history.replaceState({}, '', '/');
   await db.sessions.clear();
   await db.bodyweights.clear();
@@ -34,6 +34,29 @@ describe('complete application shell', () => {
     expect(within(mobile).getByText('برنامه')).toBeInTheDocument();
     expect(within(mobile).getByText('حرکت‌ها')).toBeInTheDocument();
     expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();
+  });
+
+  it('shows a coach-assigned workout on the student home while profile sync is pending', async () => {
+    const program = {
+      title: 'برنامهٔ تمرینی شاگرد',
+      updatedAt: '2026-10-01T00:00:00Z',
+      days: [{ name: 'روز پایین‌تنه', exercises: [{ exerciseId: 'barbell-squat', name: 'اسکوات با هالتر', muscle: 'پا', sets: 3, reps: '8-12', restSeconds: 90 }] }],
+    };
+    vi.stubGlobal('fetch', async (input: string) => {
+      if (input.includes('/api/me/program')) {
+        return new Response(JSON.stringify({ program, coachName: 'مربی' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (input.includes('/api/me/profile')) return new Promise<Response>(() => {});
+      return new Response(JSON.stringify({ user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    render(<App />);
+    expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'روز پایین‌تنه' })).toBeInTheDocument();
+    expect(screen.getByText('۱ حرکت')).toBeInTheDocument();
   });
 
   it('supports a direct exercise-detail URL without a prior dashboard visit', async () => {
