@@ -24,10 +24,14 @@ npm run dev
 npm run build             # بررسی TypeScript و ساخت dist/
 npm test                  # تست‌ها
 npm run test:watch
+npx playwright install chromium  # یک‌بار برای آزمون مرورگری
+npm run test:responsive   # بررسی صفحه‌های واکنش‌گرا در Chromium
 npm run preview           # پیش‌نمایش dist/ با پروکسی API
 npm run build:offline     # تولید dist/meety-offline.html
 npm run verify:offline    # بررسی ساختاری بسته؛ جای تست واقعی آفلاین را نمی‌گیرد
 ```
+
+آزمون `test:responsive` سرور توسعهٔ جداگانه‌ای اجرا و API را شبیه‌سازی می‌کند؛ به حساب و پایگاه دادهٔ واقعی دست نمی‌زند. در صورت استفاده از Chromium نصب‌شده می‌توان مسیر آن را با `CHROMIUM_PATH` داد.
 
 ساخت تک‌فایل جاوااسکریپت، CSS، فونت‌های ساخته‌شده و آیکون‌های سند را داخل HTML قرار می‌دهد و برای بازشدن با `file://` از مسیرهای هش (`#/…`) استفاده می‌کند. این نسخه جای API را نمی‌گیرد و همهٔ تصاویر و امکانات حساب‌دار را آفلاین نمی‌کند؛ نتیجه به مرورگر و مجوز حافظهٔ آن هم وابسته است. `verify:offline` فقط چند کنترل ساختاری است.
 

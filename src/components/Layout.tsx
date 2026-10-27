@@ -198,6 +198,7 @@ export function Layout() {
             <button
               type="button"
               className="install-topbar-pill"
+              aria-label="نصب اپلیکیشن روی گوشی"
               onClick={() => setShowInstallModal(true)}
               title="نصب اپلیکیشن روی گوشی (فایل نصبی و PWA)"
             >
@@ -209,12 +210,12 @@ export function Layout() {
               </NavLink>
             )}
             {user ? (
-              <button type="button" className="account-entry" onClick={() => void signOutAndLeave()}>
-                خروج {user.displayName}
+              <button type="button" className="account-entry" title={`خروج ${user.displayName}`} onClick={() => void signOutAndLeave()}>
+                <span className="account-entry__text">خروج {user.displayName}</span>
               </button>
             ) : (
-              <NavLink to="/login" className="account-entry">
-                ورود مربی یا شاگرد
+              <NavLink to="/login" className="account-entry" title="ورود مربی یا شاگرد">
+                <span className="account-entry__text">ورود مربی یا شاگرد</span>
               </NavLink>
             )}
             <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">

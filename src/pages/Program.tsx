@@ -125,7 +125,7 @@ export function Program() {
           <button
             type="button"
             className="button button--primary"
-            style={{ minWidth: 260, fontSize: 15, padding: '12px 20px' }}
+            style={{ width: 'min(100%, 260px)', fontSize: 15, padding: '12px 20px' }}
             disabled={paying}
             onClick={() => void startPayment()}
           >
