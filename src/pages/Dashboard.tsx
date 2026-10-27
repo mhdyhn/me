@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, RefreshCw } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, Flame, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { RouteLoading } from '../components/RouteLoading';
@@ -7,7 +7,7 @@ import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { getWorkoutTemplate, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
 import { loadAssignedProgram } from '../lib/assignedProgram';
-import { getNextWorkout } from '../lib/analytics';
+import { getCompletedThisWeek, getCurrentStreak, getNextWorkout } from '../lib/analytics';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate } from '../lib/format';
 
@@ -26,6 +26,11 @@ export function Dashboard() {
   const displayedWorkout = activeSession
     ? getWorkoutTemplate(activeSession.templateId) ?? null
     : nextWorkout;
+  const weeklyCount = useMemo(() => getCompletedThisWeek(sessions, now), [sessions, now]);
+  const streak = useMemo(() => getCurrentStreak(sessions, now), [sessions, now]);
+  const targetCount = useMemo(() => program.filter((workout) => !workout.optional).length, [program]);
+  const completedCount = Math.min(weeklyCount, targetCount);
+  const weeklyProgress = targetCount > 0 ? (completedCount / targetCount) * 100 : 0;
   const exerciseCount = displayedWorkout?.exercises.length ?? 0;
   const setCount = displayedWorkout?.exercises.reduce((sum, item) => sum + item.prescription.sets, 0) ?? 0;
   const workoutName = activeSession ? displayedWorkout?.name ?? activeSession.name : displayedWorkout?.name ?? '';
@@ -50,7 +55,7 @@ export function Dashboard() {
         <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
       </section>
 
-      <div className="dashboard-grid dashboard-grid--single">
+      <div className={`dashboard-grid ${targetCount > 0 ? 'dashboard-grid--home' : 'dashboard-grid--single'}`}>
         {displayedWorkout || activeSession ? (
           <section className={`next-workout-card${activeSession ? ' next-workout-card--active' : ''}`}>
             <div className="next-workout-card__top">
@@ -106,6 +111,25 @@ export function Dashboard() {
               detail="برای دریافت یا تغییر برنامه، از مربی‌ات پیام بگیر."
               action={<Link to="/chat" className="button button--primary">گفتگو با مربی <ArrowRight size={15} /></Link>}
             />
+          </section>
+        )}
+
+        {targetCount > 0 && (
+          <section className="weekly-card panel-card" aria-label="پیشرفت تمرین این هفته">
+            <div className="weekly-card__header">
+              <div className="weekly-card__title">
+                <span className="eyebrow">این هفته</span>
+                <strong>{faNumber(completedCount)} از {faNumber(targetCount)} جلسه</strong>
+              </div>
+              <span className="week-streak"><Flame size={15} /> {faNumber(streak)} روز پیاپی</span>
+            </div>
+            <div className="week-progress" role="progressbar" aria-label="پیشرفت تمرین هفتگی" aria-valuemin={0} aria-valuemax={targetCount} aria-valuenow={completedCount}>
+              <span className="week-progress__fill" style={{ width: `${weeklyProgress}%` }} />
+            </div>
+            <div className="weekly-card__footer">
+              <p>{completedCount >= targetCount ? 'هدف هفتگی انجام شد؛ آفرین.' : `برای رسیدن به هدف، ${faNumber(targetCount - completedCount)} جلسه مانده.`}</p>
+              <Link to="/progress" className="inline-link">گزارش تمرین‌ها <ArrowRight size={14} /></Link>
+            </div>
           </section>
         )}
       </div>

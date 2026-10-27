@@ -61,7 +61,8 @@ describe('complete application shell', () => {
     expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'روز پایین‌تنه' })).toBeInTheDocument();
     expect(screen.getByText('۱ حرکت')).toBeInTheDocument();
-    expect(screen.queryByText('این هفته')).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'پیشرفت تمرین هفتگی' })).toBeInTheDocument();
+    expect(screen.getByText('این هفته')).toBeInTheDocument();
     expect(screen.queryByText(/پروفایل با حساب همگام است/)).not.toBeInTheDocument();
     expect(profileRequestMade).toBe(false);
   });

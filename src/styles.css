@@ -118,13 +118,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .welcome-row > div > p:last-child { margin: 0; font-size: 12px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(235px, .83fr); gap: 17px; }
 .dashboard-grid--single { grid-template-columns: minmax(0, 1fr); }
-.dashboard-no-program { display: grid; align-content: center; min-height: 220px; padding: 24px; }
+.dashboard-grid--home { grid-template-columns: minmax(0, 1.7fr) minmax(235px, .83fr); align-items: stretch; }
+.dashboard-no-program { grid-column: 1 / -1; display: grid; align-content: center; min-height: 220px; padding: 24px; }
 .dashboard-no-program .empty-state { gap: 12px; padding: 0; }
 .dashboard-no-program .empty-state h3,
 .dashboard-program-message h3 { margin: 0; color: var(--text); font-size: 17px; line-height: 1.5; }
 .dashboard-no-program .empty-state p,
 .dashboard-program-message p { max-width: 560px; margin: 0; line-height: 1.7; }
 .dashboard-program-message { display: grid; gap: 10px; }
+.weekly-card { display: grid; align-content: start; gap: 17px; padding: 20px 19px 17px; }
+.weekly-card__header, .weekly-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.weekly-card__title { display: grid; gap: 6px; }
+.weekly-card__title strong { color: var(--text); font-size: 16px; }
+.week-streak { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--brand); background: #F0E9F8; font-size: 11px; font-weight: 650; }
+.week-streak svg { color: #D4AF6A; }
+.week-progress { height: 8px; overflow: hidden; border-radius: 999px; background: #F0E9F8; }
+.week-progress__fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #A67BD9, #5B2E91); transition: width .25s ease; }
+.weekly-card__footer p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.weekly-card__footer .inline-link { flex: 0 0 auto; font-size: 11px; }
 .dashboard-recent-session { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .dashboard-recent-session__copy { display: grid; gap: 3px; flex: 1; min-width: 0; }
 .dashboard-recent-session__copy small { color: var(--muted); font-size: 11px; }
@@ -1052,6 +1063,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .welcome-row .eyebrow { font-size: 11px; }
   .dashboard-grid { gap: 11px; }
   .dashboard-no-program { min-height: 185px; padding: 20px 18px; border-radius: 15px; }
+  .weekly-card { gap: 14px; padding: 17px 16px 15px; }
+  .week-streak { padding: 6px 8px; font-size: 10px; }
+  .weekly-card__footer p, .weekly-card__footer .inline-link { font-size: 10px; }
   .dashboard-no-program .empty-state h3,
   .dashboard-program-message h3 { font-size: 16px; }
   .next-workout-card { min-height: auto; padding: 17px 15px 14px; border-radius: 15px; }
