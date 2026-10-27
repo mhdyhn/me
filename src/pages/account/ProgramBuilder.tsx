@@ -50,6 +50,8 @@ function Builder() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [exerciseResultLimit, setExerciseResultLimit] = useState(12);
   const [limitations, setLimitations] = useState<string>('');
 
   useEffect(() => {
@@ -88,23 +90,20 @@ function Builder() {
     };
   }, [id, loadAttempt]);
 
-  const visibleExercises = useMemo(() => {
+  const matchingExercises = useMemo(() => {
     const query = search.trim();
     if (!query) {
-      return catalog
-        .filter((exercise) => muscle === 'همه' || exercise.primaryMuscles.includes(muscle))
-        .slice(0, 60);
+      return catalog.filter((exercise) => muscle === 'همه' || exercise.primaryMuscles.includes(muscle));
     }
     const withinMuscle = muscle === 'همه' ? [] : catalog.filter((exercise) => {
       if (!exercise.primaryMuscles.includes(muscle)) return false;
       return matchesPersianSearch(exerciseSearchText(exercise), query);
     });
-    if (withinMuscle.length > 0) return withinMuscle.slice(0, 60);
+    if (withinMuscle.length > 0) return withinMuscle;
 
-    return catalog
-      .filter((exercise) => matchesPersianSearch(exerciseSearchText(exercise), query))
-      .slice(0, 60);
+    return catalog.filter((exercise) => matchesPersianSearch(exerciseSearchText(exercise), query));
   }, [muscle, search]);
+  const visibleExercises = matchingExercises.slice(0, exerciseResultLimit);
 
   function updateDays(next: ProgramDay[]) {
     setMessage(null);
@@ -116,6 +115,7 @@ function Builder() {
     if (days.length >= MAX_DAYS) return;
     updateDays([...days, { name: `روز ${days.length + 1}`, exercises: [] }]);
     setActiveDay(days.length);
+    setShowExercisePicker(false);
   }
 
   async function removeDay(index: number) {
@@ -131,6 +131,7 @@ function Builder() {
     if (!ok) return;
     updateDays(days.filter((_, position) => position !== index));
     setActiveDay(0);
+    setShowExercisePicker(false);
   }
 
   /** Swaps an entry with its neighbour. Used for both days and exercises. */
@@ -255,6 +256,7 @@ function Builder() {
     setDays(template.buildProgramDays());
     setActiveDay(0);
     setShowTemplateModal(false);
+    setShowExercisePicker(false);
     setMessage(`الگوی «${template.title}» بارگذاری شد. تغییرات را اعمال کرده و ذخیره نمایید.`);
   }
 
@@ -370,20 +372,25 @@ function Builder() {
                 <li key={`${item.exerciseId}-${itemIndex}`} className="item-row">
                   <div className="item-row__name">
                     <strong>{item.name}</strong>
-                    <span className="account-muted">{item.muscle}</span>
+                    <span className="account-muted">{item.muscle} · {faNumber(item.sets)} ست · {item.reps} تکرار · {faNumber(item.restSeconds)} ثانیه استراحت</span>
                   </div>
-                  <label className="mini-field">
-                    <span>ست</span>
-                    <input type="number" min={1} max={10} value={item.sets} onChange={(event) => editItem(activeDay, itemIndex, { sets: Number(event.target.value) })} />
-                  </label>
-                  <label className="mini-field">
-                    <span>تکرار</span>
-                    <input dir="ltr" value={item.reps} maxLength={12} onChange={(event) => editItem(activeDay, itemIndex, { reps: event.target.value })} />
-                  </label>
-                  <label className="mini-field">
-                    <span>استراحت (ثانیه)</span>
-                    <input type="number" min={0} max={600} step={15} value={item.restSeconds} onChange={(event) => editItem(activeDay, itemIndex, { restSeconds: Number(event.target.value) })} />
-                  </label>
+                  <details className="item-row__settings">
+                    <summary>تنظیمات</summary>
+                    <div className="item-row__fields">
+                      <label className="mini-field">
+                        <span>ست</span>
+                        <input type="number" min={1} max={10} value={item.sets} onChange={(event) => editItem(activeDay, itemIndex, { sets: Number(event.target.value) })} />
+                      </label>
+                      <label className="mini-field">
+                        <span>تکرار</span>
+                        <input dir="ltr" value={item.reps} maxLength={12} onChange={(event) => editItem(activeDay, itemIndex, { reps: event.target.value })} />
+                      </label>
+                      <label className="mini-field">
+                        <span>استراحت · ثانیه</span>
+                        <input type="number" min={0} max={600} step={15} value={item.restSeconds} onChange={(event) => editItem(activeDay, itemIndex, { restSeconds: Number(event.target.value) })} />
+                      </label>
+                    </div>
+                  </details>
                   <div className="order-buttons">
                     <button type="button" className="icon-button" aria-label={`بالاتر بردن ${item.name}`} disabled={itemIndex === 0} onClick={() => moveItem(activeDay, itemIndex, -1)}>
                       <ArrowUp size={16} />
@@ -399,31 +406,56 @@ function Builder() {
               ))}
             </ul>
 
-            <div className="picker">
-              <h3>افزودن حرکت</h3>
-              <div className="chip-row" role="group" aria-label="گروه عضلانی">
-                {muscleOptions.map((option) => (
-                  <button key={option} type="button" className={`chip${option === muscle ? ' is-active' : ''}`} aria-pressed={option === muscle} onClick={() => setMuscle(option)}>
-                    {option}
-                  </button>
-                ))}
+            <section className={`picker${showExercisePicker ? ' picker--open' : ''}`}>
+              <div className="picker__head">
+                <div>
+                  <h3>حرکت‌های این روز</h3>
+                  <p className="account-muted">حرکت‌ها را جست‌وجو کن؛ تنظیمات هر حرکت جداگانه باز می‌شود.</p>
+                </div>
+                <button
+                  type="button"
+                  className="button button--secondary button--small"
+                  aria-expanded={showExercisePicker}
+                  onClick={() => setShowExercisePicker((open) => !open)}
+                >
+                  {showExercisePicker ? <X size={15} /> : <Plus size={15} />}
+                  {showExercisePicker ? 'بستن فهرست' : 'افزودن حرکت'}
+                </button>
               </div>
-              <input className="picker__search" aria-label="جست‌وجوی حرکت با نام فارسی، انگلیسی یا نام حرکت" placeholder="جست‌وجو با نام فارسی، انگلیسی یا حرکت (مثل اسکوات اسمیت)" value={search} onChange={(event) => setSearch(event.target.value)} />
-              <ul className="picker-list">
-                {visibleExercises.map((exercise) => (
-                  <li key={exercise.id}>
-                    <div>
-                      <strong>{exercise.name}</strong>
-                      {exercise.englishName && <div className="account-muted" style={{ fontSize: 11 }} dir="ltr">{exercise.englishName}</div>}
-                    </div>
-                    <button type="button" className="button button--ghost" onClick={() => addExercise(exercise)}>
-                      <Plus size={16} /> افزودن
+              {showExercisePicker && (
+                <div className="picker__content">
+                  <div className="picker__filters">
+                    <input className="picker__search" aria-label="جست‌وجوی حرکت با نام فارسی، انگلیسی یا نام حرکت" placeholder="نام حرکت را بنویس؛ مثل اسکوات اسمیت" value={search} onChange={(event) => { setSearch(event.target.value); setExerciseResultLimit(12); }} />
+                    <label className="field picker__muscle-filter">
+                      <span>گروه عضلانی</span>
+                      <select aria-label="گروه عضلانی" value={muscle} onChange={(event) => { setMuscle(event.target.value); setExerciseResultLimit(12); }}>
+                        {muscleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="picker__hint">نمایش {faNumber(visibleExercises.length)} از {faNumber(matchingExercises.length)} نتیجه</p>
+                  <ul className="picker-list">
+                    {visibleExercises.map((exercise) => (
+                      <li key={exercise.id}>
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          {exercise.englishName && <div className="account-muted" style={{ fontSize: 11 }} dir="ltr">{exercise.englishName}</div>}
+                        </div>
+                        <button type="button" className="button button--ghost" onClick={() => addExercise(exercise)}>
+                          <Plus size={16} /> افزودن
+                        </button>
+                      </li>
+                    ))}
+                    {visibleExercises.length === 0 && <li className="account-muted">حرکتی پیدا نشد.</li>}
+                  </ul>
+                  {matchingExercises.length > visibleExercises.length && (
+                    <button type="button" className="button button--ghost button--small picker__more" onClick={() => setExerciseResultLimit((limit) => limit + 12)}>
+                      نمایش حرکت‌های بیشتر ({faNumber(matchingExercises.length - visibleExercises.length)} باقی‌مانده)
                     </button>
-                  </li>
-                ))}
-                {visibleExercises.length === 0 && <li className="account-muted">حرکتی پیدا نشد.</li>}
-              </ul>
-            </div>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         )}
       </section>
