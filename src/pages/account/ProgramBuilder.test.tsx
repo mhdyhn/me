@@ -78,6 +78,40 @@ describe('coach programme builder', () => {
     expect(sent.filter((call) => call.method === 'GET' && call.path === '/api/students/3/program')).toHaveLength(2);
   });
 
+  it('keeps the movement picker closed until asked and shows a short result list', async () => {
+    mockApi();
+    renderBuilder();
+    const user = userEvent.setup();
+
+    await screen.findByLabelText('عنوان برنامه');
+    await user.click(screen.getByRole('button', { name: /روز جدید/ }));
+    expect(screen.queryByLabelText('جست‌وجوی حرکت با نام فارسی، انگلیسی یا نام حرکت')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /افزودن حرکت/ }));
+    expect(screen.getByLabelText('جست‌وجوی حرکت با نام فارسی، انگلیسی یا نام حرکت')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'افزودن' })).toHaveLength(12);
+    await user.click(screen.getByRole('button', { name: /نمایش حرکت‌های بیشتر/ }));
+    expect(screen.getAllByRole('button', { name: 'افزودن' })).toHaveLength(24);
+  });
+
+  it('shows movement prescriptions compactly and opens detailed settings on demand', async () => {
+    mockApi({
+      title: 'برنامهٔ جمع‌وجور',
+      updatedAt: 'x',
+      days: [{ name: 'روز اول', exercises: [{ exerciseId: 'a-b', name: 'حرکت نمونه', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }],
+    });
+    renderBuilder();
+    const user = userEvent.setup();
+
+    expect(await screen.findByText('سینه · ۳ ست · 8-12 تکرار · ۹۰ ثانیه استراحت')).toBeInTheDocument();
+    const settings = screen.getByText('تنظیمات').closest('details');
+    expect(settings).not.toHaveAttribute('open');
+    await user.click(screen.getByText('تنظیمات'));
+    expect(settings).toHaveAttribute('open');
+    expect(screen.getByRole('spinbutton', { name: 'ست' })).toHaveValue(3);
+    expect(screen.getByRole('textbox', { name: 'تکرار' })).toHaveValue('8-12');
+  });
+
   it('builds a day from the catalogue and saves it for the student', async () => {
     const sent = mockApi();
     renderBuilder();
@@ -85,6 +119,7 @@ describe('coach programme builder', () => {
 
     await user.type(await screen.findByLabelText('عنوان برنامه'), 'برنامهٔ تست');
     await user.click(screen.getByRole('button', { name: /روز جدید/ }));
+    await user.click(screen.getByRole('button', { name: /افزودن حرکت/ }));
     const firstAdd = (await screen.findAllByRole('button', { name: 'افزودن' }))[0];
     await user.click(firstAdd!);
     await user.click(screen.getByRole('button', { name: 'ذخیرهٔ برنامه' }));
@@ -108,6 +143,7 @@ describe('coach programme builder', () => {
     renderBuilder();
     const user = userEvent.setup();
 
+    await user.click(await screen.findByText('تنظیمات'));
     const repsInput = await screen.findByDisplayValue('8-12');
     await user.clear(repsInput);
     await user.type(repsInput, 'تا خستگی');
@@ -124,8 +160,10 @@ describe('coach programme builder', () => {
 
     await user.type(await screen.findByLabelText('عنوان برنامه'), 'برنامه با اعداد فارسی');
     await user.click(screen.getByRole('button', { name: /روز جدید/ }));
+    await user.click(screen.getByRole('button', { name: /افزودن حرکت/ }));
     const firstAdd = (await screen.findAllByRole('button', { name: 'افزودن' }))[0];
     await user.click(firstAdd!);
+    await user.click(await screen.findByText('تنظیمات'));
     const repsInput = await screen.findByDisplayValue('8-12');
     await user.clear(repsInput);
     await user.type(repsInput, '۸-۱۲');
