@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, Flame } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
+import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
@@ -18,7 +19,6 @@ export function Dashboard() {
   const profileRef = useRef(profile);
   profileRef.current = profile;
   const { user } = useSession();
-  const [cloudProfileChecked, setCloudProfileChecked] = useState(false);
   const [profileSyncStatus, setProfileSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'disabled' | 'error' | 'not-needed'>('idle');
   const [profileSyncError, setProfileSyncError] = useState('');
   const [syncAttempt, setSyncAttempt] = useState(0);
@@ -29,11 +29,9 @@ export function Dashboard() {
     if (loading) return;
     if (user?.role !== 'student' || import.meta.env.MODE === 'offline') {
       setProfileSyncStatus('not-needed');
-      setCloudProfileChecked(true);
       return;
     }
     let active = true;
-    setCloudProfileChecked(false);
     setProfileSyncStatus('syncing');
     setProfileSyncError('');
     void api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', '/me/profile')
@@ -57,8 +55,7 @@ export function Dashboard() {
         if (!active) return;
         setProfileSyncError(caught instanceof ApiError ? caught.message : 'اتصال به سرور برقرار نشد. اینترنت را بررسی کن و دوباره تلاش کن.');
         setProfileSyncStatus('error');
-      })
-      .finally(() => { if (active) setCloudProfileChecked(true); });
+      });
     return () => { active = false; };
   }, [user?.id, user?.role, loading, saveProfile, syncAttempt]);
 
@@ -66,7 +63,7 @@ export function Dashboard() {
   const now = useMemo(() => new Date(), []);
   const hour = now.getHours();
   const greeting = hour < 12 ? 'صبح به‌خیر' : hour < 18 ? 'روز به‌خیر' : 'عصر به‌خیر';
-  const nextWorkout = useMemo(() => getNextWorkout(sessions), [sessions]);
+  const nextWorkout = useMemo(() => getNextWorkout(sessions), [sessions, program]);
   const displayedWorkout = activeSession
     ? getWorkoutTemplate(activeSession.templateId) ?? null
     : nextWorkout;
@@ -88,7 +85,8 @@ export function Dashboard() {
     }
   };
 
-  if (loading || (!cloudProfileChecked && syncAttempt === 0)) return null;
+  // Local data loading gets a visible placeholder; the independent profile-sync request never blocks the dashboard.
+  if (loading) return <RouteLoading />;
   return (
     <div className="page-stack dashboard-page">
       <section className="welcome-row">

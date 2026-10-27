@@ -329,13 +329,13 @@ function Builder() {
       </section>
 
       <section className="builder-section">
-        <div className="builder-section__head">
+          <div className="builder-section__head">
           <h2>روزها</h2>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="builder-section__actions">
             <button type="button" className="button button--ghost" onClick={() => setShowTemplateModal(true)}>
               <Sparkles size={16} /> الگوهای آماده
             </button>
-            <button type="button" className="button button--ghost" onClick={addDay} disabled={days.length >= MAX_DAYS}>
+            <button type="button" className="button button--secondary" onClick={addDay} disabled={days.length >= MAX_DAYS}>
               <Plus size={16} /> روز جدید
             </button>
           </div>
@@ -359,18 +359,20 @@ function Builder() {
         {days[activeDay] && (
           <div className="day-editor">
             <div className="day-editor__head">
-              <input aria-label="نام روز" value={days[activeDay].name} maxLength={80} onChange={(event) => renameDay(activeDay, event.target.value)} />
-              <div className="order-buttons">
-                <button type="button" className="icon-button" aria-label="جابه‌جایی روز به بالا" disabled={activeDay === 0} onClick={() => moveDay(activeDay, -1)}>
-                  <ArrowUp size={16} />
-                </button>
-                <button type="button" className="icon-button" aria-label="جابه‌جایی روز به پایین" disabled={activeDay >= days.length - 1} onClick={() => moveDay(activeDay, 1)}>
-                  <ArrowDown size={16} />
+              <input className="day-editor__name" aria-label="نام روز" value={days[activeDay].name} maxLength={80} onChange={(event) => renameDay(activeDay, event.target.value)} />
+              <div className="day-editor__actions">
+                <div className="order-buttons">
+                  <button type="button" className="icon-button" aria-label="جابه‌جایی روز به بالا" disabled={activeDay === 0} onClick={() => moveDay(activeDay, -1)}>
+                    <ArrowUp size={16} />
+                  </button>
+                  <button type="button" className="icon-button" aria-label="جابه‌جایی روز به پایین" disabled={activeDay >= days.length - 1} onClick={() => moveDay(activeDay, 1)}>
+                    <ArrowDown size={16} />
+                  </button>
+                </div>
+                <button type="button" className="button button--ghost" onClick={() => removeDay(activeDay)}>
+                  <Trash2 size={16} /> حذف روز
                 </button>
               </div>
-              <button type="button" className="button button--ghost" onClick={() => removeDay(activeDay)}>
-                <Trash2 size={16} /> حذف روز
-              </button>
             </div>
 
             {days[activeDay].exercises.length === 0 && <p className="account-muted">این روز هنوز حرکتی ندارد. از فهرست پایین حرکت اضافه کنید.</p>}

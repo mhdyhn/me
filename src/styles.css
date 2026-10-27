@@ -1084,6 +1084,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .weekly-card > p { font-size: 12px; }
   .week-progress { margin: 14px 0 10px; }
   .builder-program-basics { grid-template-columns: 1fr; }
+  .builder-section__head { align-items: stretch; flex-direction: column; }
+  .builder-section__actions .button { flex: 1 1 140px; justify-content: center; }
+  .day-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .day-editor__head { align-items: stretch; flex-direction: column; }
+  .day-editor__name { width: 100%; max-width: none !important; }
+  .day-editor__actions { justify-content: space-between; }
   .picker__head { align-items: flex-start; }
   .picker__filters { grid-template-columns: 1fr; }
   .item-row__settings { flex: 1 1 100%; }
@@ -1395,15 +1401,17 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .program-price-share > div { display: grid; gap: 4px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
 .program-price-share > div > span { color: var(--muted); font-size: 10px; }
 .program-price-share > div > strong { color: var(--text); font-size: 12px; }
-.builder-section__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.builder-section__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
 .builder-section h2 { margin: 0; font-size: 15px; }
+.builder-section__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.day-tab { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.day-tab { min-height: 40px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .day-tab.is-active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 700; }
 .day-tab small { opacity: .75; }
 .day-editor { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.day-editor__head { display: flex; gap: 10px; align-items: center; }
-.day-editor__head input { max-width: 260px; }
+.day-editor__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; }
+.day-editor__name { flex: 1 1 220px; width: 100%; max-width: 420px; }
+.day-editor__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 .item-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .item-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 10px; border-radius: 12px; background: var(--surface-soft); }
 .item-row__name { flex: 1 1 180px; display: grid; gap: 2px; font-size: 13px; }
@@ -2513,3 +2521,17 @@ select:not([multiple]):disabled { cursor: not-allowed; opacity: .58; }
 select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 /* The chart controls already include an inline chevron, so avoid drawing a second one. */
 .select-with-icon select { min-height: 42px; padding-block: 8px; padding-inline: 12px 36px; border-radius: 10px; background-image: none; }
+
+@media (max-width: 680px) {
+  .builder-program-basics { grid-template-columns: 1fr; }
+  .builder-section__head { align-items: stretch; flex-direction: column; }
+  .builder-section__actions .button { flex: 1 1 140px; justify-content: center; }
+  .day-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .day-editor__head { align-items: stretch; flex-direction: column; }
+  .day-editor__name { width: 100%; max-width: none; }
+  .day-editor__actions { justify-content: space-between; }
+}
+
+@media (max-width: 400px) {
+  .program-price-share { grid-template-columns: 1fr; }
+}
