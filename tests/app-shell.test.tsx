@@ -36,7 +36,8 @@ describe('complete application shell', () => {
     expect(within(mobile).queryByText('شاگرد')).not.toBeInTheDocument();
   });
 
-  it('shows a coach-assigned workout on the student home while profile sync is pending', async () => {
+  it('shows the coach-assigned workout without requesting profile synchronization', async () => {
+    let profileRequestMade = false;
     const program = {
       title: 'برنامهٔ تمرینی شاگرد',
       updatedAt: '2026-10-01T00:00:00Z',
@@ -46,7 +47,10 @@ describe('complete application shell', () => {
       if (input.includes('/api/me/program')) {
         return new Response(JSON.stringify({ program, coachName: 'مربی' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      if (input.includes('/api/me/profile')) return new Promise<Response>(() => {});
+      if (input.includes('/api/me/profile')) {
+        profileRequestMade = true;
+        return new Promise<Response>(() => {});
+      }
       return new Response(JSON.stringify({ user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -57,6 +61,10 @@ describe('complete application shell', () => {
     expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'روز پایین‌تنه' })).toBeInTheDocument();
     expect(screen.getByText('۱ حرکت')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'پیشرفت تمرین هفتگی' })).toBeInTheDocument();
+    expect(screen.getByText('این هفته')).toBeInTheDocument();
+    expect(screen.queryByText(/پروفایل با حساب همگام است/)).not.toBeInTheDocument();
+    expect(profileRequestMade).toBe(false);
   });
 
   it('supports a direct exercise-detail URL without a prior dashboard visit', async () => {
