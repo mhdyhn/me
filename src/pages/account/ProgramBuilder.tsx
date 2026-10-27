@@ -277,34 +277,41 @@ function Builder() {
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> شاگردها</Link>
 
       <section className="builder-section">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        <div className="builder-program-basics">
           <label className="field">
             <span>عنوان برنامه</span>
             <input value={title} onChange={(event) => { setTitle(event.target.value); setMessage(null); }} maxLength={80} placeholder="مثلاً برنامهٔ سه روزه قدرتی" />
           </label>
-          <label className="field">
-            <span>هزینهٔ برنامه (تومان)</span>
-            <input
-              type="number"
-              min={0}
-              step={5000}
-              value={priceTomans || ''}
-              onChange={(event) => {
-                setPriceTomans(Math.max(0, parseInt(event.target.value) || 0));
-                setMessage(null);
-              }}
-              placeholder="۰ برای برنامهٔ رایگان"
-            />
-          </label>
+          <details className="program-price-disclosure">
+            <summary>
+              <span className="program-price-disclosure__title">تنظیمات قیمت</span>
+              <span className="program-price-disclosure__value">{priceTomans > 0 ? `${faNumber(priceTomans)} تومان` : 'رایگان'}</span>
+            </summary>
+            <div className="program-price-disclosure__content">
+              <label className="field">
+                <span>هزینهٔ برنامه (تومان)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={5000}
+                  value={priceTomans || ''}
+                  onChange={(event) => {
+                    setPriceTomans(Math.max(0, parseInt(event.target.value) || 0));
+                    setMessage(null);
+                  }}
+                  placeholder="۰ برای برنامهٔ رایگان"
+                />
+              </label>
+              {priceTomans > 0 && (
+                <div className="program-price-share">
+                  <p>تسهیم زرین‌پال</p>
+                  <div><span>سهم مربی · ۹۰٪</span><strong>{Math.floor(priceTomans * 0.9).toLocaleString('fa-IR')} تومان</strong></div>
+                  <div><span>سهم مدیر · ۱۰٪</span><strong>{(priceTomans - Math.floor(priceTomans * 0.9)).toLocaleString('fa-IR')} تومان</strong></div>
+                </div>
+              )}
+            </div>
+          </details>
         </div>
-        {priceTomans > 0 && (
-          <div style={{ marginTop: 8, fontSize: 13, padding: '8px 14px', background: 'var(--surface-soft)', borderRadius: 10, border: '1px solid var(--line)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-            <span className="account-muted">تسهیم زرین‌پال:</span>
-            <span style={{ color: '#4ade80', fontWeight: 600 }}>سهم مربی (۹۰٪): {Math.floor(priceTomans * 0.9).toLocaleString('fa-IR')} تومان</span>
-            <span className="account-muted">|</span>
-            <span className="account-muted">سهم مدیر (۱۰٪): {(priceTomans - Math.floor(priceTomans * 0.9)).toLocaleString('fa-IR')} تومان</span>
-          </div>
-        )}
 
         {limitations && limitations.trim().length > 0 && (
           <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1.5px solid rgba(239, 68, 68, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>

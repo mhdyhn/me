@@ -1083,6 +1083,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .weekly-card h3 { margin: 15px 0 5px; font-size: 15px; }
   .weekly-card > p { font-size: 12px; }
   .week-progress { margin: 14px 0 10px; }
+  .builder-program-basics { grid-template-columns: 1fr; }
   .picker__head { align-items: flex-start; }
   .picker__filters { grid-template-columns: 1fr; }
   .item-row__settings { flex: 1 1 100%; }
@@ -1379,6 +1380,21 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .student-row__actions a { text-decoration: none; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--muted); text-decoration: none; font-size: 12px; }
 .builder-section { margin-bottom: 22px; }
+.builder-program-basics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .42fr); align-items: start; gap: 12px; }
+.program-price-disclosure { min-width: 0; }
+.program-price-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--text); background: var(--surface); cursor: pointer; list-style: none; transition: border-color .18s, background .18s; }
+.program-price-disclosure > summary::-webkit-details-marker { display: none; }
+.program-price-disclosure > summary::after { flex: 0 0 auto; width: 8px; height: 8px; border-inline-end: 1.5px solid var(--brand); border-bottom: 1.5px solid var(--brand); content: ''; transform: rotate(45deg) translateY(-2px); transition: transform .18s; }
+.program-price-disclosure[open] > summary { border-color: var(--purple-soft); background: #FAF7FD; }
+.program-price-disclosure[open] > summary::after { transform: rotate(225deg) translateY(-2px); }
+.program-price-disclosure__title { font-size: 12px; font-weight: 700; }
+.program-price-disclosure__value { margin-inline-start: auto; color: var(--brand); font-size: 12px; font-weight: 700; }
+.program-price-disclosure__content { display: grid; gap: 10px; padding: 12px 2px 2px; }
+.program-price-share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.program-price-share > p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; }
+.program-price-share > div { display: grid; gap: 4px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.program-price-share > div > span { color: var(--muted); font-size: 10px; }
+.program-price-share > div > strong { color: var(--text); font-size: 12px; }
 .builder-section__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
 .builder-section h2 { margin: 0; font-size: 15px; }
 .day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
