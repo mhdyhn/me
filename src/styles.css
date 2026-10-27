@@ -2613,3 +2613,7 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .payment-practice__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .payment-practice__amount { max-width: 18rem; }
 .payment-practice__amount small { color: #a42929; }
+
+/* Student test access is never presented as a real purchase. */
+.student-test-purchase { padding: 14px 0 0; }
+.test-purchase-notice { margin: 10px 16px 0; padding: 10px 14px; border: 1px solid #d5ae59; border-radius: 12px; color: #684b10; background: #fff7df; font-size: 13px; line-height: 1.8; }

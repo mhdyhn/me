@@ -17,6 +17,9 @@ export interface AssignedMeta {
   priceTomans: number;
   coachName: string | null;
   isPaid: boolean;
+  isTestPurchase?: boolean;
+  testPurchaseAvailable?: boolean;
+  testPurchaseExpiresAt?: string | null;
 }
 
 const ownerDefaultProgram = import.meta.env.MODE === 'test' ? originalProgram : adminPersonalProgram;

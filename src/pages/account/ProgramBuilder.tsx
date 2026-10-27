@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { PaymentPractice } from '../../components/PaymentPractice';
+import { StudentTestAccess } from '../../components/StudentTestAccess';
 import { exercises as catalog } from '../../data/exercises';
 import { exerciseSearchText } from '../../data/exerciseCategories';
 import { matchesPersianSearch } from '../../lib/labels';
@@ -336,6 +337,7 @@ function Builder() {
             </div>
           </details>
         </div>
+        <StudentTestAccess key={`${id}:${currentProgram?.id ?? 'none'}:${currentProgram?.version ?? 0}`} studentId={id} program={currentProgram} />
         <PaymentPractice program={currentProgram} studentId={id} />
 
         {limitations && limitations.trim().length > 0 && (

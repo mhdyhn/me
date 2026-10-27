@@ -6,6 +6,7 @@ import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser
 import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
+import { allowTestPurchase, confirmTestPurchase, revokeTestPurchase, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -406,6 +407,48 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const programme = await loadProgramme(db, student.id);
+        const state = programme ? await testPurchaseState(db, student.id, programme.id, now()) : null;
+        return {
+          status: 200,
+          body: { available: studentTestPurchasesAvailable(), enabled: !!state, purchased: state?.status === 'paid', expiresAt: state?.expires_at ?? null },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const input = requireObject(body);
+        if (typeof input.enabled !== 'boolean') throw new HttpError(400, 'وضعیت آزمایش نامعتبر است.');
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        const programme = await loadProgramme(db, student.id);
+        if (!programme || programme.id !== expectedId || programme.version !== input.expectedVersion) {
+          throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        if (!input.enabled) {
+          await revokeTestPurchase(db, student.id, expectedId);
+          return { status: 200, body: { enabled: false } };
+        }
+        if (await isProgramPaid(db, student.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
+        const expiresAt = await allowTestPurchase(db, student.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        return { status: 200, body: { enabled: true, expiresAt } };
+      },
+    },
+
+    {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
@@ -602,7 +645,9 @@ export function createApp(options: AppOptions) {
           return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
         }
         const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id, prog.id));
-        if (!isPaid) {
+        const test = isPaid ? null : await testPurchaseState(db, user!.id, prog.id, now());
+        const isTestPurchase = test?.status === 'paid';
+        if (!isPaid && !isTestPurchase) {
           return {
             status: 200,
             body: {
@@ -616,7 +661,10 @@ export function createApp(options: AppOptions) {
               },
               coachName: coach?.displayName ?? null,
               isPaid: false,
+              testPurchaseAvailable: !!test,
+              testPurchaseExpiresAt: test?.expires_at ?? null,
             },
+            headers: { 'Cache-Control': 'no-store' },
           };
         }
         return {
@@ -624,8 +672,11 @@ export function createApp(options: AppOptions) {
           body: {
             program: prog,
             coachName: coach?.displayName ?? null,
-            isPaid: true,
+            isPaid,
+            isTestPurchase,
+            testPurchaseExpiresAt: isTestPurchase ? test!.expires_at : null,
           },
+          headers: { 'Cache-Control': 'no-store' },
         };
       },
     },
@@ -675,6 +726,37 @@ export function createApp(options: AppOptions) {
     },
 
     // Payment endpoints
+    // Test checkout is separate from the real payment ledger and is explicitly authorized per student.
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/test\/start$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        if (await isProgramPaid(db, user!.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
+        const checkout = await startTestPurchase(db, user!.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        return { status: 201, body: { simulation: true, ...checkout }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/test\/confirm$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ آزمایشی');
+        if (!/^TEST-[a-f0-9-]{36}$/.test(authority)) throw new HttpError(400, 'شناسهٔ آزمایشی نامعتبر است.');
+        if (input.result !== 'success' && input.result !== 'cancel') throw new HttpError(400, 'نتیجهٔ آزمایش نامعتبر است.');
+        const result = await confirmTestPurchase(db, user!.id, authority, input.result, now());
+        return { status: 200, body: { simulation: true, ...result }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
     // A read-only rehearsal: it neither creates transactions nor grants programme access.
     {
       method: 'POST',

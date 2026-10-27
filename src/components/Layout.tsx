@@ -26,6 +26,8 @@ import { useSession } from '../context/SessionContext';
 import { usePersonalSyncState } from './PersonalSync';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import type { Role } from '../lib/api';
+import { loadAssignedProgram } from '../lib/assignedProgram';
+import { getAssignedMeta, setAssignedMeta, setAssignedProgram, useAssignedMeta } from '../lib/programStore';
 
 interface NavItem {
   label: string;
@@ -78,6 +80,7 @@ export function Layout() {
   const location = useLocation();
   const { activeSession, storageWarning } = useGym();
   const { user, signOut } = useSession();
+  const assignedMeta = useAssignedMeta();
   const personalSync = usePersonalSyncState();
   const quote = useMotivationalQuote();
   const navigate = useNavigate();
@@ -99,6 +102,32 @@ export function Layout() {
   ];
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
   const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
+
+  // Test access is temporary. Recheck it on focus, periodically, and at its deadline.
+  useEffect(() => {
+    if (user?.role !== 'student' || !assignedMeta?.isTestPurchase || !assignedMeta.testPurchaseExpiresAt) return;
+    const programId = assignedMeta.id;
+    const expiry = Date.parse(assignedMeta.testPurchaseExpiresAt);
+    const recheck = () => {
+      const current = getAssignedMeta();
+      if (!current?.isTestPurchase || current.id !== programId) return;
+      if (Number.isFinite(expiry) && Date.now() >= expiry) {
+        setAssignedMeta({ ...current, isTestPurchase: false, testPurchaseAvailable: false });
+        setAssignedProgram([]);
+      }
+      void loadAssignedProgram();
+    };
+    window.addEventListener('focus', recheck);
+    const interval = window.setInterval(recheck, 60_000);
+    const remaining = expiry - Date.now();
+    // A fast device clock can put the server's deadline in the past; avoid an immediate retry loop.
+    const deadline = Number.isFinite(remaining) && remaining > 0 ? window.setTimeout(recheck, remaining + 250) : undefined;
+    return () => {
+      window.removeEventListener('focus', recheck);
+      window.clearInterval(interval);
+      if (deadline !== undefined) window.clearTimeout(deadline);
+    };
+  }, [user?.id, user?.role, assignedMeta?.id, assignedMeta?.isTestPurchase, assignedMeta?.testPurchaseExpiresAt]);
 
   // Close more sheet automatically on route change
   useEffect(() => {
@@ -225,6 +254,9 @@ export function Layout() {
           </div>
         </header>
 
+        {user?.role === 'student' && assignedMeta?.isTestPurchase && (
+          <div className="test-purchase-notice" role="status">دسترسی این برنامه آزمایشی است؛ پرداخت واقعی انجام نشده و دسترسی پس از پایان مهلت یا تنظیم درگاه واقعی قطع می‌شود.</div>
+        )}
         {storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}
         {user && ['offline', 'conflict', 'error'].includes(personalSync.phase) && <div className="storage-warning" role="status">{personalSync.message} <NavLink to="/settings">بررسی همگام‌سازی</NavLink></div>}
         <main className="page-content" id="main-content"><Outlet /></main>

@@ -3,7 +3,8 @@ import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, Pl
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
-import { PaymentPractice } from '../components/PaymentPractice';
+import { StudentTestPurchase } from '../components/StudentTestPurchase';
+import { loadAssignedProgram } from '../lib/assignedProgram';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide } from '../lib/exerciseGuide';
 import { getCompletedThisWeek } from '../lib/analytics';
@@ -108,7 +109,7 @@ export function Program() {
   }
 
   // If the coach set a price on the program and the student has not paid yet, show the payment locked view.
-  if (readOnly && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid) {
+  if (readOnly && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid && !assignedMeta.isTestPurchase) {
     return (
       <div className="page-stack">
         <SectionHeading
@@ -139,7 +140,8 @@ export function Program() {
           >
             {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
           </button>
-          <PaymentPractice program={assignedMeta} />
+          {assignedMeta.testPurchaseAvailable && <StudentTestPurchase key={`${assignedMeta.id}:${assignedMeta.version}`} program={assignedMeta} />}
+          <button type="button" className="button button--ghost" onClick={() => void loadAssignedProgram()}>بررسی دوبارهٔ وضعیت برنامه</button>
         </div>
         {user?.role === 'student' && <ProgrammeArchive studentId={user.id} />}
       </div>

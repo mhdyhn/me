@@ -36,6 +36,8 @@ function mockApi(program: unknown = null, failProgramLoads = 0) {
           [json, status] = [{ program: program ? { id: 'program-1', version: 1, ...(program as object) } : null }, 200];
         }
       }
+      if (method === 'GET' && input === '/api/students/3/test-purchase') [json, status] = [{ available: true, enabled: false, purchased: false, expiresAt: null }, 200];
+      if (method === 'PUT' && input === '/api/students/3/test-purchase') [json, status] = [{ enabled: (body as { enabled: boolean }).enabled, expiresAt: '2026-11-01T08:00:00Z' }, 200];
       if (method === 'POST' && input === '/api/pay/practice') [json, status] = [{ simulation: true, programmeTitle: 'برنامهٔ پولی', amountTomans: 250000, coachShareTomans: 225000, adminShareTomans: 25000 }, 200];
       if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), id: 'program-1', version: 2, updatedAt: 'now' } }, 200];
       if (method === 'DELETE' && input === '/api/students/3/program') [json, status] = [{ ok: true }, 200];
@@ -97,6 +99,25 @@ describe('coach programme builder', () => {
     expect(screen.getByLabelText('هزینهٔ برنامه (تومان)')).toHaveValue(250000);
     expect(screen.getByText('سهم مربی · ۹۰٪')).toBeInTheDocument();
     expect(screen.getByText('سهم مدیر · ۱۰٪')).toBeInTheDocument();
+  });
+
+  it('requires coach confirmation before granting a single student temporary test purchase access', async () => {
+    const sent = mockApi({ title: 'برنامهٔ پولی', priceTomans: 250000, updatedAt: 'x', days: [] });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderBuilder();
+    const user = userEvent.setup();
+    await screen.findByLabelText('عنوان برنامه');
+    await user.click(screen.getByText('خرید آزمایشی برای این شاگرد'));
+    expect(screen.getByText(/تمرین‌هایی که در حساب شاگرد ثبت شوند/)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'اجازهٔ خرید آزمایشی برای این شاگرد' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect((await screen.findByRole('status'))).toHaveTextContent('برای این شاگرد فعال است');
+    const grants = sent.filter((call) => call.path === '/api/students/3/test-purchase' && call.method === 'PUT');
+    expect(grants[0]?.body).toEqual({ enabled: true, expectedId: 'program-1', expectedVersion: 1 });
+    await user.click(screen.getByRole('button', { name: 'پایان دسترسی آزمایشی' }));
+    expect(sent.filter((call) => call.path === '/api/students/3/test-purchase' && call.method === 'PUT')[1]?.body)
+      .toEqual({ enabled: false, expectedId: 'program-1', expectedVersion: 1 });
+    confirm.mockRestore();
   });
 
   it('offers an explicitly read-only payment rehearsal for the saved programme', async () => {
