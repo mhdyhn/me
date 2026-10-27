@@ -3,6 +3,7 @@ import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, Pl
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
+import { PaymentPractice } from '../components/PaymentPractice';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide } from '../lib/exerciseGuide';
 import { getCompletedThisWeek } from '../lib/analytics';
@@ -138,6 +139,7 @@ export function Program() {
           >
             {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
           </button>
+          <PaymentPractice program={assignedMeta} />
         </div>
         {user?.role === 'student' && <ProgrammeArchive studentId={user.id} />}
       </div>

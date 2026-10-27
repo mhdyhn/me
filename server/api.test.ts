@@ -781,6 +781,43 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(adminTransactions.json.transactions.some((t: { authority: string }) => t.authority === authority)).toBe(true);
   });
 
+  it('handles actual callback routes in an isolated sandbox for success, repeats and cancellation', async () => {
+    const coach = await coachSession();
+    const paidStudent = await studentSession(coach.token, 'شاگرد بازگشت موفق');
+    const cancelStudent = await studentSession(coach.token, 'شاگرد بازگشت ناموفق');
+    const program = {
+      title: 'برنامهٔ آزمایش بازگشت', priceTomans: 100000,
+      days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }],
+    };
+    const startFor = async (student: { id: number; token: string }) => {
+      const saved = await call('PUT', `/api/students/${student.id}/program`, program, coach.token);
+      const offer = saved.json.program;
+      const checkout = await call('POST', '/api/pay/start', { expectedId: offer.id, expectedVersion: offer.version }, student.token);
+      expect(checkout.status).toBe(201);
+      expect(checkout.json.authority).toMatch(/^SANDBOX-/);
+      return checkout.json.authority as string;
+    };
+    const successAuthority = await startFor(paidStudent);
+    const callback = (authority: string, status: string) => fetch(`${base}/api/pay/callback?Authority=${encodeURIComponent(authority)}&Status=${status}`, { redirect: 'manual' });
+    const success = await callback(successAuthority, 'OK');
+    expect(success.status).toBe(302);
+    expect(success.headers.get('location')).toContain('status=paid');
+    expect((await callback(successAuthority, 'OK')).status).toBe(302);
+    const unlocked = await call('GET', '/api/me/program', undefined, paidStudent.token);
+    expect(unlocked.json.isPaid).toBe(true);
+    expect(unlocked.json.program.days).toHaveLength(1);
+
+    const cancelAuthority = await startFor(cancelStudent);
+    const canceled = await callback(cancelAuthority, 'NOK');
+    expect(canceled.status).toBe(302);
+    expect(canceled.headers.get('location')).toContain('status=failed');
+    expect((await call('GET', '/api/me/program', undefined, cancelStudent.token)).json.isPaid).toBe(false);
+    const transactions = (await call('GET', '/api/coach/transactions', undefined, coach.token)).json.transactions;
+    expect(transactions).toHaveLength(2);
+    expect(transactions.find((row: { authority: string }) => row.authority === successAuthority).status).toBe('paid');
+    expect(transactions.find((row: { authority: string }) => row.authority === cancelAuthority).status).toBe('canceled');
+  });
+
   it('marks transaction as canceled when gateway returns NOK', async () => {
     const coach = await coachSession();
     const student = await studentSession(coach.token, 'شاگرد انصرافی');

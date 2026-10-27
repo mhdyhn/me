@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
+import { PaymentPractice } from '../../components/PaymentPractice';
 import { exercises as catalog } from '../../data/exercises';
 import { exerciseSearchText } from '../../data/exerciseCategories';
 import { matchesPersianSearch } from '../../lib/labels';
@@ -327,7 +328,7 @@ function Builder() {
               </label>
               {priceTomans > 0 && (
                 <div className="program-price-share">
-                  <p>تسهیم زرین‌پال</p>
+                  <p>محاسبهٔ نمونه با نسبت ۹۰ به ۱۰؛ نسبت واقعی به تنظیمات سرور بستگی دارد.</p>
                   <div><span>سهم مربی · ۹۰٪</span><strong>{Math.floor(priceTomans * 0.9).toLocaleString('fa-IR')} تومان</strong></div>
                   <div><span>سهم مدیر · ۱۰٪</span><strong>{(priceTomans - Math.floor(priceTomans * 0.9)).toLocaleString('fa-IR')} تومان</strong></div>
                 </div>
@@ -335,6 +336,7 @@ function Builder() {
             </div>
           </details>
         </div>
+        <PaymentPractice program={currentProgram} studentId={id} />
 
         {limitations && limitations.trim().length > 0 && (
           <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1.5px solid rgba(239, 68, 68, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>

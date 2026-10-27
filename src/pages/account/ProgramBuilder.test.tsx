@@ -36,6 +36,7 @@ function mockApi(program: unknown = null, failProgramLoads = 0) {
           [json, status] = [{ program: program ? { id: 'program-1', version: 1, ...(program as object) } : null }, 200];
         }
       }
+      if (method === 'POST' && input === '/api/pay/practice') [json, status] = [{ simulation: true, programmeTitle: 'برنامهٔ پولی', amountTomans: 250000, coachShareTomans: 225000, adminShareTomans: 25000 }, 200];
       if (method === 'PUT' && input === '/api/students/3/program') [json, status] = [{ program: { ...(body as object), id: 'program-1', version: 2, updatedAt: 'now' } }, 200];
       if (method === 'DELETE' && input === '/api/students/3/program') [json, status] = [{ ok: true }, 200];
       return new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
@@ -96,6 +97,22 @@ describe('coach programme builder', () => {
     expect(screen.getByLabelText('هزینهٔ برنامه (تومان)')).toHaveValue(250000);
     expect(screen.getByText('سهم مربی · ۹۰٪')).toBeInTheDocument();
     expect(screen.getByText('سهم مدیر · ۱۰٪')).toBeInTheDocument();
+  });
+
+  it('offers an explicitly read-only payment rehearsal for the saved programme', async () => {
+    const sent = mockApi({ title: 'برنامهٔ پولی', priceTomans: 250000, updatedAt: 'x', days: [] });
+    renderBuilder();
+    const user = userEvent.setup();
+    await screen.findByLabelText('عنوان برنامه');
+    await user.click(screen.getByText('تنظیمات قیمت'));
+    await user.clear(screen.getByLabelText('هزینهٔ برنامه (تومان)'));
+    await user.type(screen.getByLabelText('هزینهٔ برنامه (تومان)'), '300000');
+    await user.click(screen.getByText('آزمایش پرداخت بدون درگاه'));
+    expect(screen.getByText(/تغییرات ذخیره‌نشده در آزمایش لحاظ نمی‌شوند/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'شروع آزمایش پرداخت' }));
+    expect(await screen.findByText(/مبلغ برنامه:/)).toHaveTextContent('۲۵۰٬۰۰۰ تومان');
+    expect(sent.find((call) => call.path === '/api/pay/practice')?.body).toEqual({ expectedId: 'program-1', expectedVersion: 1, studentId: 3 });
+    expect(sent.some((call) => call.path === '/api/pay/start')).toBe(false);
   });
 
   it('keeps the movement picker closed until asked and shows a short result list', async () => {
