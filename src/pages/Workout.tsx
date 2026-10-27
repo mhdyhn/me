@@ -32,13 +32,14 @@ export function Workout() {
   const [previewFrame, setPreviewFrame] = useState<FigureState>('start');
 
   useEffect(() => {
-    if (!template || loading) return;
+    // Completing a session clears activeSession. Do not immediately create a fresh one while the summary is open.
+    if (!template || loading || summary) return;
     if (activeSession) {
       setSessionId(activeSession.id);
       return;
     }
     void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
-  }, [template, loading, activeSession?.id, startWorkout]);
+  }, [template, loading, activeSession?.id, startWorkout, summary]);
 
   const session = summary ?? (sessionId ? sessions.find((item) => item.id === sessionId) ?? null : activeSession);
   const activeTemplate = session ? getWorkoutTemplate(session.templateId) : template;

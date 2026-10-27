@@ -101,6 +101,9 @@ describe('workout flow', () => {
     expect(screen.getByText('خلاصهٔ جلسه')).toBeInTheDocument();
     expect(screen.getByText('۱۰۰')).toBeInTheDocument();
     expect(screen.getByLabelText('نکته‌ای هست که بخواهی یادت بماند؟')).toBeInTheDocument();
+    const savedSessions = await db.sessions.toArray();
+    expect(savedSessions).toHaveLength(1);
+    expect(savedSessions[0]?.status).toBe('completed');
   });
 
   it('resolves conflict by completing previous active session and starting new workout day', async () => {

@@ -5,7 +5,6 @@ import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
-import { StudentOnboarding } from './StudentOnboarding';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout, getRecentRecord } from '../lib/analytics';
 import { calculateMuscleRecovery, calculateReadinessScore, getStoredHealthMetrics } from '../lib/aiHealthEngine';
@@ -14,14 +13,6 @@ import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { ApiError, api } from '../lib/api';
 import type { UserProfile } from '../types';
 import { faNumber, formatDate, kg } from '../lib/format';
-
-const isStudentOnboardingDismissed = (key: string | null): boolean => {
-  try { return Boolean(key && window.localStorage.getItem(key) === 'true'); } catch { return false; }
-};
-
-const dismissStudentOnboarding = (key: string | null): void => {
-  try { if (key) window.localStorage.setItem(key, 'true'); } catch { /* Keep the current session usable when storage is blocked. */ }
-};
 
 const profileNeedsSetup = (profile: UserProfile): boolean => !profile.age || !profile.heightCm || !profile.weightKg || !profile.primaryGoal || !profile.trainingDays || !profile.sessionMinutes;
 
@@ -36,13 +27,6 @@ export function Dashboard() {
   const [syncAttempt, setSyncAttempt] = useState(0);
   const program = useProgram();
   const navigate = useNavigate();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
-  const onboardingKey = user ? `meety:student-onboarding-skipped:${user.id}` : null;
-
-  useEffect(() => {
-    setOnboardingDismissed(isStudentOnboardingDismissed(onboardingKey));
-  }, [onboardingKey]);
-
   useEffect(() => {
     if (loading) return;
     if (user?.role !== 'student' || import.meta.env.MODE === 'offline') {
@@ -125,16 +109,7 @@ export function Dashboard() {
   const healthMetrics = useMemo(() => getStoredHealthMetrics(), []);
   const readiness = useMemo(() => calculateReadinessScore(healthMetrics, sessions, now), [healthMetrics, sessions, now]);
   const muscleRecoveries = useMemo(() => calculateMuscleRecovery(sessions, now), [sessions, now]);
-  const needsSetup = profileNeedsSetup(profile);
-
   if (loading || (!cloudProfileChecked && syncAttempt === 0)) return null;
-  if (user?.role === 'student' && needsSetup && !onboardingDismissed) {
-    return <StudentOnboarding onDismiss={() => {
-      dismissStudentOnboarding(onboardingKey);
-      setOnboardingDismissed(true);
-    }} />;
-  }
-
   return (
     <div className="page-stack dashboard-page">
       <section className="welcome-row">
