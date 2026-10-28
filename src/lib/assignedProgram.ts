@@ -1,4 +1,4 @@
-import { ApiError, api, type Programme, type ProgramItem } from './api';
+import { ApiError, api, getToken, type Programme, type ProgramItem } from './api';
 import type { WorkoutExercise, WorkoutTemplate } from '../types';
 import { setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from './programStore';
 import { isValidReps, normalizeReps } from '../../shared/repetitions';
@@ -48,12 +48,22 @@ export function assignedToTemplates(program: Programme): WorkoutTemplate[] {
   });
 }
 
-/** Loads the programme the coach assigned to the signed-in student. Read-only for the student. */
+let assignedLoadVersion = 0;
+
+/** Loads only the latest programme response for the session that started the request. */
 export async function loadAssignedProgram(): Promise<void> {
+  const requestVersion = ++assignedLoadVersion;
+  const sessionToken = getToken();
+  const stillCurrent = () => requestVersion === assignedLoadVersion && getToken() === sessionToken;
   setAssignedProgramLoadState('loading');
   try {
-    const result = await api<{ program: Programme | null; coachName?: string | null; isPaid?: boolean }>('GET', '/me/program');
+    const result = await api<{
+      program: Programme | null; coachName?: string | null; isPaid?: boolean;
+      isTestPurchase?: boolean; testPurchaseAvailable?: boolean; testPurchaseExpiresAt?: string | null;
+    }>('GET', '/me/program');
+    if (!stillCurrent()) return;
     if (result.program) {
+      const isTestPurchase = result.isTestPurchase === true;
       setAssignedMeta({
         id: result.program.id,
         version: result.program.version,
@@ -61,8 +71,11 @@ export async function loadAssignedProgram(): Promise<void> {
         priceTomans: result.program.priceTomans ?? 0,
         coachName: result.coachName ?? null,
         isPaid: result.isPaid !== false,
+        isTestPurchase,
+        testPurchaseAvailable: result.testPurchaseAvailable === true,
+        testPurchaseExpiresAt: result.testPurchaseExpiresAt ?? null,
       });
-      if (result.isPaid !== false) {
+      if (result.isPaid !== false || isTestPurchase) {
         setAssignedProgram(assignedToTemplates(result.program));
       } else {
         setAssignedProgram([]);
@@ -73,6 +86,7 @@ export async function loadAssignedProgram(): Promise<void> {
     }
     setAssignedProgramLoadState('ready');
   } catch (error) {
+    if (!stillCurrent()) return;
     setAssignedProgramLoadState('error');
     if (!(error instanceof ApiError && error.status === 401)) {
       console.error('Meety could not load the coach programme.', error);

@@ -7,6 +7,7 @@ import { migratePayments } from './payments.ts';
 import { migrateBiometrics } from './biometrics.ts';
 import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
+import { migrateTestPurchases } from './testPurchases.ts';
 
 /**
  * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
@@ -149,6 +150,7 @@ async function migrate(db: Db): Promise<void> {
   await migrateNutrition(db);
   await migrateSessions(db);
   await migratePayments(db);
+  await migrateTestPurchases(db);
   await migrateBiometrics(db);
   await migrateStudentProfiles(db);
   await migratePersonalData(db);

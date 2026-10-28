@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
 import { ApiError, api, type PaymentTransaction } from '../../lib/api';
+import { PaymentPractice } from '../../components/PaymentPractice';
 import { faNumber } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
 
@@ -66,13 +67,22 @@ function CoachTransactionsView() {
         <ArrowRight size={16} /> شاگردها
       </Link>
 
+      <section className="panel-card" style={{ marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>محیط آزمایشی پرداخت</h3>
+        <p className="account-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
+          برای تمرین با مبلغ دلخواه نیازی به ساخت شاگرد یا تغییر برنامهٔ واقعی نیست. برای بررسی قیمت یک برنامهٔ ذخیره‌شده، شاگرد را انتخاب و برنامهٔ او را باز کنید.
+        </p>
+        <Link to="/coach" className="button button--secondary">انتخاب شاگرد</Link>
+        <PaymentPractice program={null} sample />
+      </section>
+
       {/* IBAN registration card */}
       <section className="panel-card" style={{ marginBottom: 20 }}>
         <h3 style={{ margin: '0 0 8px', fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <CreditCard size={18} /> شماره شبای تسویه حساب (۹۰٪ سهم مربی)
+          <CreditCard size={18} /> شماره شبای تسویه حساب
         </h3>
         <p className="account-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
-          سهم ۹۰ درصدی شما از فروش هر برنامهٔ تمرینی، به‌صورت خودکار توسط سیستم تسهیم زرین‌پال به این شماره شبا واریز می‌شود.
+          ثبت شبا به‌تنهایی به معنی واریز وجه نیست. تسهیم و تسویهٔ بانکی باید پس از اتصال درگاه و بررسی قرارداد آن تأیید شوند؛ سهم پیش‌فرض مربی ۹۰٪ است و می‌تواند در تنظیمات سرور تغییر کند.
         </p>
         <form onSubmit={(e) => void onSaveIban(e)} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
           <input
@@ -96,7 +106,7 @@ function CoachTransactionsView() {
       {/* Revenue stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
         <div className="panel-card" style={{ padding: '1rem', background: 'var(--surface-soft)' }}>
-          <span className="account-muted" style={{ fontSize: 13 }}>مجموع درآمد شما (۹۰٪)</span>
+          <span className="account-muted" style={{ fontSize: 13 }}>جمع سهم ثبت‌شده از پرداخت‌های موفق</span>
           <strong style={{ display: 'block', fontSize: 20, color: '#4ade80', marginTop: 4 }}>
             {faNumber(totalEarned)} تومان
           </strong>
@@ -109,6 +119,7 @@ function CoachTransactionsView() {
         </div>
       </div>
 
+      <p className="account-muted">مبالغ بر اساس سوابق برنامه نمایش داده می‌شوند و تأیید واریز به حساب بانکی نیستند.</p>
       {loadError && <p className="form-error">{loadError}</p>}
       {transactions === null && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
       {transactions?.length === 0 && (
@@ -151,6 +162,12 @@ function AdminTransactionsView() {
         <ArrowRight size={16} /> مربی‌ها
       </Link>
 
+      <section className="panel-card" style={{ marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>محیط آزمایشی پرداخت</h3>
+        <p className="account-muted">این نمونه مستقل از شاگردها و تراکنش‌های واقعی است.</p>
+        <PaymentPractice program={null} sample />
+      </section>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
         <div className="panel-card" style={{ padding: '1rem' }}>
           <span className="account-muted" style={{ fontSize: 13 }}>کل گردش مالی</span>
@@ -159,19 +176,20 @@ function AdminTransactionsView() {
           </strong>
         </div>
         <div className="panel-card" style={{ padding: '1rem' }}>
-          <span className="account-muted" style={{ fontSize: 13 }}>درآمد باشگاه (۱۰٪)</span>
+          <span className="account-muted" style={{ fontSize: 13 }}>سهم ثبت‌شدهٔ باشگاه</span>
           <strong style={{ display: 'block', fontSize: 20, color: 'var(--accent)', marginTop: 4 }}>
             {faNumber(totalAdminShare)} تومان
           </strong>
         </div>
         <div className="panel-card" style={{ padding: '1rem' }}>
-          <span className="account-muted" style={{ fontSize: 13 }}>سهم مربیان (۹۰٪)</span>
+          <span className="account-muted" style={{ fontSize: 13 }}>سهم ثبت‌شدهٔ مربیان</span>
           <strong style={{ display: 'block', fontSize: 20, color: '#4ade80', marginTop: 4 }}>
             {faNumber(totalCoachShare)} تومان
           </strong>
         </div>
       </div>
 
+      <p className="account-muted">جمع‌ها از سوابق برنامه هستند و تأیید تسویهٔ بانکی نیستند.</p>
       {loadError && <p className="form-error">{loadError}</p>}
       {transactions === null && !loadError && <p className="account-muted">در حال بارگذاری…</p>}
       {transactions?.length === 0 && <p className="account-muted">هنوز تراکنشی ثبت نشده است.</p>}
@@ -228,7 +246,7 @@ function TransactionList({ transactions, isCoach }: { transactions: PaymentTrans
                 <strong style={{ fontSize: 16 }}>{faNumber(t.amountTomans)} تومان</strong>
                 {isCoach && (
                   <span style={{ display: 'block', fontSize: 12, color: '#4ade80' }}>
-                    سهم شما (۹۰٪): {faNumber(t.coachShareTomans)} تومان
+                    سهم ثبت‌شدهٔ شما: {faNumber(t.coachShareTomans)} تومان
                   </span>
                 )}
               </div>

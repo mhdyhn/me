@@ -2601,3 +2601,19 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .draft-conflict { border: 1px solid var(--line); border-inline-start: 3px solid #f5b959; border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
 .draft-conflict p { margin: 0; line-height: 1.8; }
 .draft-conflict pre { overflow: auto; max-height: 16rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Payment practice never represents a real charge or entitlement. */
+.payment-practice { width: 100%; min-width: 0; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); text-align: start; }
+.payment-practice summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; cursor: pointer; font-weight: 700; }
+.payment-practice summary small { color: #684b10; background: #fff0c4; border-radius: 999px; padding: 3px 9px; font-size: 11px; }
+.payment-practice__content { display: grid; gap: 10px; padding: 0 14px 14px; color: var(--text); font-size: 13px; line-height: 1.9; }
+.payment-practice__content p, .payment-practice__result p { margin: 0; }
+.payment-practice__content > .button, .payment-practice__result > .button { justify-self: start; }
+.payment-practice__result { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
+.payment-practice__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.payment-practice__amount { max-width: 18rem; }
+.payment-practice__amount small { color: #a42929; }
+
+/* Student test access is never presented as a real purchase. */
+.student-test-purchase { padding: 14px 0 0; }
+.test-purchase-notice { margin: 10px 16px 0; padding: 10px 14px; border: 1px solid #d5ae59; border-radius: 12px; color: #684b10; background: #fff7df; font-size: 13px; line-height: 1.8; }

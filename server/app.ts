@@ -5,7 +5,8 @@ import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, re
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
-import { createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
+import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
+import { allowTestPurchase, confirmTestPurchase, revokeTestPurchase, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -169,6 +170,27 @@ export function createApp(options: AppOptions) {
         } catch {
           return { status: 503, body: { ok: false, database: false } };
         }
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/release$/,
+      auth: 'public',
+      // Render provides these deployment values; never expose arbitrary environment contents.
+      handler: async () => {
+        const render = process.env.RENDER === 'true';
+        const branch = render ? process.env.RENDER_GIT_BRANCH?.trim() : '';
+        const sha = render ? process.env.RENDER_GIT_COMMIT?.trim() : '';
+        return {
+          status: 200,
+          body: {
+            stableBranch: 'main',
+            deploymentBranch: branch === 'main' ? 'main' : branch ? 'other' : 'unknown',
+            revision: sha && /^[a-f0-9]{7,64}$/i.test(sha) ? sha.toLowerCase() : null,
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
       },
     },
 
@@ -406,6 +428,48 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET',
+      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const programme = await loadProgramme(db, student.id);
+        const state = programme ? await testPurchaseState(db, student.id, programme.id, now()) : null;
+        return {
+          status: 200,
+          body: { available: studentTestPurchasesAvailable(), enabled: !!state, purchased: state?.status === 'paid', expiresAt: state?.expires_at ?? null },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const input = requireObject(body);
+        if (typeof input.enabled !== 'boolean') throw new HttpError(400, 'وضعیت آزمایش نامعتبر است.');
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        const programme = await loadProgramme(db, student.id);
+        if (!programme || programme.id !== expectedId || programme.version !== input.expectedVersion) {
+          throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        if (!input.enabled) {
+          await revokeTestPurchase(db, student.id, expectedId);
+          return { status: 200, body: { enabled: false } };
+        }
+        if (await isProgramPaid(db, student.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
+        const expiresAt = await allowTestPurchase(db, student.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        return { status: 200, body: { enabled: true, expiresAt } };
+      },
+    },
+
+    {
       method: 'PUT',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
@@ -602,7 +666,9 @@ export function createApp(options: AppOptions) {
           return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
         }
         const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id, prog.id));
-        if (!isPaid) {
+        const test = isPaid ? null : await testPurchaseState(db, user!.id, prog.id, now());
+        const isTestPurchase = test?.status === 'paid';
+        if (!isPaid && !isTestPurchase) {
           return {
             status: 200,
             body: {
@@ -616,7 +682,10 @@ export function createApp(options: AppOptions) {
               },
               coachName: coach?.displayName ?? null,
               isPaid: false,
+              testPurchaseAvailable: !!test,
+              testPurchaseExpiresAt: test?.expires_at ?? null,
             },
+            headers: { 'Cache-Control': 'no-store' },
           };
         }
         return {
@@ -624,8 +693,11 @@ export function createApp(options: AppOptions) {
           body: {
             program: prog,
             coachName: coach?.displayName ?? null,
-            isPaid: true,
+            isPaid,
+            isTestPurchase,
+            testPurchaseExpiresAt: isTestPurchase ? test!.expires_at : null,
           },
+          headers: { 'Cache-Control': 'no-store' },
         };
       },
     },
@@ -675,6 +747,86 @@ export function createApp(options: AppOptions) {
     },
 
     // Payment endpoints
+    // Test checkout is separate from the real payment ledger and is explicitly authorized per student.
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/test\/start$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        if (await isProgramPaid(db, user!.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
+        const checkout = await startTestPurchase(db, user!.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        return { status: 201, body: { simulation: true, ...checkout }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/test\/confirm$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ آزمایشی');
+        if (!/^TEST-[a-f0-9-]{36}$/.test(authority)) throw new HttpError(400, 'شناسهٔ آزمایشی نامعتبر است.');
+        if (input.result !== 'success' && input.result !== 'cancel') throw new HttpError(400, 'نتیجهٔ آزمایش نامعتبر است.');
+        const result = await confirmTestPurchase(db, user!.id, authority, input.result, now());
+        return { status: 200, body: { simulation: true, ...result }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    // A read-only rehearsal: it neither creates transactions nor grants programme access.
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/practice$/,
+      auth: ['student', 'coach', 'admin'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (Object.hasOwn(input, 'sampleAmountTomans')) {
+          if (user!.role === 'student') throw new HttpError(403, 'دسترسی به این بخش ندارید.');
+          const amountTomans = input.sampleAmountTomans;
+          if (!Number.isSafeInteger(amountTomans) || (amountTomans as number) < 1 || (amountTomans as number) > 2147483647) {
+            throw new HttpError(400, 'مبلغ نمونه باید عدد صحیح بین ۱ تا ۲٬۱۴۷٬۴۸۳٬۶۴۷ تومان باشد.');
+          }
+          const { coachShare, adminShare } = calculateCommission(amountTomans as number);
+          return { status: 200, body: { simulation: true, programmeTitle: 'برنامهٔ نمونه', amountTomans, coachShareTomans: coachShare, adminShareTomans: adminShare } };
+        }
+        let studentId = user!.id;
+        if (user!.role === 'student') {
+          if (input.studentId !== undefined && input.studentId !== studentId) throw new HttpError(404, 'شاگرد پیدا نشد.');
+        } else {
+          if (!Number.isSafeInteger(input.studentId) || (input.studentId as number) <= 0) {
+            throw new HttpError(400, 'شاگرد را انتخاب کنید.');
+          }
+          studentId = (await ownStudent(user!, input.studentId as number)).id;
+        }
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        const programme = await loadProgramme(db, studentId);
+        if (!programme) throw new HttpError(404, 'برنامه‌ای برای آزمایش وجود ندارد.');
+        if (programme.id !== expectedId || programme.version !== input.expectedVersion) {
+          throw new HttpError(409, 'برنامه یا قیمت آن تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        const amountTomans = programme.priceTomans ?? 0;
+        if (amountTomans <= 0) throw new HttpError(400, 'برای آزمایش، یک برنامهٔ پولی ذخیره کنید.');
+        const { coachShare, adminShare } = calculateCommission(amountTomans);
+        return {
+          status: 200,
+          body: {
+            simulation: true,
+            programmeTitle: programme.title,
+            amountTomans,
+            ...(user!.role !== 'student' ? { coachShareTomans: coachShare, adminShareTomans: adminShare } : {}),
+          },
+        };
+      },
+    },
+
     {
       method: 'POST',
       pattern: /^\/api\/pay\/start$/,
@@ -691,7 +843,7 @@ export function createApp(options: AppOptions) {
             const publicUrl = new URL(configuredOrigin ?? '');
             if (publicUrl.protocol !== 'https:' || publicUrl.origin !== configuredOrigin) throw new Error('invalid payment origin');
           } catch {
-            throw new HttpError(503, 'نشانی بازگشت درگاه پرداخت پیکربندی نشده است.');
+            throw new HttpError(503, 'پرداخت واقعی هنوز آماده نیست؛ برای بررسی از «آزمایش پرداخت» استفاده کنید.');
           }
         }
         const proto = request.headers['x-forwarded-proto'] || 'http';

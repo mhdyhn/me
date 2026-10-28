@@ -36,6 +36,8 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
     kind: 'bodyweight', key: 'weight-1', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z',
     value: { id: 'weight-1', date: '2026-01-01', weightKg: 65, notes: long },
   }] : [];
+  let testPurchased = false;
+  let testEnabled = false;
   await page.addInitScript((account) => {
     localStorage.setItem('meety.session-token', 'responsive-test');
     localStorage.setItem('meety.session-user', JSON.stringify(account));
@@ -47,7 +49,22 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
     let json: unknown = {};
     if (path === '/api/me') json = { user };
     else if (path === '/api/me/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [] };
-    else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...programme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, coachName: coach.displayName };
+    else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...programme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, isTestPurchase: testPurchased, testPurchaseAvailable: !paid && !testPurchased, testPurchaseExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), coachName: coach.displayName };
+    else if (path === '/api/students/5/test-purchase') {
+      if (request.method() === 'PUT') testEnabled = (request.postDataJSON() as { enabled: boolean }).enabled;
+      json = { available: true, enabled: testEnabled, purchased: false, expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
+    }
+    else if (path === '/api/pay/test/start') json = { simulation: true, authority: 'TEST-01234567-89ab-cdef-0123-456789abcdef', amountTomans: 2_500_000, expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
+    else if (path === '/api/pay/test/confirm') {
+      testPurchased = (request.postDataJSON() as { result: string }).result === 'success';
+      json = { simulation: true, success: testPurchased, amountTomans: 2_500_000, expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
+    }
+    else if (path === '/api/pay/practice') {
+      const body = request.postDataJSON() as { sampleAmountTomans?: number };
+      const amountTomans = body.sampleAmountTomans ?? 2_500_000;
+      const coachShareTomans = Math.floor(amountTomans * 0.9);
+      json = { simulation: true, programmeTitle: body.sampleAmountTomans ? 'برنامهٔ نمونه' : programme.title, amountTomans, coachShareTomans, adminShareTomans: amountTomans - coachShareTomans };
+    }
     else if (path === '/api/coach/transactions' || path === '/api/admin/transactions') json = { transactions };
     else if (path === '/api/coach/iban') json = { iban: null };
     else if (path === '/api/students/5/ai-settings') json = { biometrics: { limitations: '' } };
@@ -221,5 +238,70 @@ test('a populated progress table scrolls locally without moving the page', async
   await expectNoPageOverflow(page);
   await page.locator('.session-history-row').click();
   await expect(page.locator('.session-history-detail')).toBeVisible();
+  await expectNoPageOverflow(page);
+});
+
+for (const width of [320, 390]) {
+  for (const role of ['coach', 'student'] as const) {
+    test(`payment testing fits and stays labelled for ${role} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockAccount(page, role === 'coach' ? coach : student, false);
+      const errors: string[] = [];
+      const requests: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('request', (request) => { if (request.url().includes('/api/pay/')) requests.push(new URL(request.url()).pathname); });
+      await page.goto(role === 'coach' ? '/coach/students/5/program' : '/program', { waitUntil: 'domcontentloaded' });
+      if (role === 'coach') {
+        await page.getByText('آزمایش پرداخت بدون درگاه').click();
+        await expect(page.getByText(/تراکنشی ثبت نمی‌کند و برنامه را باز نمی‌کند/)).toBeVisible();
+        await page.getByRole('button', { name: 'شروع آزمایش پرداخت' }).click();
+        await expect(page.getByText(/سهم محاسبه‌شدهٔ مربی/)).toBeVisible();
+        await page.getByRole('button', { name: 'فرض پرداخت موفق' }).click();
+        await expect(page.getByRole('status')).toContainText('هیچ پول، تراکنش یا دسترسی واقعی ایجاد نشده است');
+        expect(requests).toEqual(['/api/pay/practice']);
+      } else {
+        await expect(page.getByText(/پول واقعی پرداخت نمی‌شود/)).toBeVisible();
+        await page.getByRole('button', { name: 'شروع خرید آزمایشی' }).click();
+        await expect(page.getByText('درگاه شبیه‌سازی‌شده؛ بدون انتقال پول')).toBeVisible();
+        await page.getByRole('button', { name: 'تأیید خرید آزمایشی' }).click();
+        await expect(page.getByText(/دسترسی این برنامه آزمایشی است/)).toBeVisible();
+        await expect(page.getByRole('button', { name: /پرداخت آنلاین و فعال‌سازی/ })).toHaveCount(0);
+        expect(requests).toEqual(['/api/pay/test/start', '/api/pay/test/confirm']);
+      }
+      await expectNoPageOverflow(page);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+for (const role of ['coach', 'admin'] as const) {
+  test(`${role} can practise a sample amount without selecting a student at 320px`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await mockAccount(page, role === 'coach' ? coach : admin);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(role === 'coach' ? '/coach/transactions' : '/coach/admin/transactions', { waitUntil: 'domcontentloaded' });
+    await page.getByText('آزمایش پرداخت بدون درگاه').click();
+    await page.getByLabel('مبلغ نمونه (تومان)').fill('123456');
+    await page.getByRole('button', { name: 'شروع آزمایش پرداخت' }).click();
+    await expect(page.getByText('پیش‌نمایش آزمایشی: برنامهٔ نمونه')).toBeVisible();
+    await expect(page.getByText(/سهم محاسبه‌شدهٔ مربی: ۱۱۱٬۱۱۰/)).toBeVisible();
+    await page.getByRole('button', { name: 'فرض انصراف' }).click();
+    await expect(page.getByRole('status')).toContainText('انصراف فرض شد');
+    await expectNoPageOverflow(page);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('coach enables a time-limited test purchase for one student on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, coach, false);
+  await page.goto('/coach/students/5/program', { waitUntil: 'domcontentloaded' });
+  await page.getByText('خرید آزمایشی برای این شاگرد', { exact: true }).click();
+  await page.getByRole('button', { name: 'اجازهٔ خرید آزمایشی برای این شاگرد' }).click();
+  const dialog = page.getByRole('dialog', { name: 'فعال‌کردن خرید آزمایشی' });
+  await expect(dialog).toContainText('بدون پرداخت واقعی');
+  await dialog.getByRole('button', { name: 'فعال‌کردن آزمایش' }).click();
+  await expect(page.getByRole('button', { name: 'پایان دسترسی آزمایشی' })).toBeVisible();
   await expectNoPageOverflow(page);
 });
