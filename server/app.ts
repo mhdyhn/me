@@ -6,7 +6,7 @@ import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser
 import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
-import { allowTestPurchase, confirmTestPurchase, revokeTestPurchase, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
+import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -435,9 +435,10 @@ export function createApp(options: AppOptions) {
         const student = await ownStudent(user!, Number(params[0]));
         const programme = await loadProgramme(db, student.id);
         const state = programme ? await testPurchaseState(db, student.id, programme.id, now()) : null;
+        const mode = await getTestMode(db, now());
         return {
           status: 200,
-          body: { available: studentTestPurchasesAvailable(), enabled: !!state, purchased: state?.status === 'paid', expiresAt: state?.expires_at ?? null },
+          body: { available: studentTestPurchasesAvailable(), enabled: !!state, purchased: state?.status === 'paid', expiresAt: state?.expires_at ?? null, globalModeEnabled: mode.enabled },
           headers: { 'Cache-Control': 'no-store' },
         };
       },
@@ -460,7 +461,7 @@ export function createApp(options: AppOptions) {
           throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
         }
         if (!input.enabled) {
-          await revokeTestPurchase(db, student.id, expectedId);
+          await revokeTestPurchase(db, student.id, expectedId, now());
           return { status: 200, body: { enabled: false } };
         }
         if (await isProgramPaid(db, student.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
@@ -667,6 +668,7 @@ export function createApp(options: AppOptions) {
         }
         const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id, prog.id));
         const test = isPaid ? null : await testPurchaseState(db, user!.id, prog.id, now());
+        const mode = !isPaid && !test ? await getTestMode(db, now()) : null;
         const isTestPurchase = test?.status === 'paid';
         if (!isPaid && !isTestPurchase) {
           return {
@@ -682,8 +684,8 @@ export function createApp(options: AppOptions) {
               },
               coachName: coach?.displayName ?? null,
               isPaid: false,
-              testPurchaseAvailable: !!test,
-              testPurchaseExpiresAt: test?.expires_at ?? null,
+              testPurchaseAvailable: !!test || !!mode?.enabled,
+              testPurchaseExpiresAt: test?.expires_at ?? mode?.expiresAt ?? null,
             },
             headers: { 'Cache-Control': 'no-store' },
           };
@@ -747,7 +749,7 @@ export function createApp(options: AppOptions) {
     },
 
     // Payment endpoints
-    // Test checkout is separate from the real payment ledger and is explicitly authorized per student.
+    // Test checkout requires an individual grant or an explicitly enabled global test session.
     {
       method: 'POST',
       pattern: /^\/api\/pay\/test\/start$/,
@@ -904,7 +906,7 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/coach\/transactions$/,
       auth: ['coach'],
       handler: async ({ user }) => {
-        return { status: 200, body: { transactions: await listCoachTransactions(db, user!.id) } };
+        return { status: 200, body: { transactions: await listCoachTransactions(db, user!.id), testTransactions: await listTestTransactions(db, now(), user!.id) }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -913,7 +915,25 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/admin\/transactions$/,
       auth: ['admin'],
       handler: async () => {
-        return { status: 200, body: { transactions: await listAllTransactions(db) } };
+        return { status: 200, body: { transactions: await listAllTransactions(db), testTransactions: await listTestTransactions(db, now()) }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/payment-test-mode$/,
+      auth: ['admin'],
+      handler: async () => ({ status: 200, body: await getTestMode(db, now()), headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/admin\/payment-test-mode$/,
+      auth: ['admin'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (typeof input.enabled !== 'boolean') throw new HttpError(400, 'وضعیت آزمایش نامعتبر است.');
+        return { status: 200, body: await setTestMode(db, user!.id, input.enabled, now()), headers: { 'Cache-Control': 'no-store' } };
       },
     },
 

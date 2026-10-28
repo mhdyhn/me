@@ -1726,6 +1726,18 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 
 /* Transaction details can contain long account names and reference codes. */
 .transaction-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.financial-refresh { margin: 0 0 16px; }
+.financial-report { min-width: 0; margin-bottom: 24px; }
+.financial-report h2, .test-mode-card h2 { margin: 0 0 8px; font-size: 18px; }
+.financial-report h3 { margin: 16px 0 8px; font-size: 15px; }
+.financial-report--test { padding: 16px; border: 1px solid #c28b26; border-radius: 14px; background: rgba(194, 139, 38, .08); }
+.financial-report__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; margin-top: 14px; }
+.financial-report__metric { min-width: 0; padding: 1rem; background: var(--surface-soft); }
+.financial-report__metric span { font-size: 13px; }
+.financial-report__metric strong { display: block; margin-top: 4px; font-size: 18px; overflow-wrap: anywhere; }
+.test-mode-card { margin-bottom: 20px; border-color: #c28b26; }
+.test-mode-card p { font-size: 13px; line-height: 1.9; }
+.test-transaction-badge { color: #684b10; background: #fff0c4; }
 .transaction-card__identity { flex: 1 1 220px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .transaction-card__names { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
 .transaction-card__names > span, .transaction-card__meta > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
@@ -2615,5 +2627,7 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .payment-practice__amount small { color: #a42929; }
 
 /* Student test access is never presented as a real purchase. */
-.student-test-purchase { padding: 14px 0 0; }
+.student-test-purchase { width: 100%; min-width: 0; display: grid; justify-items: center; gap: 10px; color: var(--text); font-size: 13px; line-height: 1.9; }
+.student-test-purchase p { margin: 0; }
+.student-test-purchase > .button { width: min(100%, 320px); }
 .test-purchase-notice { margin: 10px 16px 0; padding: 10px 14px; border: 1px solid #d5ae59; border-radius: 12px; color: #684b10; background: #fff7df; font-size: 13px; line-height: 1.8; }

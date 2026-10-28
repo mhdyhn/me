@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ApiError, api, type Programme } from '../lib/api';
 import { confirmModal } from './ConfirmModal';
 
-type TestAccess = { available: boolean; enabled: boolean; purchased: boolean; expiresAt: string | null };
+type TestAccess = { available: boolean; enabled: boolean; purchased: boolean; expiresAt: string | null; globalModeEnabled?: boolean };
 
 /** The coach explicitly grants temporary test access to just one student. */
 export function StudentTestAccess({ studentId, program }: { studentId: number; program: Programme | null }) {
@@ -39,7 +39,7 @@ export function StudentTestAccess({ studentId, program }: { studentId: number; p
       const result = await api<{ enabled: boolean; expiresAt?: string }>('PUT', `/students/${studentId}/test-purchase`, {
         enabled, expectedId: program.id, expectedVersion: program.version,
       });
-      setAccess({ available: access?.available ?? true, enabled: result.enabled, purchased: false, expiresAt: result.expiresAt ?? null });
+      setAccess({ available: access?.available ?? true, enabled: result.enabled, purchased: false, expiresAt: result.expiresAt ?? null, globalModeEnabled: access?.globalModeEnabled });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'وضعیت خرید آزمایشی تغییر نکرد.');
     } finally {
@@ -53,6 +53,7 @@ export function StudentTestAccess({ studentId, program }: { studentId: number; p
       <div className="payment-practice__content">
         <p>با اجازهٔ شما، شاگرد می‌تواند خرید را بدون پول واقعی انجام دهد و برنامه را حداکثر ۲۴ ساعت آزمایشی باز کند. این خرید درآمد یا پرداخت واقعی نیست.</p>
         <p>فقط برای حساب آزمایشی فعال کنید؛ تمرین‌هایی که در حساب شاگرد ثبت شوند، دادهٔ معمولی همان حساب هستند.</p>
+        {access?.globalModeEnabled && <p role="status">حالت آزمایش سراسری مدیر روشن است؛ تا پایان آن، این شاگرد حتی پس از لغو مجوز فردی می‌تواند دوباره آزمایش کند.</p>}
         {!canEnable ? <p>ابتدا برنامهٔ پولی این شاگرد را ذخیره کنید.</p> : error ? (
           <><p className="form-error" role="alert">{error}</p><button type="button" className="button button--secondary" onClick={() => setAttempt((value) => value + 1)}>تلاش دوباره</button></>
         ) : !access ? <p>در حال بررسی وضعیت آزمایش…</p> : !access.available ? (
