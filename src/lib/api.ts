@@ -20,6 +20,10 @@ export interface PublicUser {
   mustChangePassword: boolean;
   iban?: string | null;
   isActive?: boolean;
+  selfRegistered?: boolean;
+  pendingApproval?: boolean;
+  coachAccess?: boolean;
+  phoneNumber?: string | null;
 }
 
 export interface ProgramItem {

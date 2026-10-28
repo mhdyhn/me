@@ -2,7 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, userForToken, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { limitRegistration, registerAccount } from './registration.ts';
+import { requireMobile } from './phone.ts';
+import { acceptCoachInvitation, makeCoachInvitation, previewCoachInvitation, revokeCoachInvitations, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
@@ -22,6 +25,8 @@ export interface AppOptions {
   now?: () => Date;
   maxFailedLogins?: number;
   lockMinutes?: number;
+  /** Registration attempts per socket address and 15-minute window. */
+  maxRegistrationAttempts?: number;
 }
 
 interface Context {
@@ -143,7 +148,7 @@ export function createApp(options: AppOptions) {
 
   async function ownStudent(coach: StoredUser, studentId: number): Promise<StoredUser> {
     const student = await findUserById(db, studentId);
-    if (!student || student.role !== 'student' || (coach.role !== 'admin' && student.coachId !== coach.id)) {
+    if (!student || student.role !== 'student' || (coach.role !== 'admin' && (student.coachId !== coach.id || !student.coachAccess))) {
       // Same answer for "missing" and "belongs to another coach", so ids cannot be probed.
       throw new HttpError(404, 'شاگرد پیدا نشد.');
     }
@@ -196,6 +201,21 @@ export function createApp(options: AppOptions) {
 
     {
       method: 'POST',
+      pattern: /^\/api\/auth\/register$/,
+      auth: 'public',
+      handler: async ({ body, request }) => {
+        if (!String(request.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+          throw new HttpError(415, 'درخواست باید JSON باشد.');
+        }
+        const at = now();
+        await limitRegistration(db, secretKey, request.socket.remoteAddress ?? 'unknown', at, options.maxRegistrationAttempts);
+        const result = await registerAccount(db, body, at);
+        return { status: 201, body: result, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
       pattern: /^\/api\/auth\/login$/,
       auth: 'public',
       handler: async ({ body }) => {
@@ -210,6 +230,7 @@ export function createApp(options: AppOptions) {
           throw new HttpError(401, 'نام کاربری یا رمز عبور اشتباه است.');
         }
         if (!user.isActive) {
+          if (user.pendingApproval) throw new HttpError(403, 'ثبت‌نام مربی در انتظار تأیید مدیر است. پس از تأیید می‌توانید وارد شوید.');
           throw new HttpError(403, 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
         }
         const token = await createSession(db, user.id, user.authVersion, now());
@@ -272,8 +293,9 @@ export function createApp(options: AppOptions) {
         const input = requireObject(body);
         if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'انتخاب اشتراک پروفایل با مربی الزامی است.');
+        if (input.shareWithCoach && (user!.coachId === null || !user!.coachAccess)) throw new HttpError(409, 'دسترسی مربی فعال نیست.');
         const profile = validateStudentProfile(body);
-        const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString());
+        const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString(), user!.coachAccessVersion);
         return { status: 200, body: { stored } };
       },
     },
@@ -286,7 +308,8 @@ export function createApp(options: AppOptions) {
         const input = requireObject(body);
         if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'فیلد shareWithCoach باید بولین باشد.');
-        const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString());
+        if (input.shareWithCoach && (user!.coachId === null || !user!.coachAccess)) throw new HttpError(409, 'دسترسی مربی فعال نیست.');
+        const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString(), user!.coachAccessVersion);
         return { status: 200, body: { shareWithCoach: input.shareWithCoach && exists } };
       },
     },
@@ -304,6 +327,20 @@ export function createApp(options: AppOptions) {
 
     {
       method: 'GET',
+      pattern: /^\/api\/admin\/students$/,
+      auth: ['admin'],
+      handler: async ({ url }) => {
+        const search = url.searchParams.get('username')?.trim() || null;
+        if (search && search.length > 64) throw new HttpError(400, 'نام کاربری بیش از حد طولانی است.');
+        const rawCursor = url.searchParams.get('before');
+        const before = rawCursor === null ? null : Number(rawCursor);
+        if (before !== null && (!Number.isSafeInteger(before) || before < 1 || before > 2147483647)) throw new HttpError(400, 'نشانگر فهرست نامعتبر است.');
+        return { status: 200, body: await listAdminStudents(db, secretKey, search, before), headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/coaches$/,
       auth: ['admin'],
       handler: async () => ({ status: 200, body: { coaches: await listCoachSummaries(db, secretKey) } }),
@@ -316,6 +353,7 @@ export function createApp(options: AppOptions) {
       handler: async ({ body }) => {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام مربی');
+        const phoneNumber = requireMobile(input.phoneNumber);
         const username = await generateUsername(db, 'c');
         const password = generatePassword();
         const id = await insertUser(db, {
@@ -324,6 +362,7 @@ export function createApp(options: AppOptions) {
           passwordEnc: encryptSecret(secretKey, password),
           role: 'coach',
           displayName,
+          phoneNumber,
           coachId: null,
           mustChangePassword: true,
           now: now(),
@@ -382,9 +421,42 @@ export function createApp(options: AppOptions) {
       auth: ['admin'],
       handler: async ({ params }) => {
         const coach = await ownCoach(Number(params[0]));
-        const students = await listStudents(db, coach.id, secretKey);
+        const students = await listStudents(db, coach.id, secretKey, true);
         return { status: 200, body: { coachName: coach.displayName, students } };
       },
+    },
+
+    {
+      method: 'POST', pattern: /^\/api\/coach\/invitations$/,
+      auth: ['coach'],
+      handler: async ({ user }) => ({ status: 201, body: await makeCoachInvitation(db, secretKey, user!, now()), headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
+      method: 'DELETE', pattern: /^\/api\/coach\/invitations$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        await revokeCoachInvitations(db, user!);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+
+    {
+      method: 'POST', pattern: /^\/api\/me\/coach-invitation\/preview$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => ({ status: 200, body: await previewCoachInvitation(db, secretKey, user!, body, now()), headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
+      method: 'POST', pattern: /^\/api\/me\/coach-invitation\/accept$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => ({ status: 200, body: { user: toPublic(await acceptCoachInvitation(db, secretKey, user!, body, now())) }, headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
+      method: 'POST', pattern: /^\/api\/me\/coach-access\/withdraw$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => ({ status: 200, body: { user: toPublic(await withdrawCoachAccess(db, user!, body)) }, headers: { 'Cache-Control': 'no-store' } }),
     },
 
     {
@@ -401,6 +473,7 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, body }) => {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام شاگرد');
+        const phoneNumber = requireMobile(input.phoneNumber);
         const username = await generateUsername(db, 's');
         const password = generatePassword();
         const id = await insertUser(db, {
@@ -409,6 +482,7 @@ export function createApp(options: AppOptions) {
           passwordEnc: encryptSecret(secretKey, password),
           role: 'student',
           displayName,
+          phoneNumber,
           coachId: user!.id,
           mustChangePassword: true,
           now: now(),
@@ -501,8 +575,8 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/nutrition$/,
       auth: ['student'],
       handler: async ({ user }) => {
-        const coach = await findUserById(db, user!.coachId!);
-        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: await loadPlan(db, user!.id) } };
+        const coach = user!.coachId === null ? null : await findUserById(db, user!.coachId);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: user!.coachId === null ? null : await loadPlan(db, user!.id) } };
       },
     },
 
@@ -564,8 +638,9 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
       handler: async ({ user }) => {
-        const coach = await findUserById(db, user!.coachId!);
-        return { status: 200, body: { coachName: coach?.displayName ?? null, messages: await listMessages(db, user!.coachId!, user!.id) } };
+        if (user!.coachId === null) throw new HttpError(409, 'این حساب هنوز مربی ندارد.');
+        const coach = await findUserById(db, user!.coachId);
+        return { status: 200, body: { coachName: coach?.displayName ?? null, messages: await listMessages(db, user!.coachId, user!.id) } };
       },
     },
 
@@ -574,8 +649,10 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
       handler: async ({ user, body }) => {
+        if (user!.coachId === null) throw new HttpError(409, 'این حساب هنوز مربی ندارد.');
+        if (!user!.coachAccess) throw new HttpError(409, 'دسترسی مربی قطع شده است؛ ارسال پیام فعال نیست.');
         const { text, mediaType, mediaData } = parseMessageInput(body);
-        return { status: 201, body: { message: await addMessage(db, user!.coachId!, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
+        return { status: 201, body: { message: await addMessage(db, user!.coachId, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
       },
     },
 
@@ -661,7 +738,8 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/program$/,
       auth: ['student'],
       handler: async ({ user }) => {
-        const coach = await findUserById(db, user!.coachId!);
+        if (user!.coachId === null) return { status: 200, body: { program: null, coachName: null, isPaid: true } };
+        const coach = await findUserById(db, user!.coachId);
         const prog = await loadProgramme(db, user!.id);
         if (!prog) {
           return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
@@ -1021,6 +1099,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
+        if (student.selfRegistered) throw new HttpError(403, 'حسابی که شاگرد خودش ساخته است توسط مربی حذف نمی‌شود.');
         await deleteUser(db, student.id);
         return { status: 200, body: { ok: true } };
       },
@@ -1029,9 +1108,10 @@ export function createApp(options: AppOptions) {
     {
       method: 'POST',
       pattern: /^\/api\/students\/(\d+)\/reset-password$/,
-      auth: ['coach'],
+      auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
+        if (user!.role === 'coach' && student.selfRegistered) throw new HttpError(403, 'رمز حسابی که شاگرد خودش ساخته است توسط مربی تغییر نمی‌کند.');
         const password = generatePassword();
         if (!(await resetUserPassword(db, student.id, hashPassword(password), encryptSecret(secretKey, password)))) {
           throw new HttpError(404, 'شاگرد پیدا نشد.');
@@ -1046,6 +1126,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
+        if (user!.role === 'coach' && student.selfRegistered) throw new HttpError(403, 'وضعیت حسابی که شاگرد خودش ساخته است توسط مربی تغییر نمی‌کند.');
         const input = requireObject(body);
         if (typeof input.active !== 'boolean') {
           throw new HttpError(400, 'فیلد active باید بولین باشد.');

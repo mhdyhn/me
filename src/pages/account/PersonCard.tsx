@@ -4,6 +4,7 @@ import { Check, Copy, Eye, EyeOff } from 'lucide-react';
 interface PersonCardProps {
   name: string;
   username: string;
+  phoneNumber?: string | null;
   /** The generated password when it is still the one in use; null once the person has chosen their own. */
   password: string | null;
   mustChangePassword: boolean;
@@ -11,6 +12,7 @@ interface PersonCardProps {
   roleLabel: string;
   /** Whether the account is active. Defaults to true. */
   isActive?: boolean;
+  pendingApproval?: boolean;
   /** Extra badges on the header, e.g. the student count. */
   badges?: ReactNode;
   /** Buttons along the bottom of the card. */
@@ -20,7 +22,7 @@ interface PersonCardProps {
 }
 
 /** One person's card: identity, sign-in details with copy buttons, and actions. Used for coaches (admin) and students (coach). */
-export function PersonCard({ name, username, password, mustChangePassword, roleLabel, isActive = true, badges, actions, children }: PersonCardProps) {
+export function PersonCard({ name, username, phoneNumber, password, mustChangePassword, roleLabel, isActive = true, pendingApproval = false, badges, actions, children }: PersonCardProps) {
   return (
     <article className={`person-card ${!isActive ? 'person-card--inactive' : ''}`}>
       <header className="person-card__head">
@@ -30,7 +32,9 @@ export function PersonCard({ name, username, password, mustChangePassword, roleL
           <span className="person-card__role">{roleLabel}</span>
         </div>
         <div className="person-card__badges">
-          {!isActive ? (
+          {pendingApproval ? (
+            <span className="badge">در انتظار تأیید</span>
+          ) : !isActive ? (
             <span className="badge badge--danger">غیرفعال</span>
           ) : (
             <span className="badge badge--success">فعال</span>
@@ -42,6 +46,7 @@ export function PersonCard({ name, username, password, mustChangePassword, roleL
 
       <dl className="person-card__credentials">
         <CredentialRow label="نام کاربری" value={username} />
+        {phoneNumber ? <CredentialRow label="موبایل (تأییدنشده)" value={phoneNumber} /> : <div className="person-card__row"><dt>موبایل</dt><dd className="person-card__note">ثبت نشده</dd></div>}
         {password ? (
           <CredentialRow label="رمز عبور" value={password} secret />
         ) : (

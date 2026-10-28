@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Dumbbell, Eye, EyeOff, KeyRound, LogIn, Smartphone, User } from 'lucide-react';
 import { ApiError } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { homeFor } from './AccountShell';
+import { AuthIntro } from './AuthIntro';
 
 export { SAVED_CREDENTIALS_KEY } from '../../lib/savedLogin';
 import { getSavedCredentials, SAVED_CREDENTIALS_KEY, type SavedCredentials } from '../../lib/savedLogin';
@@ -91,6 +92,8 @@ export function Login() {
   return (
     <div className="login-screen">
       <div className="login-glow" aria-hidden="true" />
+      <div className="auth-layout">
+      <AuthIntro />
       <main className="login-card">
         <div className="login-brand">
           <span className="brand-mark"><Dumbbell size={22} strokeWidth={2.3} /></span>
@@ -100,8 +103,9 @@ export function Login() {
           </div>
         </div>
 
-        <h1>خوش آمدید</h1>
-        <p className="login-sub">با نام کاربری و رمزی که مربی یا مدیر باشگاه به شما داده وارد شوید.</p>
+        <span className="auth-card-kicker">خوش آمدی به میتی</span>
+        <h1>وارد حسابت شو</h1>
+        <p className="login-sub">با نام کاربری و رمز خودت، یا اطلاعاتی که مربی یا مدیر به تو داده وارد شو.</p>
 
         <form className="login-form" onSubmit={(event) => void submit(event)}>
           <label className="login-field" htmlFor="login-username">
@@ -197,7 +201,12 @@ export function Login() {
           </button>
         </form>
 
-        <p className="login-help">رمز را فراموش کرده‌اید؟ از مربی یا مدیر باشگاه بخواهید رمز تازه بسازد.</p>
+        <p className="login-help">رمز را فراموش کرده‌ای؟ با مربی یا پشتیبانی تماس بگیر؛ بازیابی حساب مستقل پس از بررسی هویت انجام می‌شود.</p>
+
+        <div className="auth-signup-prompt">
+          <div><strong>تازه به میتی پیوسته‌ای؟</strong><span>حساب شخصی یا مربی بساز.</span></div>
+          <Link to="/register" className="button button--secondary">ساخت حساب</Link>
+        </div>
 
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line-soft)', textAlign: 'center' }}>
           <button
@@ -210,6 +219,7 @@ export function Login() {
           </button>
         </div>
       </main>
+      </div>
 
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>

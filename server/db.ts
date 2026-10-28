@@ -8,6 +8,7 @@ import { migrateBiometrics } from './biometrics.ts';
 import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
 import { migrateTestPurchases } from './testPurchases.ts';
+import { migrateRegistration } from './registration.ts';
 
 /**
  * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
@@ -110,7 +111,12 @@ async function migrate(db: Db): Promise<void> {
       password_enc TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       auth_version INTEGER NOT NULL DEFAULT 0,
-      CHECK ((role = 'student') = (coach_id IS NOT NULL))
+      self_registered INTEGER NOT NULL DEFAULT 0,
+      pending_approval INTEGER NOT NULL DEFAULT 0,
+      coach_access INTEGER NOT NULL DEFAULT 1,
+      coach_access_version INTEGER NOT NULL DEFAULT 0,
+      phone_number TEXT,
+      CONSTRAINT users_coach_role_check CHECK (role = 'student' OR coach_id IS NULL)
     );
 
     -- One active programme per student. The coach replaces it; the body is validated by programs.ts.
@@ -146,6 +152,7 @@ async function migrate(db: Db): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE sessions ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
   `);
+  await migrateRegistration(db);
   await migrateChat(db);
   await migrateNutrition(db);
   await migrateSessions(db);

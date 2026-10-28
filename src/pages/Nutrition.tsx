@@ -23,6 +23,7 @@ export function Nutrition() {
   const today = getLocalDateKey();
   const todayEntry = nutritionDays.find((day) => day.date === today);
   const currentWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
+  const hasWeight = Number.isFinite(currentWeight) && currentWeight >= 30;
   const proteinLow = Math.round(currentWeight * 1.6);
   const proteinHigh = Math.round(currentWeight * 2.2);
   const goalDraft = useGuardedDraft(goalsView(nutritionGoals));
@@ -85,12 +86,12 @@ export function Nutrition() {
 
   return (
     <div className="page-stack nutrition-page">
-      {user?.role === 'student' && <StudentNutritionPlan />}
+      {user?.role === 'student' && user.coachId !== null && <StudentNutritionPlan />}
       <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="وعده‌های روزانه‌ات را ثبت کن؛ کالری و درشت‌مغذی‌ها خودکار حساب می‌شوند و با هدف‌هایت مقایسه می‌شوند." />
       <div className="nutrition-context panel-card">
         <span className="nutrition-context__icon"><Leaf size={19} /></span>
-        <div><span className="eyebrow">نقطهٔ شروع · نه نسخهٔ قطعی</span><p>با وزن <strong>{currentWeightText} کیلوگرم</strong>، بازهٔ عمومی پروتئین حدود <strong>{faNumber(proteinLow)} تا {faNumber(proteinHigh)} گرم در روز</strong> (تقریباً ۱٫۶ تا ۲٫۲ گرم به‌ازای هر کیلوگرم) است. هدف قابل تنظیم است؛ این برنامه نیاز دقیق کالری تو را نمی‌داند.</p></div>
-        <span className="nutrition-context__weight">{currentWeightText}<small>کیلوگرم</small></span>
+        <div><span className="eyebrow">نقطهٔ شروع · نه نسخهٔ قطعی</span>{hasWeight ? <p>با وزن <strong>{currentWeightText} کیلوگرم</strong>، بازهٔ عمومی پروتئین حدود <strong>{faNumber(proteinLow)} تا {faNumber(proteinHigh)} گرم در روز</strong> (تقریباً ۱٫۶ تا ۲٫۲ گرم به‌ازای هر کیلوگرم) است. هدف قابل تنظیم است؛ این برنامه نیاز دقیق کالری تو را نمی‌داند.</p> : <p>برای دیدن بازهٔ تقریبی پروتئین، ابتدا وزن خود را در پروفایل یا بخش پیشرفت ثبت کن.</p>}</div>
+        {hasWeight && <span className="nutrition-context__weight">{currentWeightText}<small>کیلوگرم</small></span>}
       </div>
 
       <div className="nutrition-grid">
@@ -99,7 +100,7 @@ export function Nutrition() {
           <p className="muted">نیاز به کالری برای هر فرد متفاوت است. خودت یک برآورد آغازین وارد کن و پس از چند هفته روندت را بررسی کن.</p>
           <form className="form-stack" onSubmit={(event) => void submitGoals(event)}>
             <label className="field-control"><span>هدف کالری <small>اختیاری · کیلوکالری</small></span><input type="number" min="500" max="10000" step="25" inputMode="numeric" value={targetCalories} onChange={(event) => goalDraft.setDraft((current) => ({ ...current, calories: event.target.value }))} placeholder="برآورد دلخواهت را وارد کن" /></label>
-            <label className="field-control"><span>پروتئین <small>گرم در روز</small></span><div className="input-with-unit"><input type="number" min="0" max="500" step="1" value={targetProtein} onChange={(event) => goalDraft.setDraft((current) => ({ ...current, protein: event.target.value }))} required /><span>گرم</span></div><small className="field-hint">بازهٔ تقریبی برای وزن فعلی: {faNumber(proteinLow)} تا {faNumber(proteinHigh)} گرم.</small></label>
+            <label className="field-control"><span>پروتئین <small>گرم در روز</small></span><div className="input-with-unit"><input type="number" min="0" max="500" step="1" value={targetProtein} onChange={(event) => goalDraft.setDraft((current) => ({ ...current, protein: event.target.value }))} required /><span>گرم</span></div><small className="field-hint">{hasWeight ? `بازهٔ تقریبی برای وزن فعلی: ${faNumber(proteinLow)} تا ${faNumber(proteinHigh)} گرم.` : 'برای برآورد بازهٔ پروتئین، ابتدا وزن را ثبت کن.'}</small></label>
             <div className="macro-inputs"><label className="field-control"><span>کربوهیدرات <small>گرم</small></span><input type="number" min="0" max="1000" step="1" value={targetCarbs} onChange={(event) => goalDraft.setDraft((current) => ({ ...current, carbs: event.target.value }))} placeholder="اختیاری" /></label><label className="field-control"><span>چربی <small>گرم</small></span><input type="number" min="0" max="500" step="1" value={targetFats} onChange={(event) => goalDraft.setDraft((current) => ({ ...current, fats: event.target.value }))} placeholder="اختیاری" /></label></div>
             {goalDraft.conflict && <DraftConflictNotice latest={nutritionGoals} discard={goalDraft.discard} acceptCurrent={goalDraft.acceptCurrent} />}
             {goalError && <p className="form-error" role="alert">{goalError}</p>}

@@ -6,6 +6,7 @@ import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api'
 import { faNumber } from '../../lib/format';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
+import { AdminStudents } from './AdminStudents';
 
 interface CoachSummary extends PublicUser {
   studentCount: number;
@@ -27,6 +28,8 @@ function AdminCoaches() {
   const [loadingCoaches, setLoadingCoaches] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [coachSearch, setCoachSearch] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -57,9 +60,10 @@ function AdminCoaches() {
     setFormError(null);
     setBusy(true);
     try {
-      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/coaches', { displayName: name.trim() });
+      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/coaches', { displayName: name.trim(), phoneNumber });
       setCredentials({ user: created.user, username: created.username, password: created.password });
       setName('');
+      setPhoneNumber('');
       void load();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'مربی ساخته نشد.');
@@ -71,11 +75,11 @@ function AdminCoaches() {
   async function toggleCoachActive(coach: CoachSummary) {
     const nextActive = coach.isActive === false;
     const ok = await confirmModal({
-      title: nextActive ? 'فعال‌سازی مربی' : 'غیرفعال‌سازی مربی',
+      title: coach.pendingApproval ? 'تأیید ثبت‌نام مربی' : nextActive ? 'فعال‌سازی مربی' : 'غیرفعال‌سازی مربی',
       message: nextActive
-        ? `مربی «${coach.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
+        ? coach.pendingApproval ? `ثبت‌نام مربی «${coach.displayName}» تأیید شود؟ پس از تأیید می‌تواند وارد حساب خود شود.` : `مربی «${coach.displayName}» دوباره فعال شود؟ پس از فعال‌سازی امکان ورود به برنامه را خواهد داشت.`
         : `مربی «${coach.displayName}» غیرفعال شود؟ حساب مربی مسدود شده و از سیستم خارج می‌شود.`,
-      confirmText: nextActive ? 'فعال‌سازی' : 'غیرفعال‌سازی',
+      confirmText: coach.pendingApproval ? 'تأیید مربی' : nextActive ? 'فعال‌سازی' : 'غیرفعال‌سازی',
       cancelText: 'انصراف',
       variant: nextActive ? 'primary' : 'danger',
     });
@@ -170,6 +174,11 @@ function AdminCoaches() {
   }
 
   const totalStudents = useMemo(() => coaches?.reduce((sum, c) => sum + (c.studentCount || 0), 0) ?? 0, [coaches]);
+  const visibleCoaches = useMemo(() => {
+    const query = coachSearch.trim().toLowerCase();
+    return (coaches ?? []).filter((coach) => !query || coach.displayName.toLowerCase().includes(query) || coach.username.toLowerCase().includes(query))
+      .sort((a, b) => Number(Boolean(b.pendingApproval)) - Number(Boolean(a.pendingApproval)));
+  }, [coaches, coachSearch]);
 
   return (
     <PanelPage title="مدیریت مربی‌ها و باشگاه">
@@ -177,12 +186,12 @@ function AdminCoaches() {
       <div className="admin-overview-card">
         <div className="admin-overview-stats">
           <div className="admin-stat-item">
-            <span className="admin-stat-num">{faNumber(coaches?.length ?? 0)}</span>
+            <span className="admin-stat-num">{faNumber(coaches?.filter((coach) => coach.isActive !== false).length ?? 0)}</span>
             <span className="admin-stat-label">مربیان فعال</span>
           </div>
           <div className="admin-stat-item">
             <span className="admin-stat-num">{faNumber(totalStudents)}</span>
-            <span className="admin-stat-label">کل شاگردان باشگاه</span>
+            <span className="admin-stat-label">شاگردان مرتبط با مربی‌ها</span>
           </div>
           <div className="admin-stat-item admin-stat-ai">
             <span className="badge badge--success">
@@ -193,6 +202,7 @@ function AdminCoaches() {
         </div>
 
         <div className="admin-overview-actions">
+          <a href="#admin-students-heading" className="button button--small button--secondary"><Users size={14} /> همهٔ شاگردها</a>
           <Link to="/ai-hub" className="button button--small button--secondary">
             <Sparkles size={14} /> داشبورد هوش سلامتی
           </Link>
@@ -210,6 +220,7 @@ function AdminCoaches() {
             <span>نام مربی جدید</span>
             <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required />
           </label>
+          <label className="field" htmlFor="coach-phone"><span id="coach-phone-label">شماره موبایل مربی</span><input id="coach-phone" aria-labelledby="coach-phone-label" aria-describedby="coach-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="coach-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد.</small></label>
           <button type="submit" className="button button--primary" disabled={busy}>
             <UserPlus size={16} /> {busy ? 'در حال ساخت…' : 'ساخت مربی'}
           </button>
@@ -229,18 +240,22 @@ function AdminCoaches() {
       {coaches === null && !coachesLoadError && <p className="account-muted" role="status">در حال بارگذاری…</p>}
       {coaches?.length === 0 && <p className="account-muted">هنوز مربی‌ای ساخته نشده است. بالا یکی بسازید.</p>}
 
-      {coaches && coaches.length > 0 && (
+      {coaches && coaches.length > 0 && <label className="field coach-search"><span>جست‌وجوی مربی با نام یا نام کاربری</span><input value={coachSearch} onChange={(event) => setCoachSearch(event.target.value)} /></label>}
+      {coaches && coaches.length > 0 && visibleCoaches.length === 0 && <p className="account-muted">مربی‌ای با این نام پیدا نشد.</p>}
+      {visibleCoaches.length > 0 && (
         <ul className="person-card-grid">
-          {coaches.map((coach) => (
+          {visibleCoaches.map((coach) => (
             <li key={coach.id}>
               <PersonCard
                 name={coach.displayName}
                 username={coach.username}
+                phoneNumber={coach.phoneNumber}
                 password={coach.password}
                 mustChangePassword={coach.mustChangePassword}
                 roleLabel="مربی"
                 isActive={coach.isActive !== false}
-                badges={<span className="badge"><Users size={13} /> {faNumber(coach.studentCount)} شاگرد</span>}
+                pendingApproval={coach.pendingApproval}
+                badges={<><span className="badge"><Users size={13} /> {faNumber(coach.studentCount)} شاگرد</span><span className="badge">{coach.selfRegistered ? 'ثبت‌نام مستقیم' : 'ساخته‌شده دستی'}</span></>}
                 actions={
                   <>
                     <Link className="button button--ghost" to={`/coach/coaches/${coach.id}/chat`}>
@@ -253,7 +268,7 @@ function AdminCoaches() {
                       title={coach.isActive === false ? 'فعال‌سازی مجدد مربی' : 'غیرفعال‌سازی موقت مربی'}
                     >
                       {coach.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
-                      {coach.isActive === false ? 'فعال‌سازی مربی' : 'غیرفعال‌سازی مربی'}
+                      {coach.pendingApproval ? 'تأیید ثبت‌نام' : coach.isActive === false ? 'فعال‌سازی مربی' : 'غیرفعال‌سازی مربی'}
                     </button>
                     <button type="button" className="button button--ghost" onClick={() => void resetPassword(coach)}>
                       <KeyRound size={16} /> رمز تازه
@@ -344,6 +359,7 @@ function AdminCoaches() {
           ))}
         </ul>
       )}
+      <AdminStudents />
     </PanelPage>
   );
 }
