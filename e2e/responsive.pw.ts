@@ -10,6 +10,12 @@ const transactions = Array.from({ length: 8 }, (_, index) => ({
   authority: `transaction-${index}`, status: 'paid', refId: '123456789012345678901234567890', cardPan: null,
   createdAt: '2026-01-01T00:00:00Z', verifiedAt: '2026-01-01T00:00:00Z',
 }));
+const testTransactions = [
+  { ...transactions[0], id: 41, authority: 'TEST-first', simulation: true, programmeId: 'program-1', programmeVersion: 1, refId: null },
+  { ...transactions[1], id: 42, authority: 'TEST-canceled', simulation: true, programmeId: 'program-1', programmeVersion: 1, status: 'canceled', refId: null },
+  { ...transactions[2], id: 43, authority: 'TEST-pending', simulation: true, programmeId: 'program-1', programmeVersion: 1, status: 'pending', refId: null },
+  { ...transactions[3], id: 44, authority: 'TEST-expired', simulation: true, programmeId: 'program-1', programmeVersion: 1, status: 'expired', refId: null },
+];
 const programme = {
   id: 'program-1',
   version: 1,
@@ -24,7 +30,7 @@ const programme = {
 
 type RecordValue = { kind: string; key: string; version: number; deleted: boolean; value: unknown; updatedAt: string };
 
-async function mockAccount(page: Page, user: typeof student | typeof coach | typeof admin, paid = true, withHistory = false, withArchive = false) {
+async function mockAccount(page: Page, user: typeof student | typeof coach | typeof admin, paid = true, withHistory = false, withArchive = false, testAvailable = true) {
   const records: RecordValue[] = withHistory ? [{
     kind: 'session', key: 'completed-session', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z',
     value: {
@@ -38,6 +44,7 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
   }] : [];
   let testPurchased = false;
   let testEnabled = false;
+  let globalTestEnabled = false;
   await page.addInitScript((account) => {
     localStorage.setItem('meety.session-token', 'responsive-test');
     localStorage.setItem('meety.session-user', JSON.stringify(account));
@@ -49,7 +56,7 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
     let json: unknown = {};
     if (path === '/api/me') json = { user };
     else if (path === '/api/me/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [] };
-    else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...programme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, isTestPurchase: testPurchased, testPurchaseAvailable: !paid && !testPurchased, testPurchaseExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), coachName: coach.displayName };
+    else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...programme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, isTestPurchase: testPurchased, testPurchaseAvailable: testAvailable && !paid && !testPurchased, testPurchaseExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), coachName: coach.displayName };
     else if (path === '/api/students/5/test-purchase') {
       if (request.method() === 'PUT') testEnabled = (request.postDataJSON() as { enabled: boolean }).enabled;
       json = { available: true, enabled: testEnabled, purchased: false, expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
@@ -65,7 +72,11 @@ async function mockAccount(page: Page, user: typeof student | typeof coach | typ
       const coachShareTomans = Math.floor(amountTomans * 0.9);
       json = { simulation: true, programmeTitle: body.sampleAmountTomans ? 'برنامهٔ نمونه' : programme.title, amountTomans, coachShareTomans, adminShareTomans: amountTomans - coachShareTomans };
     }
-    else if (path === '/api/coach/transactions' || path === '/api/admin/transactions') json = { transactions };
+    else if (path === '/api/coach/transactions' || path === '/api/admin/transactions') json = { transactions, testTransactions };
+    else if (path === '/api/admin/payment-test-mode') {
+      if (request.method() === 'PUT') globalTestEnabled = (request.postDataJSON() as { enabled: boolean }).enabled;
+      json = { available: true, enabled: globalTestEnabled, expiresAt: globalTestEnabled ? new Date(Date.now() + 86_400_000).toISOString() : null };
+    }
     else if (path === '/api/coach/iban') json = { iban: null };
     else if (path === '/api/students/5/ai-settings') json = { biometrics: { limitations: '' } };
     else if (path === '/api/students/5/sessions') json = {
@@ -179,7 +190,7 @@ for (const width of [320, 360, 681, 768]) {
 for (const width of [320, 360]) {
   test(`unpaid programme and its payment button fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    await mockAccount(page, student, false);
+    await mockAccount(page, student, false, false, false, false);
     await page.goto('/program', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: /پرداخت آنلاین و فعال‌سازی/ })).toBeVisible();
     await expectNoPageOverflow(page);
@@ -208,7 +219,7 @@ for (const width of [320, 1280]) {
     await expect(create).toBeChecked();
     await expectNoPageOverflow(page);
 
-    await mockAccount(page, student, false, false, true);
+    await mockAccount(page, student, false, false, true, false);
     await page.goto('/program', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: /پرداخت آنلاین و فعال‌سازی/ })).toBeVisible();
     await page.getByText(/بایگانی برنامه‌های قبلی/).click();
@@ -260,10 +271,11 @@ for (const width of [320, 390]) {
         await expect(page.getByRole('status')).toContainText('هیچ پول، تراکنش یا دسترسی واقعی ایجاد نشده است');
         expect(requests).toEqual(['/api/pay/practice']);
       } else {
-        await expect(page.getByText(/پول واقعی پرداخت نمی‌شود/)).toBeVisible();
-        await page.getByRole('button', { name: 'شروع خرید آزمایشی' }).click();
-        await expect(page.getByText('درگاه شبیه‌سازی‌شده؛ بدون انتقال پول')).toBeVisible();
-        await page.getByRole('button', { name: 'تأیید خرید آزمایشی' }).click();
+        await expect(page.getByText(/بدون درگاه و پرداخت پول/)).toBeVisible();
+        await page.getByRole('button', { name: /خرید و فعال‌سازی آزمایشی/ }).click();
+        const dialog = page.getByRole('dialog', { name: 'تأیید خرید آزمایشی' });
+        await expect(dialog).toContainText('پولی پرداخت نمی‌شود');
+        await dialog.getByRole('button', { name: 'تأیید و فعال‌سازی آزمایشی' }).click();
         await expect(page.getByText(/دسترسی این برنامه آزمایشی است/)).toBeVisible();
         await expect(page.getByRole('button', { name: /پرداخت آنلاین و فعال‌سازی/ })).toHaveCount(0);
         expect(requests).toEqual(['/api/pay/test/start', '/api/pay/test/confirm']);
@@ -287,7 +299,7 @@ for (const role of ['coach', 'admin'] as const) {
     await expect(page.getByText('پیش‌نمایش آزمایشی: برنامهٔ نمونه')).toBeVisible();
     await expect(page.getByText(/سهم محاسبه‌شدهٔ مربی: ۱۱۱٬۱۱۰/)).toBeVisible();
     await page.getByRole('button', { name: 'فرض انصراف' }).click();
-    await expect(page.getByRole('status')).toContainText('انصراف فرض شد');
+    await expect(page.locator('.payment-practice').getByRole('status')).toContainText('انصراف فرض شد');
     await expectNoPageOverflow(page);
     expect(errors).toEqual([]);
   });
@@ -303,5 +315,78 @@ test('coach enables a time-limited test purchase for one student on a narrow pho
   await expect(dialog).toContainText('بدون پرداخت واقعی');
   await dialog.getByRole('button', { name: 'فعال‌کردن آزمایش' }).click();
   await expect(page.getByRole('button', { name: 'پایان دسترسی آزمایشی' })).toBeVisible();
+  await expectNoPageOverflow(page);
+});
+
+for (const role of ['coach', 'admin'] as const) {
+  test(`${role} sees separate real and test financial reports on a narrow phone`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await mockAccount(page, role === 'coach' ? coach : admin);
+    await page.goto(role === 'coach' ? '/coach/transactions' : '/coach/admin/transactions', { waitUntil: 'domcontentloaded' });
+    const simulation = page.getByLabel('گزارش مالی آزمایشی');
+    const live = page.getByLabel('گزارش مالی واقعی');
+    await expect(simulation).toContainText('هیچ پولی جابه‌جا نشده');
+    await expect(simulation).toContainText('۲٬۲۵۰٬۰۰۰ تومان');
+    await expect(simulation).toContainText('۱ عدد');
+    await expect(simulation.getByText('آزمایشی؛ بدون پول')).toHaveCount(4);
+    await expect(simulation).toContainText('لغو / ناموفق');
+    await expect(simulation).toContainText('در انتظار');
+    await expect(simulation).toContainText('منقضی / پایان‌یافته');
+    await expect(live).toContainText(role === 'coach' ? '۱۸٬۰۰۰٬۰۰۰ تومان' : '۲۰٬۰۰۰٬۰۰۰ تومان');
+    await expect(live).toContainText('۸ عدد');
+    await expectNoPageOverflow(page);
+  });
+}
+
+test('admin explicitly enables and stops global test mode with warnings at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, admin);
+  await page.goto('/coach/admin/transactions', { waitUntil: 'domcontentloaded' });
+  const control = page.getByLabel('مدیریت آزمایش سراسری خرید');
+  await expect(control).toContainText('همهٔ شاگردان');
+  await control.getByRole('button', { name: 'فعال‌کردن آزمایش سراسری' }).click();
+  const startDialog = page.getByRole('dialog', { name: 'فعال‌کردن آزمایش سراسری' });
+  await expect(startDialog).toContainText('بدون پرداخت بانکی');
+  await startDialog.getByRole('button', { name: 'فعال‌کردن آزمایش سراسری' }).click();
+  await expect(control).toContainText('آزمایش سراسری روشن است');
+  await control.getByRole('button', { name: 'پایان آزمایش سراسری' }).click();
+  const stopDialog = page.getByRole('dialog', { name: 'پایان آزمایش سراسری' });
+  await expect(stopDialog).toContainText('گزارش آزمایشی باقی می‌ماند');
+  await stopDialog.getByRole('button', { name: 'پایان آزمایش سراسری' }).click();
+  await expect(control).toContainText('آزمایش سراسری خاموش است');
+  await expectNoPageOverflow(page);
+});
+
+test('admin reloads the true mode if an activation response is lost', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, admin);
+  let enabled = false;
+  await page.route('**/api/admin/payment-test-mode', async (route) => {
+    if (route.request().method() === 'PUT') {
+      enabled = true;
+      await route.abort('failed');
+    } else {
+      await route.fulfill({ json: { available: true, enabled, expiresAt: enabled ? new Date(Date.now() + 86_400_000).toISOString() : null } });
+    }
+  });
+  await page.goto('/coach/admin/transactions', { waitUntil: 'domcontentloaded' });
+  const control = page.getByLabel('مدیریت آزمایش سراسری خرید');
+  await control.getByRole('button', { name: 'فعال‌کردن آزمایش سراسری' }).click();
+  await page.getByRole('dialog', { name: 'فعال‌کردن آزمایش سراسری' }).getByRole('button', { name: 'فعال‌کردن آزمایش سراسری' }).click();
+  await expect(control).toContainText('آزمایش سراسری روشن است');
+  await expect(control.getByRole('button', { name: 'پایان آزمایش سراسری' })).toBeVisible();
+  await expectNoPageOverflow(page);
+});
+
+test('student cancellation stays locked and can start again without a fake bank page', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, student, false);
+  await page.goto('/program', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: /خرید و فعال‌سازی آزمایشی/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'تأیید خرید آزمایشی' });
+  await dialog.getByRole('button', { name: 'انصراف' }).click();
+  await expect(page.getByRole('status')).toContainText('خرید آزمایشی لغو');
+  await expect(page.getByRole('button', { name: /خرید و فعال‌سازی آزمایشی/ })).toBeVisible();
+  await expect(page.getByText('درگاه شبیه‌سازی‌شده؛ بدون انتقال پول')).toHaveCount(0);
   await expectNoPageOverflow(page);
 });

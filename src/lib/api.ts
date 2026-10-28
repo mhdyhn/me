@@ -55,11 +55,22 @@ export interface PaymentTransaction {
   coachShareTomans: number;
   adminShareTomans: number;
   authority: string;
-  status: 'pending' | 'paid' | 'failed' | 'canceled';
+  status: 'pending' | 'paid' | 'failed' | 'canceled' | 'expired';
   refId: string | null;
   cardPan: string | null;
   createdAt: string;
   verifiedAt: string | null;
+}
+
+export interface TestPaymentTransaction extends PaymentTransaction {
+  simulation: true;
+  programmeId: string;
+  programmeVersion: number;
+}
+
+export interface TransactionsResponse {
+  transactions: PaymentTransaction[];
+  testTransactions?: TestPaymentTransaction[];
 }
 
 export interface Credentials {

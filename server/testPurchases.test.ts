@@ -20,6 +20,7 @@ beforeEach(async () => {
   vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
   vi.stubEnv('ZARINPAL_SANDBOX', '');
   vi.stubEnv('STUDENT_TEST_PURCHASES', 'on');
+  vi.stubEnv('COACH_COMMISSION_PERCENT', '90');
   clock = new Date('2026-10-28T08:00:00Z');
   db = await openDatabase('memory');
   await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
@@ -89,6 +90,14 @@ describe('explicit student test purchase in production', () => {
     expect(checkout.json).toMatchObject({ simulation: true, amountTomans: 100000 });
     expect(checkout.json.authority).toMatch(/^TEST-/);
     expect((await start(student.token, program)).json.authority).toBe(checkout.json.authority);
+    const pendingReport = (await call('GET', '/api/coach/transactions', undefined, coach.token)).json;
+    expect(pendingReport.transactions).toEqual([]);
+    expect(pendingReport.testTransactions).toHaveLength(1);
+    expect(pendingReport.testTransactions[0]).toMatchObject({
+      simulation: true, status: 'pending', studentId: student.id, programmeId: program.id,
+      programmeVersion: program.version, amountTomans: 100000, coachShareTomans: 90000, adminShareTomans: 10000,
+      createdAt: clock.toISOString(), verifiedAt: null,
+    });
     expect((await confirm(other.token, checkout.json.authority, 'success')).status).toBe(409);
     expect((await confirm(student.token, checkout.json.authority, 'success')).json).toMatchObject({ simulation: true, success: true });
     expect((await confirm(student.token, checkout.json.authority, 'cancel')).json.success).toBe(true);
@@ -98,14 +107,20 @@ describe('explicit student test purchase in production', () => {
     const secondDevice = await signIn(student.username, 'student-test-pass-1');
     expect((await call('GET', '/api/me/program', undefined, secondDevice)).json.isTestPurchase).toBe(true);
     expect((await call('GET', '/api/me/programs/archive', undefined, student.token)).json.programs).toEqual([]);
-    expect((await call('GET', '/api/coach/transactions', undefined, coach.token)).json.transactions).toEqual([]);
-    expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.transactions).toEqual([]);
+    const coachReport = (await call('GET', '/api/coach/transactions', undefined, coach.token)).json;
+    const adminReport = (await call('GET', '/api/admin/transactions', undefined, admin)).json;
+    expect(coachReport.transactions).toEqual([]);
+    expect(adminReport.transactions).toEqual([]);
+    expect(coachReport.testTransactions).toHaveLength(1);
+    expect(adminReport.testTransactions).toEqual(coachReport.testTransactions);
+    expect(coachReport.testTransactions[0]).toMatchObject({ status: 'paid', verifiedAt: clock.toISOString(), simulation: true, refId: null });
     expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
     expect((await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, student.token)).status).toBe(404);
     expect((await call('POST', '/api/pay/start', expected(program), student.token)).status).toBe(503);
     expect((await allow(coach.token, student.id, program, false)).status).toBe(200);
     expect((await call('GET', '/api/me/program', undefined, student.token)).json).toMatchObject({ isPaid: false, testPurchaseAvailable: false, program: { days: [] } });
     expect((await confirm(student.token, checkout.json.authority, 'success')).status).toBe(409);
+    expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions).toEqual(adminReport.testTransactions);
   });
 
   it('cancels without access, rejects stale checkout and keeps test access scoped to the purchased programme', async () => {
@@ -121,6 +136,8 @@ describe('explicit student test purchase in production', () => {
     const pending = await start(student.token, first);
     expect(pending.json.authority).not.toBe(canceled.json.authority);
     const edit = await saveProgram(coach.token, student.id, { title: 'ویرایش برنامه', saveMode: 'edit', ...expected(first) });
+    const ended = (await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions.find((t: Json) => t.authority === pending.json.authority);
+    expect(ended).toMatchObject({ status: 'expired', verifiedAt: null });
     expect((await confirm(student.token, pending.json.authority, 'success')).status).toBe(409);
     const current = await start(student.token, edit);
     expect((await confirm(student.token, current.json.authority, 'success')).json.success).toBe(true);
@@ -133,6 +150,9 @@ describe('explicit student test purchase in production', () => {
     expect((await start(student.token, next)).status).toBe(409);
     expect((await call('GET', '/api/me/programs/archive', undefined, student.token)).json.programs).toEqual([]);
     expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
+    const history = (await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions;
+    expect(history.map((t: Json) => t.status)).toEqual(['paid', 'canceled', 'canceled']);
+    expect(history.filter((t: Json) => t.status === 'paid').reduce((sum: number, t: Json) => sum + t.amountTomans, 0)).toBe(100000);
   });
 
   it('clears test authorizations on startup with a merchant so they cannot revive later', async () => {
@@ -177,5 +197,129 @@ describe('explicit student test purchase in production', () => {
     expect((await call('GET', '/api/me/program', undefined, student.token)).json).toMatchObject({ isPaid: false, testPurchaseAvailable: false, program: { days: [] } });
     expect((await confirm(student.token, checkout.json.authority, 'success')).status).toBe(409);
     expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
+  });
+
+  it('lets only an admin enable a 24-hour global session, revokes it on stop and preserves financial history', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const otherCoach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const other = await createStudent(otherCoach.token);
+    const program = await saveProgram(coach.token, student.id);
+    const otherProgram = await saveProgram(otherCoach.token, other.id);
+    expect((await call('GET', '/api/admin/payment-test-mode', undefined, admin)).json).toEqual({ available: true, enabled: false, expiresAt: null });
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, coach.token)).status).toBe(403);
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, student.token)).status).toBe(403);
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: 'true' }, admin)).status).toBe(400);
+    expect((await start(student.token, program)).status).toBe(409);
+    const activation = await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin);
+    expect(activation.status).toBe(200);
+    expect(activation.json).toEqual({ available: true, enabled: true, expiresAt: '2026-10-29T08:00:00.000Z' });
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json).toMatchObject({ isPaid: false, testPurchaseAvailable: true, program: { days: [] } });
+    const purchased = await start(student.token, program);
+    const pending = await start(other.token, otherProgram);
+    expect((await confirm(student.token, purchased.json.authority, 'success')).json.success).toBe(true);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isTestPurchase).toBe(true);
+    const coachHistory = (await call('GET', '/api/coach/transactions', undefined, coach.token)).json.testTransactions;
+    expect(coachHistory).toHaveLength(1);
+    expect(coachHistory[0].studentId).toBe(student.id);
+    expect((await call('GET', '/api/coach/transactions', undefined, otherCoach.token)).json.testTransactions[0].studentId).toBe(other.id);
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: false }, admin)).json.enabled).toBe(false);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json).toMatchObject({ isPaid: false, testPurchaseAvailable: false, program: { days: [] } });
+    expect((await confirm(other.token, pending.json.authority, 'success')).status).toBe(409);
+    let history = (await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions;
+    expect(history.map((t: Json) => t.status)).toEqual(['canceled', 'paid']);
+    expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.transactions).toEqual([]);
+    // A fresh session must not revive a previous session's successful test purchase.
+    await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json).toMatchObject({ isPaid: false, testPurchaseAvailable: true, program: { days: [] } });
+    const newCheckout = await start(student.token, program);
+    expect(newCheckout.json.authority).not.toBe(purchased.json.authority);
+    expect((await confirm(student.token, newCheckout.json.authority, 'success')).json.success).toBe(true);
+    await start(other.token, otherProgram);
+    clock = new Date(clock.getTime() + 24 * 60 * 60 * 1000);
+    expect((await call('GET', '/api/admin/payment-test-mode', undefined, admin)).json.enabled).toBe(false);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.program.days).toEqual([]);
+    history = (await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions;
+    expect(history.map((t: Json) => t.status)).toEqual(['expired', 'paid', 'canceled', 'paid']);
+    expect(history[0].verifiedAt).toBeNull();
+    expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
+  });
+
+  it('does not report that global mode is enabled if its database singleton is missing', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    await db.query('DELETE FROM payment_test_mode WHERE id = 1');
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin)).status).toBe(503);
+    expect((await call('GET', '/api/admin/payment-test-mode', undefined, admin)).json.enabled).toBe(false);
+  });
+
+  it('snapshots the configured real commission and never rewrites it when a pending checkout is retried', async () => {
+    vi.stubEnv('COACH_COMMISSION_PERCENT', '87.5');
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id, { priceTomans: 100001 });
+    await allow(coach.token, student.id, program);
+    const checkout = await start(student.token, program);
+    vi.stubEnv('COACH_COMMISSION_PERCENT', '20');
+    expect((await start(student.token, program)).json.authority).toBe(checkout.json.authority);
+    await confirm(student.token, checkout.json.authority, 'success');
+    const history = (await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions;
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ amountTomans: 100001, coachShareTomans: 87500, adminShareTomans: 12501, status: 'paid' });
+  });
+
+  it('attributes a test transaction to the assigned coach, as real checkout does, even with an old mismatched program row', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const otherCoach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id);
+    await db.query('UPDATE student_programs SET coach_id = $1 WHERE student_id = $2', [otherCoach.id, student.id]);
+    await allow(coach.token, student.id, program);
+    const checkout = await start(student.token, program);
+    await confirm(student.token, checkout.json.authority, 'success');
+    expect((await call('GET', '/api/coach/transactions', undefined, coach.token)).json.testTransactions[0]).toMatchObject({ coachId: coach.id, studentId: student.id });
+    expect((await call('GET', '/api/coach/transactions', undefined, otherCoach.token)).json.testTransactions).toEqual([]);
+  });
+
+  it('does not invent financial history for pre-upgrade grants and requires a ledger record to confirm', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id);
+    await allow(coach.token, student.id, program);
+    await db.query("UPDATE payment_test_purchases SET status = 'paid', amount_tomans = 100000 WHERE student_id = $1", [student.id]);
+    await migrateTestPurchases(db);
+    expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions).toEqual([]);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isTestPurchase).toBe(true);
+    await allow(coach.token, student.id, program);
+    const checkout = await start(student.token, program);
+    await db.query('DELETE FROM payment_test_transactions WHERE authority = $1', [checkout.json.authority]);
+    expect((await confirm(student.token, checkout.json.authority, 'success')).status).toBe(409);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.program.days).toEqual([]);
+    expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
+  });
+
+  it('keeps individual grants distinct from global mode and disables mode on merchant startup', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id);
+    await allow(coach.token, student.id, program);
+    await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin);
+    const checkout = await start(student.token, program);
+    await confirm(student.token, checkout.json.authority, 'success');
+    await call('PUT', '/api/admin/payment-test-mode', { enabled: false }, admin);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isTestPurchase).toBe(true);
+    await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin);
+    vi.stubEnv('ZARINPAL_MERCHANT_ID', 'real-merchant');
+    expect((await call('PUT', '/api/admin/payment-test-mode', { enabled: true }, admin)).status).toBe(503);
+    await migrateTestPurchases(db);
+    expect(await db.query('SELECT * FROM payment_test_purchases')).toEqual([]);
+    expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.testTransactions).toHaveLength(1);
+    vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
+    expect((await call('GET', '/api/admin/payment-test-mode', undefined, admin)).json.enabled).toBe(false);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.program.days).toEqual([]);
   });
 });

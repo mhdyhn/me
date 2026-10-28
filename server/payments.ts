@@ -12,7 +12,7 @@ export interface PaymentTransaction {
   coachShareTomans: number;
   adminShareTomans: number;
   authority: string;
-  status: 'pending' | 'paid' | 'failed' | 'canceled';
+  status: 'pending' | 'paid' | 'failed' | 'canceled' | 'expired';
   refId: string | null;
   cardPan: string | null;
   createdAt: string;

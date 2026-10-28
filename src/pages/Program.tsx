@@ -123,24 +123,31 @@ export function Program() {
           </div>
           <h2 style={{ margin: 0, fontSize: '1.25rem' }}>این برنامه نیازمند پرداخت و فعال‌سازی است</h2>
           <p className="account-muted" style={{ margin: 0, maxWidth: 440 }}>
-            مربی شما این برنامه را اختصاصی برای شما آماده کرده است. با پرداخت هزینه از طریق درگاه امن شاپرک و زرین‌پال، تمام روزها و حرکت‌های برنامه فوراً برای شما بازگشایی می‌شوند.
+            {assignedMeta.testPurchaseAvailable
+              ? 'این برنامه در حالت خرید آزمایشی است. تأیید خرید، برنامه را برای مدت محدود و بدون پرداخت بانکی باز می‌کند.'
+              : 'مربی شما این برنامه را اختصاصی برای شما آماده کرده است. با پرداخت هزینه از طریق درگاه امن شاپرک و زرین‌پال، تمام روزها و حرکت‌های برنامه برای شما بازگشایی می‌شوند.'}
           </p>
           <div style={{ padding: '12px 24px', borderRadius: 12, background: 'var(--surface-soft)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
             <CreditCard size={20} className="account-muted" />
             <span style={{ fontSize: 14 }}>مبلغ قابل پرداخت:</span>
             <strong style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{faNumber(assignedMeta.priceTomans)} تومان</strong>
           </div>
-          {payError && <p className="form-error" role="alert">{payError}</p>}
-          <button
-            type="button"
-            className="button button--primary"
-            style={{ width: 'min(100%, 260px)', fontSize: 15, padding: '12px 20px' }}
-            disabled={paying}
-            onClick={() => void startPayment()}
-          >
-            {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
-          </button>
-          {assignedMeta.testPurchaseAvailable && <StudentTestPurchase key={`${assignedMeta.id}:${assignedMeta.version}`} program={assignedMeta} />}
+          {assignedMeta.testPurchaseAvailable ? (
+            <StudentTestPurchase key={`${assignedMeta.id}:${assignedMeta.version}`} program={assignedMeta} />
+          ) : (
+            <>
+              {payError && <p className="form-error" role="alert">{payError}</p>}
+              <button
+                type="button"
+                className="button button--primary"
+                style={{ width: 'min(100%, 260px)', fontSize: 15, padding: '12px 20px' }}
+                disabled={paying}
+                onClick={() => void startPayment()}
+              >
+                {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
+              </button>
+            </>
+          )}
           <button type="button" className="button button--ghost" onClick={() => void loadAssignedProgram()}>بررسی دوبارهٔ وضعیت برنامه</button>
         </div>
         {user?.role === 'student' && <ProgrammeArchive studentId={user.id} />}
