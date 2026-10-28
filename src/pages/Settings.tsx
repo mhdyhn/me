@@ -17,6 +17,7 @@ import type { UserProfile } from '../types';
 export function Settings() {
   const { profile, sessions, bodyweights, nutritionDays, nutritionGoals, saveProfile, loading } = useGym();
   const { user } = useSession();
+  const hasCoach = user?.role === 'student' && user.coachId !== null && user.coachAccess !== false;
   const profileDraft = useGuardedDraft(profile);
   const { draft, setDraft } = profileDraft;
   const [shareWithCoach, setShareWithCoach] = useState(false);
@@ -32,7 +33,7 @@ export function Settings() {
 
   useEffect(() => {
     let active = true;
-    if (user?.role !== 'student') { setSharingLoaded(true); return () => { active = false; }; }
+    if (!hasCoach || !user) { setSharingLoaded(true); return () => { active = false; }; }
     setSharingLoaded(false);
     setSharingLoadError('');
     api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', `/me/profile?accountId=${user.id}`)
@@ -47,7 +48,7 @@ export function Settings() {
       })
       .finally(() => { if (active) setSharingLoaded(true); });
     return () => { active = false; };
-  }, [user?.id, user?.role, sharingReload]);
+  }, [user?.id, hasCoach, sharingReload]);
 
   const update = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -61,7 +62,7 @@ export function Settings() {
       const storedLocally = await saveProfile(draft, profileDraft.base);
       if (storedLocally === false) { setError('پروفایل در حافظهٔ دستگاه ذخیره نشد و ممکن است پس از بازکردن دوباره از دست برود.'); return; }
       // Sharing consent is separate from private sync and must never be guessed while offline.
-      if (user?.role === 'student' && sharingLoaded && !sharingLoadError && serverSharing !== null && serverSharing !== shareWithCoach) {
+      if (hasCoach && user && sharingLoaded && !sharingLoadError && serverSharing !== null && serverSharing !== shareWithCoach) {
         try {
           if (shareWithCoach) await api('PUT', '/me/profile', { accountId: user.id, profile: draft, shareWithCoach: true });
           else await api('POST', '/me/profile/sharing', { accountId: user.id, shareWithCoach: false });
@@ -101,7 +102,7 @@ export function Settings() {
 
   return (
     <div className="page-stack settings-page">
-      <SectionHeading eyebrow="پروفایل تمرینی" title="برنامه را برای خودت تنظیم کن." description={user?.role === 'student' ? 'پروفایل به حساب تو همگام می‌شود؛ اشتراک با مربی جداگانه و اختیاری است.' : 'پروفایل و تنظیمات شخصی پس از اتصال با حساب تو همگام می‌شوند.'} />
+      <SectionHeading eyebrow="پروفایل تمرینی" title="برنامه را برای خودت تنظیم کن." description={hasCoach ? 'پروفایل به حساب تو همگام می‌شود؛ اشتراک با مربی جداگانه و اختیاری است.' : 'پروفایل و تنظیمات شخصی پس از اتصال با حساب تو همگام می‌شوند.'} />
       <PersonalDataPanel />
       <div className="settings-layout">
         <form className="settings-form panel-card" onSubmit={(event) => void submit(event)}>
@@ -121,13 +122,13 @@ export function Settings() {
             <label className="field-control"><span>سطح استرس <small>۱ تا ۱۰</small></span><input type="number" min="1" max="10" value={draft.stressLevel} onChange={(event) => update('stressLevel', Number(event.target.value))} /></label>
             <label className="field-control field-control--wide"><span>آسیب‌دیدگی یا محدودیت</span><textarea rows={3} value={draft.injuries} onChange={(event) => update('injuries', event.target.value)} /></label>
           </div>
-          {user?.role === 'student' && (
+          {hasCoach && (
             <label className="student-onboarding__consent settings-profile-consent">
               <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded || Boolean(sharingLoadError)} onChange={(event) => setShareWithCoach(event.target.checked)} />
               <span><strong>نمایش پروفایل به مربی</strong><small>{sharingLoadError ? 'تا دریافت وضعیت معتبر، تغییر اشتراک غیرفعال است؛ ذخیرهٔ محلی ممکن است. اگر پیش‌تر اشتراک فعال بوده، مربی پس از همگام‌سازی ممکن است نسخهٔ تازه را ببیند.' : sharingLoaded ? 'با روشن‌کردن و ذخیره، پروفایل به حساب فرستاده و با مربی فعلی به اشتراک گذاشته می‌شود؛ خاموش‌کردن و ذخیره، دسترسی را قطع می‌کند.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
             </label>
           )}
-          {user?.role === 'student' && sharingLoadError && (
+          {hasCoach && sharingLoadError && (
             <div className="settings-sync-retry" role="alert">
               <p className="form-error">{sharingLoadError}</p>
               <button type="button" className="button button--secondary button--small" onClick={() => setSharingReload((attempt) => attempt + 1)}>
@@ -162,7 +163,7 @@ export function Settings() {
           </section>
 
           <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>
-          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>داده‌های تو، انتخاب تو.</h3><p>{user?.role === 'student' ? 'پروفایل با حساب همگام می‌شود؛ مربی فقط با فعال‌کردن اشتراک آن را می‌بیند. داده‌های همگام‌نشده با پاک‌کردن مرورگر از دست می‌روند.' : 'پروفایل و گزارش‌های شخصی به حساب همگام می‌شوند؛ داده‌های همگام‌نشده ممکن است با پاک‌کردن مرورگر از دست بروند.'}</p><div className="privacy-points">{user?.role === 'student' && <span><ShieldCheck size={14} /> اشتراک پروفایل با مربی قابل مدیریت است</span>}<span><ShieldCheck size={14} /> فایل پشتیبان را در جای امن نگه دار</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">JSON شامل پروفایل، هدف‌های تغذیه، جلسه‌ها، وزن و یادداشت‌های محلی است؛ برنامه، گفت‌وگو و دفتر خوراک سرور را ندارد. بازیابی خودکار در برنامه وجود ندارد.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
+          <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>داده‌های تو، انتخاب تو.</h3><p>{hasCoach ? 'پروفایل با حساب همگام می‌شود؛ مربی فقط با فعال‌کردن اشتراک آن را می‌بیند. داده‌های همگام‌نشده با پاک‌کردن مرورگر از دست می‌روند.' : 'پروفایل و گزارش‌های شخصی به حساب همگام می‌شوند؛ داده‌های همگام‌نشده ممکن است با پاک‌کردن مرورگر از دست بروند.'}</p><div className="privacy-points">{hasCoach && <span><ShieldCheck size={14} /> اشتراک پروفایل با مربی قابل مدیریت است</span>}<span><ShieldCheck size={14} /> فایل پشتیبان را در جای امن نگه دار</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">JSON شامل پروفایل، هدف‌های تغذیه، جلسه‌ها، وزن و یادداشت‌های محلی است؛ برنامه، گفت‌وگو و دفتر خوراک سرور را ندارد. بازیابی خودکار در برنامه وجود ندارد.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>

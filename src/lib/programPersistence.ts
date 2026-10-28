@@ -54,6 +54,7 @@ export async function loadStoredProgram(): Promise<void> {
 }
 
 async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[]): Promise<void> {
+  if (isProgramReadOnly()) throw new Error('برنامهٔ مربی قابل ویرایش شخصی نیست؛ صفحه را دوباره باز کنید.');
   try {
     await db.transaction('rw', db.preferences, async () => {
       const record = await db.preferences.get(PROGRAM_KEY);
@@ -66,7 +67,8 @@ async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplat
     if (error instanceof DraftChangedError) notifyPersonalDataApplied();
     throw error;
   }
-  setActiveProgram(next);
+  // A personal save started before connection must not replace the coach programme in memory.
+  if (!isProgramReadOnly()) setActiveProgram(next);
   notifyPersonalDataChanged();
 }
 

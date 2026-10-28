@@ -127,6 +127,7 @@ describe('coach screen', () => {
     renderAt('/coach');
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText('نام شاگرد جدید'), 'شاگرد الف');
+    await user.type(screen.getByLabelText('شماره موبایل شاگرد'), '09123456789');
     await user.click(screen.getByRole('button', { name: /ساخت شاگرد/ }));
 
     const warning = await screen.findByText(/این مشخصات فقط همین یک بار نمایش داده می‌شود/);

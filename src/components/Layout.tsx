@@ -93,7 +93,7 @@ export function Layout() {
     : user?.role === 'admin'
       ? adminPrimaryTabs
       : studentPrimaryTabs;
-  const roleItems = user ? roleSecondaryNavigation[user.role] : [];
+  const roleItems = user && !(user.role === 'student' && user.coachId === null) ? roleSecondaryNavigation[user.role] : [];
   const secondaryItems = [
     ...(user?.role !== 'student' ? [{ label: 'برنامهٔ شخصی', to: '/program', icon: CalendarDays, desc: 'برنامه تمرینی شخصی' }] : []),
     ...personalSecondaryNavigation,

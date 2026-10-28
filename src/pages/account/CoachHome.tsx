@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, MoreHorizontal, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
+import { CoachInvitations } from '../../components/CoachInvitations';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 import { useSession } from '../../context/SessionContext';
@@ -28,6 +29,7 @@ function CoachStudents() {
   const [studentSearch, setStudentSearch] = useState('');
   const [studentStatus, setStudentStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -64,9 +66,10 @@ function CoachStudents() {
     setFormError(null);
     setBusy(true);
     try {
-      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/students', { displayName: name.trim() });
+      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/students', { displayName: name.trim(), phoneNumber });
       setCredentials({ user: created.user, username: created.username, password: created.password });
       setName('');
+      setPhoneNumber('');
       void load();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'شاگرد ساخته نشد.');
@@ -131,6 +134,11 @@ function CoachStudents() {
 
   return (
     <PanelPage title="شاگردهای من">
+      <div className="coach-welcome">
+        <div><span className="coach-welcome__label">فضای مربی</span><h3>همراه شاگردها، قدم‌به‌قدم.</h3><p>شاگرد جدید بساز، برنامه‌ها را مدیریت کن و سهم فروش را یک‌جا ببین.</p></div>
+        <div className="coach-welcome__count"><strong>{students ? faNumber(students.length) : '—'}</strong><span>شاگرد</span></div>
+      </div>
+      <CoachInvitations />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: '12px', flexWrap: 'wrap' }}>
         <Link to="/coach/transactions" className="button button--ghost">
           <Receipt size={16} /> درآمدها و تراکنش‌ها
@@ -155,6 +163,7 @@ function CoachStudents() {
             <span>نام شاگرد جدید</span>
             <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required />
           </label>
+          <label className="field" htmlFor="student-phone"><span id="student-phone-label">شماره موبایل شاگرد</span><input id="student-phone" aria-labelledby="student-phone-label" aria-describedby="student-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="student-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد.</small></label>
           <button type="submit" className="button button--primary" disabled={busy}>
             <UserPlus size={16} /> {busy ? 'در حال ساخت…' : 'ساخت شاگرد'}
           </button>
@@ -202,6 +211,7 @@ function CoachStudents() {
                   <PersonCard
                     name={student.displayName}
                     username={student.username}
+                    phoneNumber={student.phoneNumber}
                     password={student.password}
                     mustChangePassword={student.mustChangePassword}
                     roleLabel="شاگرد"
@@ -229,21 +239,23 @@ function CoachStudents() {
                             <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
                               <Sparkles size={16} /> هوش و پایش
                             </Link>
-                            <button
-                              type="button"
-                              className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
-                              onClick={() => void toggleStudentActive(student)}
-                              title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
-                            >
-                              {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
-                              {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
-                            </button>
-                            <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
-                              <KeyRound size={16} /> رمز تازه
-                            </button>
-                            <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
-                              <Trash2 size={16} /> حذف
-                            </button>
+                            {!student.selfRegistered && <>
+                              <button
+                                type="button"
+                                className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}
+                                onClick={() => void toggleStudentActive(student)}
+                                title={student.isActive === false ? 'فعال‌سازی مجدد شاگرد' : 'غیرفعال‌سازی موقت شاگرد'}
+                              >
+                                {student.isActive === false ? <CheckCircle size={16} /> : <Ban size={16} />}
+                                {student.isActive === false ? 'فعال‌سازی' : 'غیرفعال‌سازی'}
+                              </button>
+                              <button type="button" className="button button--ghost" onClick={() => void resetPassword(student)}>
+                                <KeyRound size={16} /> رمز تازه
+                              </button>
+                              <button type="button" className="button button--ghost" onClick={() => void deleteStudent(student)}>
+                                <Trash2 size={16} /> حذف
+                              </button>
+                            </>}
                           </div>
                         </details>
                       </>

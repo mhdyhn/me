@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ApiError, TOKEN_KEY, USER_KEY, UNAUTHORIZED_EVENT, api, clearStoredUser, clearToken, getStoredUser, getToken, setStoredUser, setToken, type PublicUser } from '../lib/api';
 import { SCOPE_KEY, clearAccountScope, ensureAccountScope, isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
 import { db } from '../lib/db';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { loadStoredProgram } from '../lib/programPersistence';
+import { setActiveProgram, setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from '../lib/programStore';
 import { PERSONAL_DATA_APPLIED } from '../lib/personalSyncEvents';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
@@ -26,10 +27,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const initialToken = typeof window !== 'undefined' ? getToken() : null;
   const [status, setStatus] = useState<Status>(() => (initialUser && initialToken ? 'signed-in' : 'loading'));
   const [user, setUser] = useState<PublicUser | null>(initialUser);
+  const refreshGeneration = useRef(0);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     try {
       const { user: current } = await api<{ user: PublicUser }>('GET', '/me');
+      if (generation !== refreshGeneration.current) return;
       if (current.isActive === false) {
         try {
           window.sessionStorage.setItem('meety:deactivated-message', 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
@@ -46,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStoredUser(current);
       setStatus('signed-in');
     } catch (error) {
+      if (generation !== refreshGeneration.current) return;
       // An expired or revoked session is a normal sign-out. A network failure or offline restart
       // keeps the stored session so the user remains signed in.
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
@@ -74,21 +79,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  // Each account gets its own local data and programme. A student's programme comes from the coach.
-  const userKey = user ? `${user.id}:${user.role}` : null;
+  // Independent students use their own editable programme; coached students use the assigned one.
+  const userKey = user ? `${user.id}:${user.role}:${user.coachId ?? 'none'}` : null;
   useEffect(() => {
     if (!user) {
       if (isOfflineBuild) void loadStoredProgram();
       return;
     }
     if (ensureAccountScope(user)) return;
-    if (user.role === 'student') void loadAssignedProgram();
-    else void loadStoredProgram();
-    // Only the account identity matters here, not the object's identity.
+    if (user.role === 'student' && user.coachId !== null) {
+      setAssignedMeta(null);
+      setAssignedProgram([]);
+      setAssignedProgramLoadState('loading');
+      void loadAssignedProgram();
+    } else {
+      setAssignedMeta(null);
+      setActiveProgram([]);
+      setAssignedProgramLoadState('ready');
+      void loadStoredProgram();
+    }
+    // Only the account identity and relationship matter, not the object's identity.
   }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user || user.role === 'student') return;
+    if (!user || (user.role === 'student' && user.coachId !== null)) return;
     const refreshProgram = () => { void loadStoredProgram(); };
     window.addEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
     return () => window.removeEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
@@ -97,6 +111,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Any request that comes back 401 ends the session everywhere.
   useEffect(() => {
     const handle = () => {
+      refreshGeneration.current++;
       clearToken();
       clearStoredUser();
       setUser(null);
@@ -114,23 +129,36 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       let switched = event.key === TOKEN_KEY && event.newValue === null;
       if (event.key === SCOPE_KEY && user && event.newValue !== `user-${user.id}`) switched = true;
       if (event.key === USER_KEY && user) {
-        try { switched = !event.newValue || (JSON.parse(event.newValue) as PublicUser).id !== user.id; }
-        catch { switched = true; }
+        try {
+          const next = event.newValue ? JSON.parse(event.newValue) as PublicUser : null;
+          switched = !next || next.id !== user.id;
+          if (next && !switched && (next.coachId !== user.coachId || next.coachAccess !== user.coachAccess)) void refresh();
+        } catch { switched = true; }
       }
       if (switched) window.location.reload();
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [user?.id]);
+  }, [user?.id, user?.coachId, user?.coachAccess, refresh]);
+
+  // A relationship may also change on another device, which has no shared storage event.
+  useEffect(() => {
+    if (isOfflineBuild || !user) return;
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id, refresh]);
 
   const signIn = useCallback(async (username: string, password: string) => {
+    refreshGeneration.current++;
     const result = await api<{ token: string; user: PublicUser }>('POST', '/auth/login', { username, password });
     setToken(result.token);
     setStoredUser(result.user);
     // Prove the session really reached the server before entering the app. Otherwise the first
     // screen would bounce back to sign-in with no explanation.
+    let verified: PublicUser;
     try {
-      await api<{ user: PublicUser }>('GET', '/me');
+      verified = (await api<{ user: PublicUser }>('GET', '/me')).user;
     } catch {
       clearToken();
       clearStoredUser();
@@ -138,17 +166,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus('signed-out');
       throw new ApiError(401, 'ورود انجام شد، اما مرورگر نشست را نگه نداشت. صفحه را دوباره باز کنید و اگر تکرار شد، پیش‌نمایش یا تنظیمات مرورگر را بررسی کنید.');
     }
-    setUser(result.user);
+    refreshGeneration.current++;
+    setUser(verified);
+    setStoredUser(verified);
     setStatus('signed-in');
-    return result.user;
+    return verified;
   }, []);
 
   const signOut = useCallback(async () => {
+    refreshGeneration.current++;
     try {
       await api('POST', '/auth/logout', {});
     } catch {
       // Signing out locally still works if the server cannot be reached.
     }
+    refreshGeneration.current++;
     clearToken();
     clearStoredUser();
     clearAccountScope();
@@ -157,6 +189,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleSetUser = useCallback((nextUser: PublicUser) => {
+    refreshGeneration.current++;
     setUser(nextUser);
     setStoredUser(nextUser);
   }, []);

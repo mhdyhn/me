@@ -27,6 +27,7 @@ const AiHub = lazy(() => import('./pages/AiHub').then((module) => ({ default: mo
 const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
 const Workout = lazy(() => import('./pages/Workout').then((module) => ({ default: module.Workout })));
 const Login = lazy(() => import('./pages/account/Login').then((module) => ({ default: module.Login })));
+const Register = lazy(() => import('./pages/account/Register').then((module) => ({ default: module.Register })));
 const ChangePassword = lazy(() => import('./pages/account/ChangePassword').then((module) => ({ default: module.ChangePassword })));
 const CoachEntry = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.CoachEntry })));
 const ProgramPicker = lazy(() => import('./pages/account/CoachHome').then((module) => ({ default: module.ProgramPicker })));
@@ -94,6 +95,7 @@ export function App() {
           <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="login" element={<Login />} />
+            <Route path="register" element={<Register />} />
             <Route path="account/change-password" element={<ChangePassword />} />
             {/* Chats are full screen with their own back button, so they sit outside the Layout (no bottom navigation). */}
             <Route path="chat" element={signedIn(<ForRoles roles={['student']}><StudentChat /></ForRoles>)} />

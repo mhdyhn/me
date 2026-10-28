@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, Flame, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
+import { CoachConnection } from '../components/CoachConnection';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
@@ -16,6 +17,7 @@ export function Dashboard() {
   const { user } = useSession();
   const program = useProgram();
   const assignedProgramLoadState = useAssignedProgramLoadState();
+  const independent = user?.role === 'student' && user.coachId === null;
   const navigate = useNavigate();
 
   const quote = useMotivationalQuote();
@@ -49,7 +51,7 @@ export function Dashboard() {
       <section className="welcome-row">
         <div>
           <p className="eyebrow">{formatDate(now, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-          <h2>{greeting}<span className="accent-dot">.</span></h2>
+          <h2>{greeting}{user?.displayName ? `، ${user.displayName}` : ''}<span className="accent-dot">.</span></h2>
           <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
         </div>
         <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
@@ -88,7 +90,7 @@ export function Dashboard() {
               <span className="quiet-note">عجله‌ای نیست؛ هر وقت آماده‌ای تمرین کن.</span>
             </div>
           </section>
-        ) : user?.role === 'student' && assignedProgramLoadState !== 'ready' && assignedProgramLoadState !== 'error' ? (
+        ) : user?.role === 'student' && !independent && assignedProgramLoadState !== 'ready' && assignedProgramLoadState !== 'error' ? (
           <section className="dashboard-no-program panel-card" role="status" aria-live="polite">
             <div className="dashboard-program-message">
               <span className="eyebrow">برنامهٔ تمرینی</span>
@@ -96,7 +98,7 @@ export function Dashboard() {
               <p className="muted">کمی صبر کن؛ برنامه به‌زودی نمایش داده می‌شود.</p>
             </div>
           </section>
-        ) : assignedProgramLoadState === 'error' && user?.role === 'student' ? (
+        ) : assignedProgramLoadState === 'error' && user?.role === 'student' && !independent ? (
           <section className="dashboard-no-program panel-card" role="alert">
             <EmptyState
               title="دریافت برنامه انجام نشد"
@@ -106,11 +108,19 @@ export function Dashboard() {
           </section>
         ) : (
           <section className="dashboard-no-program panel-card">
-            <EmptyState
-              title="برنامهٔ تمرینی‌ات هنوز آماده نیست"
-              detail="برای دریافت یا تغییر برنامه، از مربی‌ات پیام بگیر."
-              action={<Link to="/chat" className="button button--primary">گفتگو با مربی <ArrowRight size={15} /></Link>}
-            />
+            {independent ? (
+              <EmptyState
+                title="برنامهٔ خودت را شروع کن"
+                detail="بدون مربی هم می‌توانی یک الگو انتخاب کنی یا برنامهٔ شخصی خودت را بسازی."
+                action={<Link to="/program" className="button button--primary">ساخت برنامهٔ شخصی <ArrowRight size={15} /></Link>}
+              />
+            ) : (
+              <EmptyState
+                title="برنامهٔ تمرینی‌ات هنوز آماده نیست"
+                detail="برای دریافت یا تغییر برنامه، از مربی‌ات پیام بگیر."
+                action={<Link to="/chat" className="button button--primary">گفتگو با مربی <ArrowRight size={15} /></Link>}
+              />
+            )}
           </section>
         )}
 
@@ -133,6 +143,7 @@ export function Dashboard() {
           </section>
         )}
       </div>
+      <CoachConnection />
     </div>
   );
 }

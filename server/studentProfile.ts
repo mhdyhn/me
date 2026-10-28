@@ -74,21 +74,38 @@ export function validateStudentProfile(raw: unknown): StudentProfile {
   };
 }
 
-export async function saveStudentProfile(db: Db, studentId: number, profile: StudentProfile, shareWithCoach: boolean, at: string): Promise<StoredStudentProfile> {
-  await db.query(
-    `INSERT INTO student_profiles (student_id, body, share_with_coach, updated_at) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (student_id) DO UPDATE SET body = excluded.body, share_with_coach = excluded.share_with_coach, updated_at = excluded.updated_at`,
-    [studentId, JSON.stringify(profile), shareWithCoach ? 1 : 0, at],
-  );
+export async function saveStudentProfile(db: Db, studentId: number, profile: StudentProfile, shareWithCoach: boolean, at: string, coachAccessVersion: number): Promise<StoredStudentProfile> {
+  const rows = shareWithCoach
+    ? await db.query(`WITH allowed AS (
+        SELECT id FROM users WHERE id = $1 AND coach_id IS NOT NULL AND coach_access = 1 AND coach_access_version = $5 FOR UPDATE
+      ), saved AS (
+        INSERT INTO student_profiles (student_id, body, share_with_coach, updated_at)
+        SELECT id, $2, $3, $4 FROM allowed
+        ON CONFLICT (student_id) DO UPDATE SET body = excluded.body, share_with_coach = excluded.share_with_coach, updated_at = excluded.updated_at
+        RETURNING student_id
+      ) SELECT student_id FROM saved`, [studentId, JSON.stringify(profile), 1, at, coachAccessVersion])
+    : await db.query(`INSERT INTO student_profiles (student_id, body, share_with_coach, updated_at) VALUES ($1, $2, $3, $4)
+        ON CONFLICT (student_id) DO UPDATE SET body = excluded.body, share_with_coach = excluded.share_with_coach, updated_at = excluded.updated_at RETURNING student_id`,
+      [studentId, JSON.stringify(profile), 0, at]);
+  if (!rows.length) throw new HttpError(409, 'دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
   return { profile, shareWithCoach, updatedAt: at };
 }
 
-export async function setStudentProfileSharing(db: Db, studentId: number, shareWithCoach: boolean, at: string): Promise<boolean> {
-  const rows = await db.query<{ student_id: number }>(
-    'UPDATE student_profiles SET share_with_coach = $1, updated_at = $2 WHERE student_id = $3 RETURNING student_id',
-    [shareWithCoach ? 1 : 0, at, studentId],
-  );
-  if (shareWithCoach && rows.length === 0) throw new HttpError(400, 'پروفایلی برای همگام‌سازی ثبت نشده است.');
+export async function setStudentProfileSharing(db: Db, studentId: number, shareWithCoach: boolean, at: string, coachAccessVersion: number): Promise<boolean> {
+  const rows = shareWithCoach
+    ? await db.query<{ student_id: number }>(`WITH allowed AS (
+        SELECT id FROM users WHERE id = $3 AND coach_id IS NOT NULL AND coach_access = 1 AND coach_access_version = $4 FOR UPDATE
+      ), saved AS (
+        UPDATE student_profiles SET share_with_coach = $1, updated_at = $2
+        WHERE student_id = $3 AND EXISTS (SELECT 1 FROM allowed) RETURNING student_id
+      ) SELECT student_id FROM saved`, [1, at, studentId, coachAccessVersion])
+    : await db.query<{ student_id: number }>(
+      'UPDATE student_profiles SET share_with_coach = $1, updated_at = $2 WHERE student_id = $3 RETURNING student_id', [0, at, studentId]);
+  if (shareWithCoach && rows.length === 0) {
+    const current = (await db.query<{ coach_access_version: number; coach_access: number }>('SELECT coach_access_version, coach_access FROM users WHERE id = $1', [studentId]))[0];
+    if (!current || Number(current.coach_access_version) !== coachAccessVersion || Number(current.coach_access) !== 1) throw new HttpError(409, 'دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
+    throw new HttpError(400, 'پروفایلی برای همگام‌سازی ثبت نشده است.');
+  }
   return rows.length > 0;
 }
 

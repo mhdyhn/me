@@ -4,6 +4,7 @@ const long = 'یک‌نام‌خیلی‌بلند‌و‌بدون‌فاصله�
 const student = { id: 5, username: 'student', displayName: `شاگرد ${long}`, role: 'student', coachId: 4, mustChangePassword: false, isActive: true };
 const coach = { id: 4, username: 'coach', displayName: `مربی ${long}`, role: 'coach', coachId: null, mustChangePassword: false, isActive: true };
 const admin = { id: 1, username: 'admin', displayName: `مدیر ${long}`, role: 'admin', coachId: null, mustChangePassword: false, isActive: true };
+const independent = { ...student, coachId: null, selfRegistered: true, coachAccess: true };
 const transactions = Array.from({ length: 8 }, (_, index) => ({
   id: index + 1, studentId: student.id, studentName: student.displayName, coachId: coach.id, coachName: coach.displayName,
   amountTomans: 2_500_000, coachShareTomans: 2_250_000, adminShareTomans: 250_000,
@@ -30,7 +31,7 @@ const programme = {
 
 type RecordValue = { kind: string; key: string; version: number; deleted: boolean; value: unknown; updatedAt: string };
 
-async function mockAccount(page: Page, user: typeof student | typeof coach | typeof admin, paid = true, withHistory = false, withArchive = false, testAvailable = true) {
+async function mockAccount(page: Page, user: typeof student | typeof independent | typeof coach | typeof admin, paid = true, withHistory = false, withArchive = false, testAvailable = true) {
   const records: RecordValue[] = withHistory ? [{
     kind: 'session', key: 'completed-session', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z',
     value: {
@@ -388,5 +389,66 @@ test('student cancellation stays locked and can start again without a fake bank 
   await expect(page.getByRole('status')).toContainText('خرید آزمایشی لغو');
   await expect(page.getByRole('button', { name: /خرید و فعال‌سازی آزمایشی/ })).toBeVisible();
   await expect(page.getByText('درگاه شبیه‌سازی‌شده؛ بدون انتقال پول')).toHaveCount(0);
+  await expectNoPageOverflow(page);
+});
+
+for (const width of [320, 390, 1280]) {
+  test(`registration screen supports both roles without overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.route('**/api/me', (route) => route.fulfill({ status: 401, json: { error: 'وارد شوید' } }));
+    await page.goto('/register', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'حساب خودت را بساز' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ساخت حساب شخصی' })).toBeVisible();
+    await expectNoPageOverflow(page);
+    await page.getByText('مربی هستم').click();
+    await expect(page.getByRole('button', { name: 'ثبت درخواست مربی' })).toBeVisible();
+    await expect(page.getByText(/پس از تأیید مدیر وارد می‌شوی/)).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
+
+  test(`student reviews coach invitation and consent without overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, independent);
+    await page.route('**/api/me/coach-invitation/preview', (route) => route.fulfill({ json: { coachName: coach.displayName, expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }));
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const connection = page.getByLabel('اتصال به مربی');
+    await expect(connection.getByLabel('کد دعوت مربی')).toBeVisible();
+    await connection.getByLabel('کد دعوت مربی').fill('A'.repeat(32));
+    await connection.getByRole('button', { name: 'بررسی کد' }).click();
+    await expect(connection.getByText(`اتصال به ${coach.displayName}`)).toBeVisible();
+    await expect(connection.getByText(/دفتر خوراک و امکانات مدیریت برنامه/)).toBeVisible();
+    await expect(connection.getByRole('button', { name: 'تأیید اتصال به مربی' })).toBeDisabled();
+    await connection.getByRole('checkbox').check();
+    await expect(connection.getByRole('button', { name: 'تأیید اتصال به مربی' })).toBeEnabled();
+    await expectNoPageOverflow(page);
+  });
+
+  test(`coach creates a code and keeps manual student creation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, coach);
+    await page.route('**/api/students', (route) => route.fulfill({ json: { students: [] } }));
+    await page.route('**/api/coach/invitations', (route) => route.fulfill({ status: 201, json: { code: 'A'.repeat(32), expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }));
+    await page.goto('/coach', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByLabel('نام شاگرد جدید')).toBeVisible();
+    await page.getByText('دعوت شاگرد با حساب خودش').click();
+    await page.getByRole('button', { name: 'ساخت کد دعوت' }).click();
+    await expect(page.getByText('A'.repeat(32))).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
+}
+
+test('admin can find independent accounts and pending coach approvals on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, admin);
+  await page.route('**/api/coaches', (route) => route.fulfill({ json: { coaches: [{ ...coach, isActive: false, selfRegistered: true, pendingApproval: true, password: null, studentCount: 0 }] } }));
+  await page.route('**/api/admin/students*', (route) => route.fulfill({ json: { students: [independent] } }));
+  await page.goto('/coach', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText(/در انتظار تأیید/).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'همهٔ شاگردها' })).toBeVisible();
+  await expect(page.getByLabel('نام کاربری دقیق')).toBeVisible();
+  await expect(page.getByText(independent.username)).toBeVisible();
+  for (const identity of await page.locator('.person-card__identity').all()) {
+    expect((await identity.boundingBox())?.width).toBeGreaterThan(100);
+  }
   await expectNoPageOverflow(page);
 });

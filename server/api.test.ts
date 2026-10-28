@@ -43,7 +43,7 @@ async function login(username: string, password: string) {
 /** Admin creates a coach, the coach changes the temporary password, and returns a usable token. */
 async function coachSession() {
   const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-  const created = await call('POST', '/api/coaches', { displayName: 'مربی یک' }, admin);
+  const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی یک' }, admin);
   const coachLogin = await login(created.json.username, created.json.password);
   const token = coachLogin.json.token as string;
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-new-pass-1' }, token);
@@ -52,7 +52,7 @@ async function coachSession() {
 
 describe('student profile sharing', () => {
   async function createStudentAccount(coachToken: string) {
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد پروفایل' }, coachToken);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد پروفایل' }, coachToken);
     const loginResult = await login(created.json.username, created.json.password);
     const token = loginResult.json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
@@ -172,13 +172,13 @@ describe('authentication', () => {
 describe('roles and student provisioning', () => {
   it('only the admin can create coaches', async () => {
     const { token } = await coachSession();
-    const res = await call('POST', '/api/coaches', { displayName: 'مربی دو' }, token);
+    const res = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی دو' }, token);
     expect(res.status).toBe(403);
   });
 
   it('a new coach must change the temporary password before using the app', async () => {
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-    const created = await call('POST', '/api/coaches', { displayName: 'مربی جدید' }, admin);
+    const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی جدید' }, admin);
     const token = (await login(created.json.username, created.json.password)).json.token as string;
     expect((await call('GET', '/api/students', undefined, token)).status).toBe(403);
     expect((await call('GET', '/api/me', undefined, token)).status).toBe(200);
@@ -186,7 +186,7 @@ describe('roles and student provisioning', () => {
 
   it('a coach creates a student with a generated username and password', async () => {
     const { token } = await coachSession();
-    const res = await call('POST', '/api/students', { displayName: 'شاگرد الف' }, token);
+    const res = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد الف' }, token);
     expect(res.status).toBe(201);
     expect(res.json.username).toMatch(/^s\d{6}$/);
     expect(res.json.password).toMatch(/^[a-z2-9]{10}$/);
@@ -195,7 +195,7 @@ describe('roles and student provisioning', () => {
 
   it('a student must change the generated password, and then reaches only its own data', async () => {
     const { token } = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد ب' }, token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد ب' }, token);
     const studentToken = (await login(created.json.username, created.json.password)).json.token as string;
 
     expect((await call('GET', '/api/students', undefined, studentToken)).status).toBe(403);
@@ -209,7 +209,7 @@ describe('roles and student provisioning', () => {
   it('a coach sees only the students it created', async () => {
     const first = await coachSession();
     const second = await coachSession();
-    await call('POST', '/api/students', { displayName: 'شاگرد مربی یک' }, first.token);
+    await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد مربی یک' }, first.token);
     const list = await call('GET', '/api/students', undefined, second.token);
     expect(list.json.students).toEqual([]);
   });
@@ -217,14 +217,14 @@ describe('roles and student provisioning', () => {
   it('a coach cannot reset the password of another coach\'s student', async () => {
     const first = await coachSession();
     const second = await coachSession();
-    const student = await call('POST', '/api/students', { displayName: 'شاگرد مربی یک' }, first.token);
+    const student = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد مربی یک' }, first.token);
     const res = await call('POST', `/api/students/${student.json.user.id}/reset-password`, {}, second.token);
     expect(res.status).toBe(404);
   });
 
   it('resetting a password issues a new one and signs the student out everywhere', async () => {
     const { token } = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد ج' }, token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد ج' }, token);
     const studentToken = (await login(created.json.username, created.json.password)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'first-real-pass' }, studentToken);
 
@@ -247,14 +247,14 @@ describe('roles and student provisioning', () => {
   it('keeps the current session but revokes other sessions on password changes for all three roles', async () => {
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     const adminOther = (await login('owner', 'owner-pass-123')).json.token as string;
-    const createdCoach = await call('POST', '/api/coaches', { displayName: 'مربی امنیت' }, admin);
+    const createdCoach = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی امنیت' }, admin);
     const coach = (await login(createdCoach.json.username, createdCoach.json.password)).json.token as string;
     const coachOther = (await login(createdCoach.json.username, createdCoach.json.password)).json.token as string;
     expect((await call('POST', '/api/me/password', { currentPassword: createdCoach.json.password, newPassword: 'coach-private-pass' }, coach)).status).toBe(200);
     expect((await call('GET', '/api/me', undefined, coach)).status).toBe(200);
     expect((await call('GET', '/api/me', undefined, coachOther)).status).toBe(401);
 
-    const createdStudent = await call('POST', '/api/students', { displayName: 'شاگرد امنیت' }, coach);
+    const createdStudent = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد امنیت' }, coach);
     const student = (await login(createdStudent.json.username, createdStudent.json.password)).json.token as string;
     const studentOther = (await login(createdStudent.json.username, createdStudent.json.password)).json.token as string;
     expect((await call('POST', '/api/me/password', { currentPassword: 'wrong-password', newPassword: 'student-private-pass' }, student)).status).toBe(400);
@@ -277,8 +277,8 @@ describe('roles and student provisioning', () => {
 describe('admin and coaches', () => {
   it('lists coaches with their student counts', async () => {
     const coach = await coachSession();
-    await call('POST', '/api/students', { displayName: 'شاگرد یک' }, coach.token);
-    await call('POST', '/api/students', { displayName: 'شاگرد دو' }, coach.token);
+    await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد یک' }, coach.token);
+    await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد دو' }, coach.token);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     const list = await call('GET', '/api/coaches', undefined, admin);
     expect(list.json.coaches).toEqual([expect.objectContaining({ id: coach.id, displayName: 'مربی یک', studentCount: 2 })]);
@@ -299,7 +299,7 @@ describe('admin and coaches', () => {
 
   it('does not expose a coach\'s students or their programmes to the admin', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد یک' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد یک' }, coach.token);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     expect((await call('GET', `/api/coaches/${coach.id}/students`, undefined, admin)).status).toBe(404);
     expect((await call('GET', `/api/coaches/${coach.id}/students/${created.json.user.id}/program`, undefined, admin)).status).toBe(404);
@@ -317,7 +317,7 @@ describe('admin and coaches', () => {
 describe('deleting coaches and students', () => {
   it('lets a coach delete one of their students, and the student can no longer sign in', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد حذفی' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد حذفی' }, coach.token);
     const studentId = created.json.user.id as number;
     const student = await login(created.json.username as string, created.json.password as string);
     expect(student.status).toBe(200);
@@ -332,14 +332,14 @@ describe('deleting coaches and students', () => {
   it('does not let a coach delete another coach\'s student', async () => {
     const coach = await coachSession();
     const other = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد مال مربی یک' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد مال مربی یک' }, coach.token);
     const removed = await call('DELETE', `/api/students/${created.json.user.id}`, {}, other.token);
     expect(removed.status).toBe(404);
   });
 
   it('refuses to delete a coach who still has students, and deletes the coach once none are left', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد باقی‌مانده' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد باقی‌مانده' }, coach.token);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
 
     const blocked = await call('DELETE', `/api/coaches/${coach.id}`, {}, admin);
@@ -357,7 +357,7 @@ describe('deleting coaches and students', () => {
 
   it('only lets the admin delete coaches, and never a student or the admin', async () => {
     const coach = await coachSession();
-    const student = await call('POST', '/api/students', { displayName: 'شاگرد' }, coach.token);
+    const student = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coach.token);
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     expect((await call('DELETE', `/api/coaches/${coach.id}`, {}, coach.token)).status).toBe(403);
     expect((await call('DELETE', `/api/coaches/${student.json.user.id}`, {}, admin)).status).toBe(404);
@@ -368,7 +368,7 @@ describe('deleting coaches and students', () => {
 describe('text chat between a coach and a student', () => {
   /** A student who has already changed the temporary password, so the app is open to them. */
   async function studentSession(coachToken: string, displayName: string) {
-    const created = await call('POST', '/api/students', { displayName }, coachToken);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName }, coachToken);
     const token = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
     return { token, id: created.json.user.id as number };
@@ -463,7 +463,7 @@ describe('text chat between a coach and a student', () => {
 describe('generated passwords on the cards', () => {
   it('shows the admin a coach\'s generated password until the coach chooses their own', async () => {
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-    const created = await call('POST', '/api/coaches', { displayName: 'مربی رمز' }, admin);
+    const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی رمز' }, admin);
     const before = (await call('GET', '/api/coaches', undefined, admin)).json.coaches.find((c: { id: number }) => c.id === created.json.user.id);
     expect(before.password).toBe(created.json.password);
 
@@ -475,7 +475,7 @@ describe('generated passwords on the cards', () => {
 
   it('shows a coach their students\' generated passwords, and a reset replaces them', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد رمز' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد رمز' }, coach.token);
     const listed = await call('GET', '/api/students', undefined, coach.token);
     expect(listed.json.students[0].password).toBe(created.json.password);
     const reset = await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, coach.token);
@@ -486,7 +486,7 @@ describe('generated passwords on the cards', () => {
 
   it('stores generated passwords only as a hash and an encrypted copy', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد مخفی' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد مخفی' }, coach.token);
     const raw = (await db.query<{ password_hash: string; password_enc: string }>('SELECT password_hash, password_enc FROM users WHERE id = $1', [created.json.user.id]))[0]!;
     expect(raw.password_hash).not.toContain(created.json.password);
     expect(raw.password_enc).not.toContain(created.json.password);
@@ -500,7 +500,7 @@ describe('nutrition plans', () => {
 
   it('lets the coach save a weekly plan, and the student read it back', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد تغذیه' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد تغذیه' }, coach.token);
     const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-2' }, studentToken);
 
@@ -519,7 +519,7 @@ describe('nutrition plans', () => {
 
   it('gives the student no plan until the coach makes one, and the coach an empty week', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد خالی' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد خالی' }, coach.token);
     const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-3' }, studentToken);
     expect((await call('GET', '/api/me/nutrition', undefined, studentToken)).json.plan).toBeNull();
@@ -530,7 +530,7 @@ describe('nutrition plans', () => {
 
   it('rejects plans the app cannot calculate or display safely', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد نامعتبر' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد نامعتبر' }, coach.token);
     const url = `/api/students/${created.json.user.id}/nutrition`;
     const withMeal = (items: unknown[], name = 'ناهار') => {
       const days = emptyWeek();
@@ -550,7 +550,7 @@ describe('nutrition plans', () => {
   it('keeps each student\'s plan to their own coach and keeps the admin out', async () => {
     const coach = await coachSession();
     const other = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد خصوصی تغذیه' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد خصوصی تغذیه' }, coach.token);
     const url = `/api/students/${created.json.user.id}/nutrition`;
     expect((await call('GET', url, undefined, other.token)).status).toBe(404);
     expect((await call('PUT', url, { days: emptyWeek() }, other.token)).status).toBe(404);
@@ -561,7 +561,7 @@ describe('nutrition plans', () => {
 
   it('removes the plan when the student is deleted', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد حذف تغذیه' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد حذف تغذیه' }, coach.token);
     await call('PUT', `/api/students/${created.json.user.id}/nutrition`, { days: emptyWeek() }, coach.token);
     await call('DELETE', `/api/students/${created.json.user.id}`, {}, coach.token);
     const count = (await db.query<{ n: string }>('SELECT COUNT(*) AS n FROM nutrition_plans WHERE student_id = $1', [created.json.user.id]))[0]!;
@@ -574,7 +574,7 @@ describe('personal meal diary', () => {
 
   it('lets anyone signed in keep their own day, and nobody else sees it', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد دفتر' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد دفتر' }, coach.token);
     const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-diary-pass-1' }, studentToken);
 
@@ -610,7 +610,7 @@ describe('personal meal diary', () => {
 
   it('allows a coach to view their student diary but protects other students and has security headers', async () => {
     const coach = await coachSession();
-    const created = await call('POST', '/api/students', { displayName: 'شاگرد دفتر ۲' }, coach.token);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد دفتر ۲' }, coach.token);
     const studentToken = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-diary-pass-2' }, studentToken);
 
@@ -631,7 +631,7 @@ describe('personal meal diary', () => {
 
 describe('ZarinPal payments with multi-settlement', () => {
   async function studentSession(coachToken: string, displayName: string) {
-    const created = await call('POST', '/api/students', { displayName }, coachToken);
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName }, coachToken);
     const token = (await login(created.json.username as string, created.json.password as string)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-pay-pass-1' }, token);
     return { token, id: created.json.user.id as number };

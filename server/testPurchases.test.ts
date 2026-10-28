@@ -47,13 +47,13 @@ async function signIn(username: string, password: string): Promise<string> {
   return (await call('POST', '/api/auth/login', { username, password })).json.token as string;
 }
 async function createCoach(admin: string) {
-  const created = await call('POST', '/api/coaches', { displayName: 'مربی آزمایش' }, admin);
+  const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی آزمایش' }, admin);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-test-pass-1' }, token);
   return { token, id: created.json.user.id as number };
 }
 async function createStudent(coach: string) {
-  const created = await call('POST', '/api/students', { displayName: 'شاگرد آزمایش' }, coach);
+  const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد آزمایش' }, coach);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-test-pass-1' }, token);
   return { token, id: created.json.user.id as number, username: created.json.username as string };

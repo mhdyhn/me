@@ -133,7 +133,7 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
 
     expect(await screen.findByRole('heading', { name: 'مدیریت مربی‌ها و باشگاه' })).toBeInTheDocument();
     expect(screen.getByText('مربیان فعال')).toBeInTheDocument();
-    expect(screen.getByText('کل شاگردان باشگاه')).toBeInTheDocument();
+    expect(screen.getByText('شاگردان مرتبط با مربی‌ها')).toBeInTheDocument();
     expect(await screen.findByText('مربی تست')).toBeInTheDocument();
 
     const nav = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
