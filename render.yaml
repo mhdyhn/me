@@ -13,7 +13,9 @@ services:
     runtime: node
     plan: free
     region: frankfurt
+    # Applies to this service only when it is managed and synced by this Blueprint.
     branch: main
+    autoDeployTrigger: commit
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node server/index.ts
     healthCheckPath: /api/health

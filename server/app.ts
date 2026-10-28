@@ -174,6 +174,27 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET',
+      pattern: /^\/api\/release$/,
+      auth: 'public',
+      // Render provides these deployment values; never expose arbitrary environment contents.
+      handler: async () => {
+        const render = process.env.RENDER === 'true';
+        const branch = render ? process.env.RENDER_GIT_BRANCH?.trim() : '';
+        const sha = render ? process.env.RENDER_GIT_COMMIT?.trim() : '';
+        return {
+          status: 200,
+          body: {
+            stableBranch: 'main',
+            deploymentBranch: branch === 'main' ? 'main' : branch ? 'other' : 'unknown',
+            revision: sha && /^[a-f0-9]{7,64}$/i.test(sha) ? sha.toLowerCase() : null,
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
       method: 'POST',
       pattern: /^\/api\/auth\/login$/,
       auth: 'public',
