@@ -884,3 +884,76 @@ describe('ZarinPal payments with multi-settlement', () => {
     expect(view.json.program.days).toHaveLength(0);
   });
 });
+
+describe('concurrent nutrition editing', () => {
+  const blankDays = () => Array.from({ length: 7 }, () => ({ meals: [] }));
+  const meal = (name: string) => ({ name, items: [] });
+
+  it('rejects stale personal diary writes from another device, even when the clock has not advanced', async () => {
+    const account = await coachSession();
+    const first = (await call('GET', '/api/me/diary/2026-10-13', undefined, account.token)).json.diary;
+    const saved = await call('PUT', '/api/me/diary', { day: first.day, meals: [meal('دستگاه اول')], expectedMeals: first.meals, accountId: account.id }, account.token);
+    expect(saved.status).toBe(200);
+    const stale = await call('PUT', '/api/me/diary', { day: first.day, meals: [meal('دستگاه دوم')], expectedMeals: first.meals, accountId: account.id }, account.token);
+    expect(stale.status).toBe(409);
+    expect((await call('GET', '/api/me/diary/2026-10-13', undefined, account.token)).json.diary.meals).toEqual([meal('دستگاه اول')]);
+    const retry = await call('PUT', '/api/me/diary', { day: first.day, meals: [meal('دستگاه دوم')], expectedMeals: saved.json.diary.meals, accountId: account.id }, account.token);
+    expect(retry.status).toBe(200);
+  });
+
+  it('binds diary requests to the account that opened the screen', async () => {
+    const first = await coachSession(); const second = await coachSession();
+    expect((await call('GET', `/api/me/diary/2026-10-13?accountId=${first.id}`, undefined, second.token)).status).toBe(409);
+    expect((await call('PUT', '/api/me/diary', { accountId: first.id, day: '2026-10-13', meals: [meal('اشتباه')], expectedMeals: [] }, second.token)).status).toBe(409);
+    expect((await call('GET', '/api/me/diary/2026-10-13', undefined, second.token)).json.diary.meals).toEqual([]);
+  });
+
+  it('rejects a stale weekly plan and leaves the newer coach plan visible to the student', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coach.token);
+    const path = `/api/students/${created.json.user.id}/nutrition`;
+    const original = (await call('GET', path, undefined, coach.token)).json.plan;
+    const first = await call('PUT', path, { targets: { kcal: 2100 }, days: blankDays(), expectedPlan: original }, coach.token);
+    expect(first.status).toBe(200);
+    const stale = await call('PUT', path, { targets: { kcal: 1800 }, days: blankDays(), expectedPlan: original }, coach.token);
+    expect(stale.status).toBe(409);
+    expect((await call('GET', path, undefined, coach.token)).json.plan.targets.kcal).toBe(2100);
+    const retry = await call('PUT', path, { targets: { kcal: 1800 }, days: blankDays(), expectedPlan: first.json.plan }, coach.token);
+    expect(retry.status).toBe(200);
+  });
+
+  it('rejects programme and coach-nutrition requests bound to a different account', async () => {
+    const coach = await coachSession();
+    const secondCoach = await coachSession();
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coach.token);
+    const id = created.json.user.id;
+    const program = `/api/students/${id}/program`;
+    expect((await call('GET', `${program}?accountId=${coach.id}`, undefined, admin)).status).toBe(409);
+    expect((await call('PUT', program, { accountId: coach.id }, admin)).status).toBe(409);
+    expect((await call('DELETE', program, { accountId: coach.id }, admin)).status).toBe(409);
+    expect((await call('POST', `/api/students/${id}/programs/restore`, { accountId: coach.id }, admin)).status).toBe(409);
+    const nutrition = `/api/students/${id}/nutrition`;
+    expect((await call('GET', `${nutrition}?accountId=${coach.id}`, undefined, secondCoach.token)).status).toBe(409);
+    expect((await call('PUT', nutrition, { accountId: coach.id }, secondCoach.token)).status).toBe(409);
+  });
+
+
+  it('accepts a maximum-sized valid plan plus its comparison base without relaxing unrelated routes', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coach.token);
+    const path = `/api/students/${created.json.user.id}/nutrition`;
+    const original = (await call('GET', path, undefined, coach.token)).json.plan;
+    const fullMeal = { name: 'غ'.repeat(40), items: Array.from({ length: 25 }, () => ({ foodId: 'sweet-potato-cooked', grams: 2000 })) };
+    const days = Array.from({ length: 7 }, () => ({ meals: Array.from({ length: 8 }, () => fullMeal) }));
+    const first = await call('PUT', path, { accountId: coach.id, targets: {}, days, expectedPlan: original }, coach.token);
+    expect(first.status).toBe(200);
+    const body = { accountId: coach.id, targets: {}, days, expectedPlan: first.json.plan };
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(16 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(192 * 1024);
+    expect((await call('PUT', path, body, coach.token)).status).toBe(200);
+    expect((await call('PUT', path, { ...body, padding: 'x'.repeat(192 * 1024) }, coach.token)).status).toBe(413);
+    expect((await call('PUT', '/api/me/profile', { padding: 'x'.repeat(17 * 1024) }, coach.token)).status).toBe(413);
+  });
+
+});

@@ -97,7 +97,9 @@ export async function listFormerCoachPlans(db: Db, studentId: number, currentCoa
   };
 }
 
-export async function savePlan(db: Db, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string, relationshipVersion = 0): Promise<NutritionPlan> {
+export async function savePlan(db: Db, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string, relationshipVersion = 0, expected?: Omit<NutritionPlan, 'updatedAt'>): Promise<NutritionPlan> {
+  const empty = emptyPlan();
+  const emptyBody = { targets: empty.targets, days: empty.days };
   const rows = await db.query(`
     WITH relationship AS MATERIALIZED (
       SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
@@ -105,15 +107,18 @@ export async function savePlan(db: Db, studentId: number, coachId: number, plan:
     ), saved AS (
       INSERT INTO nutrition_coach_plans (student_id, coach_id, body, updated_at)
       SELECT $1, $2, $3, $4 FROM relationship
-      ON CONFLICT(student_id, coach_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at RETURNING *
+      WHERE NOT $6::boolean OR COALESCE((SELECT body::jsonb FROM nutrition_coach_plans WHERE student_id = $1 AND coach_id = $2), $8::jsonb) = $7::jsonb
+      ON CONFLICT(student_id, coach_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+        WHERE NOT $6::boolean OR nutrition_coach_plans.body::jsonb = $7::jsonb
+      RETURNING *
     ), legacy_projection AS (
       INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at)
       SELECT student_id, coach_id, body, updated_at FROM saved
       ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at
     ) SELECT student_id FROM saved`,
-    [studentId, coachId, JSON.stringify(plan), at, relationshipVersion],
+    [studentId, coachId, JSON.stringify(plan), at, relationshipVersion, expected !== undefined, JSON.stringify(expected ?? emptyBody), JSON.stringify(emptyBody)],
   );
-  if (!rows.length) throw new HttpError(409, 'دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  if (!rows.length) throw new HttpError(409, 'برنامهٔ غذایی یا دسترسی مربی تغییر کرده است؛ نسخهٔ تازه را بررسی کنید.');
   return { ...plan, updatedAt: at };
 }
 
@@ -193,12 +198,18 @@ export async function loadDiary(db: Db, userId: number, day: string): Promise<Di
   return { day, meals: JSON.parse(row.body) as PlanMeal[], updatedAt: row.updated_at };
 }
 
-export async function saveDiary(db: Db, userId: number, day: string, meals: PlanMeal[], at: string): Promise<Diary> {
-  await db.query(
-    `INSERT INTO nutrition_diary (user_id, day, body, updated_at) VALUES ($1, $2, $3, $4)
-     ON CONFLICT(user_id, day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at`,
-    [userId, day, JSON.stringify(meals), at],
+export async function saveDiary(db: Db, userId: number, day: string, meals: PlanMeal[], at: string, expected?: PlanMeal[]): Promise<Diary> {
+  const rows = await db.query(
+    `INSERT INTO nutrition_diary (user_id, day, body, updated_at)
+     SELECT $1, $2, $3, $4
+     WHERE NOT $5::boolean OR $6::jsonb = '[]'::jsonb
+       OR EXISTS (SELECT 1 FROM nutrition_diary WHERE user_id = $1 AND day = $2 AND body::jsonb = $6::jsonb)
+     ON CONFLICT(user_id, day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+       WHERE NOT $5::boolean OR nutrition_diary.body::jsonb = $6::jsonb
+     RETURNING day`,
+    [userId, day, JSON.stringify(meals), at, expected !== undefined, JSON.stringify(expected ?? [])],
   );
+  if (!rows.length) throw new HttpError(409, 'دفتر خوراک این روز تغییر کرده است؛ نسخهٔ تازه را بررسی کنید.');
   return { day, meals, updatedAt: at };
 }
 

@@ -28,7 +28,7 @@ function mockApi(program: unknown = null, failProgramLoads = 0) {
       let status = 404;
       if (method === 'GET' && input === '/api/me') [json, status] = [{ user: coachUser }, 200];
       if (method === 'GET' && input === '/api/students') [json, status] = [{ students: [student] }, 200];
-      if (method === 'GET' && input === '/api/students/3/program') {
+      if (method === 'GET' && input === '/api/students/3/program?accountId=2') {
         if (remainingProgramLoadFailures > 0) {
           remainingProgramLoadFailures -= 1;
           [json, status] = [{ error: 'temporary network error' }, 503];
@@ -61,6 +61,7 @@ function renderBuilder() {
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   window.localStorage.setItem('meety.session-token', 'tok-coach-0000000000000001');
 });
 
@@ -78,7 +79,7 @@ describe('coach programme builder', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری برنامه' }));
 
     expect(await screen.findByLabelText('عنوان برنامه')).toBeInTheDocument();
-    expect(sent.filter((call) => call.method === 'GET' && call.path === '/api/students/3/program')).toHaveLength(2);
+    expect(sent.filter((call) => call.method === 'GET' && call.path === '/api/students/3/program?accountId=2')).toHaveLength(2);
   });
 
   it('keeps pricing compact while retaining the editable price and payment split', async () => {

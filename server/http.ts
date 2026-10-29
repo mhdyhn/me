@@ -12,6 +12,8 @@ export class HttpError extends Error {
 export const MAX_BODY_BYTES = 16 * 1024;
 /** Workout summaries are a batch of sessions, so their upload may be larger. */
 export const SESSIONS_BODY_BYTES = 256 * 1024;
+/** A weekly plan can contain a validated current version and its comparison base. */
+export const NUTRITION_BODY_BYTES = 192 * 1024;
 /** Chat messages can carry photos, voice notes, or short clips. */
 export const CHAT_BODY_BYTES = 6 * 1024 * 1024;
 
