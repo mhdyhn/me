@@ -6,18 +6,22 @@ import { MemoryRouter } from 'react-router-dom';
 const mocks = vi.hoisted(() => ({
   loadAssignedProgram: vi.fn(),
   programLoadState: 'loading' as 'idle' | 'loading' | 'ready' | 'error',
+  assignedMeta: null as null | { priceTomans: number; isPaid: boolean; isTestPurchase: boolean },
+  activeSession: null as null | { templateId: string; name: string; exercises: never[] },
 }));
 
 vi.mock('../context/GymProvider', () => ({
-  useGym: () => ({ sessions: [], loading: false, activeSession: null }),
+  useGym: () => ({ sessions: [], loading: false, activeSession: mocks.activeSession }),
 }));
 vi.mock('../context/SessionContext', () => ({
   useSession: () => ({ user: { id: 27, role: 'student' } }),
 }));
 vi.mock('../lib/programStore', () => ({
   useProgram: () => [],
+  useAssignedMeta: () => mocks.assignedMeta,
   useAssignedProgramLoadState: () => mocks.programLoadState,
   getWorkoutTemplate: () => undefined,
+  isProgramReadOnly: () => false,
   getPrimaryWorkoutTemplates: () => [],
 }));
 vi.mock('../lib/assignedProgram', () => ({ loadAssignedProgram: mocks.loadAssignedProgram }));
@@ -28,6 +32,8 @@ import { Dashboard } from './Dashboard';
 describe('student dashboard program loading', () => {
   beforeEach(() => {
     mocks.programLoadState = 'loading';
+    mocks.assignedMeta = null;
+    mocks.activeSession = null;
     mocks.loadAssignedProgram.mockReset().mockResolvedValue(undefined);
   });
 
@@ -50,6 +56,27 @@ describe('student dashboard program loading', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('دریافت برنامه انجام نشد');
     await user.click(screen.getByRole('button', { name: 'تلاش دوباره' }));
     expect(mocks.loadAssignedProgram).toHaveBeenCalledOnce();
+  });
+
+  it('does not invent zero exercises or duration for a legacy session without its prescription', () => {
+    mocks.programLoadState = 'ready';
+    mocks.activeSession = { templateId: 'old-day', name: 'جلسهٔ قدیمی', exercises: [] };
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(screen.getByText('برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.')).toBeInTheDocument();
+    expect(screen.queryByText('۰ حرکت')).not.toBeInTheDocument();
+    expect(screen.queryByText(/حدود ۰ دقیقه/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ادامهٔ تمرین/ })).toBeInTheDocument();
+  });
+
+  it('does not describe a locked paid programme as missing', () => {
+    mocks.programLoadState = 'ready';
+    mocks.assignedMeta = { priceTomans: 100000, isPaid: false, isTestPurchase: false };
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(screen.getByText('برنامهٔ مربی آماده است')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /بررسی برنامه/ })).toHaveAttribute('href', '/program');
+    expect(screen.queryByText('برنامهٔ تمرینی‌ات هنوز آماده نیست')).not.toBeInTheDocument();
   });
 
   it('shows the no-program prompt only after the server confirms there is no assigned programme', () => {

@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   appName: 'میتی',
   webDir: 'dist',
   // Same dark colour as the splash screen and the app, so there is no white flash while the site loads.
-  backgroundColor: '#101312',
+  backgroundColor: '#0a1425',
   // The app is bundled inside the APK, so the screens open at once. Only data calls go to the server (VITE_API_BASE).
 };
 

@@ -1,30 +1,30 @@
 /* Meety's shared dark, sport-focused palette; semantic colours are kept distinct. */
 :root {
   color-scheme: dark;
-  --bg: #0b100e;
-  --surface: #151d19;
-  --surface-soft: #1b2720;
-  --surface-raised: #243329;
-  --line: #3b5142;
-  --line-soft: rgba(174, 201, 181, .2);
-  --text: #f1f6f1;
-  --text-soft: #d4e0d6;
-  --muted: #b8c8bb;
-  --subtle: #a6b8aa;
-  --accent: #c9f56d;
-  --accent-ink: #11190d;
-  --brand: #c9f56d;
-  --purple-soft: #c9f56d;
-  --gold: #ffd18a;
-  --success: #c9f56d;
-  --blue: #a0e0cb;
-  --red: #ffb0a4;
+  --bg: #080f1c;
+  --surface: #111d30;
+  --surface-soft: #182940;
+  --surface-raised: #223755;
+  --line: #3a5374;
+  --line-soft: rgba(158, 190, 225, .2);
+  --text: #f5f8ff;
+  --text-soft: #d6e2f3;
+  --muted: #b5c9df;
+  --subtle: #a9c0d8;
+  --accent: #86cfff;
+  --accent-ink: #071a2a;
+  --brand: #86cfff;
+  --purple-soft: #86cfff;
+  --gold: #ffd394;
+  --success: #86cfff;
+  --blue: #b7d7ff;
+  --red: #ffb8ad;
   --radius: 18px;
   --shadow: 0 10px 32px rgba(0, 0, 0, .18);
   color: var(--text);
   background: var(--bg);
 }
-body { color: var(--text); background: radial-gradient(ellipse at 70% -20%, #203a27 0, transparent 42%), var(--bg); }
+body { color: var(--text); background: radial-gradient(ellipse at 70% -20%, #203d64 0, transparent 42%), var(--bg); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 ::selection { color: var(--accent-ink); background: var(--accent); }
 .eyebrow { color: var(--subtle); letter-spacing: 0; }
@@ -36,27 +36,27 @@ h1, h2, h3, h4 { letter-spacing: 0; }
 .button { min-height: 44px; font-size: 13px; letter-spacing: 0; }
 .button--small { min-height: 40px; }
 .button--primary, .login-submit { color: var(--accent-ink); background: var(--accent); }
-.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { color: var(--accent-ink); background: #dcff9c; }
-.button--secondary, .button--ghost { border-color: #526c59; color: var(--text); background: var(--surface-raised); }
-.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--text); background: #304637; }
+.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { color: var(--accent-ink); background: #b4e5ff; }
+.button--secondary, .button--ghost { border-color: #516a8d; color: var(--text); background: var(--surface-raised); }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--text); background: #2a4668; }
 .button--quiet { border-color: var(--line); color: var(--text-soft); background: transparent; }
 .button--quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-soft); }
 .text-link, .inline-link, .text-button, .back-link:hover { color: var(--accent); }
-.text-link:hover, .inline-link:hover { color: #e2ffb2; }
+.text-link:hover, .inline-link:hover { color: #c8edff; }
 .confirm-modal__btn--warning { color: #201305 !important; }
 .confirm-modal__btn--danger { background: #a92730 !important; }
 
 /* Navigation and surfaces shared by students, coaches, and management. */
-.sidebar { border-color: var(--line-soft); background: rgba(13, 20, 16, .97); }
+.sidebar { border-color: var(--line-soft); background: rgba(10, 19, 34, .97); }
 .brand-mark { color: var(--accent-ink); background: var(--accent); }
 .brand-lockup small, .sidebar-label, .sidebar-footer { color: var(--muted); }
 .nav-link, .side-nav-more > summary, .profile-button, .back-link { color: var(--muted); }
 .account-entry { background: transparent; cursor: pointer; }
 .nav-link:hover, .side-nav-more > summary:hover { color: var(--text); background: var(--surface-soft); }
-.nav-link.is-active { border-color: rgba(201, 245, 109, .25); color: var(--accent); background: rgba(201, 245, 109, .1); }
-.sidebar-coach-note, .note-mark, .profile-avatar, .resume-pill { border-color: rgba(201, 245, 109, .23); color: var(--accent); background: rgba(201, 245, 109, .08); }
+.nav-link.is-active { border-color: rgba(134, 207, 255, .25); color: var(--accent); background: rgba(134, 207, 255, .1); }
+.sidebar-coach-note, .note-mark, .profile-avatar, .resume-pill { border-color: rgba(134, 207, 255, .23); color: var(--accent); background: rgba(134, 207, 255, .08); }
 .sidebar-coach-note strong, .topbar-title h1, .brand-lockup strong { color: var(--text); }
-.topbar { border-color: var(--line-soft); background: rgba(11, 16, 14, .93); }
+.topbar { border-color: var(--line-soft); background: rgba(8, 15, 28, .93); }
 .status-dot, .resume-dot, .live-dot { background: var(--accent); }
 .page-content { padding-top: 28px; }
 .section-heading h2, .empty-state h3, .panel-title { color: var(--text); }
@@ -66,20 +66,19 @@ h1, h2, h3, h4 { letter-spacing: 0; }
 .welcome-row h2 { line-height: 1.5; letter-spacing: 0; }
 .welcome-row > div > p:last-child { font-size: 13px; }
 .next-workout-card, .dashboard-no-program {
-  border: 1px solid rgba(201, 245, 109, .2);
-  background: linear-gradient(270deg, #101a14 4%, rgba(16, 26, 20, .95) 45%, rgba(16, 26, 20, .45) 100%), url('./assets/meety-training-hero.webp') left center / cover no-repeat;
+  border: 1px solid rgba(134, 207, 255, .2);
+  background: linear-gradient(270deg, #0c192a 4%, rgba(12, 25, 42, .95) 45%, rgba(12, 25, 42, .45) 100%), url('./assets/meety-workout-hero.webp') left center / cover no-repeat;
   box-shadow: var(--shadow);
 }
 .next-workout-card__copy { max-width: 68%; }
-.next-workout-card h3 { color: #f7fbf6; font-size: clamp(24px, 3.2vw, 40px); line-height: 1.45; letter-spacing: 0; overflow-wrap: anywhere; }
-.next-workout-description, .quiet-note, .workout-meta-row { color: #d2ded3; font-size: 13px; }
+.next-workout-card h3 { color: #f7fbff; font-size: clamp(24px, 3.2vw, 40px); line-height: 1.45; letter-spacing: 0; overflow-wrap: anywhere; }
+.next-workout-description, .workout-meta-row { color: #d4e5f7; font-size: 13px; }
 .workout-focus, .workout-meta-row svg { color: var(--accent); }
-.workout-outline { visibility: hidden; }
-.day-chip, .week-streak { color: var(--accent); border-color: rgba(201, 245, 109, .27); background: rgba(18, 28, 20, .86); }
+.day-chip, .week-streak { color: var(--accent); border-color: rgba(134, 207, 255, .27); background: rgba(13, 29, 48, .86); }
 .week-streak svg { color: var(--gold); }
 .weekly-card { gap: 20px; }
-.week-progress, .progress-track, .timer-track { background: #304235; }
-.week-progress__fill, .progress-track > span, .timer-track > span { background: linear-gradient(90deg, #78dba7, var(--accent)); }
+.progress-track, .timer-track { background: #2c4361; }
+.progress-track > span, .timer-track > span { background: linear-gradient(90deg, #75e2de, var(--accent)); }
 .weekly-card__footer p, .weekly-card__footer .inline-link { font-size: 12px; }
 .dashboard-no-program .empty-state, .dashboard-program-message { max-width: 75%; }
 
@@ -90,13 +89,13 @@ h1, h2, h3, h4 { letter-spacing: 0; }
 .login-input, .workout-notes-disclosure textarea, .summary-notes textarea,
 .chat-composer textarea, .nutrition-search input, .nutrition-item__grams input,
 .meal-diary__day input[type='date'], .search-field, select:not([multiple]) {
-  border-color: #526c59; color: var(--text); background-color: #101813;
+  border-color: #516a8d; color: var(--text); background-color: #0b1728;
 }
-input::placeholder, textarea::placeholder { color: #a6b8aa; opacity: 1; }
-select:not([multiple]):hover:not(:disabled) { border-color: var(--accent); background-color: #1b2720; }
-select:not([multiple]):focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 245, 109, .18); }
+input::placeholder, textarea::placeholder { color: #a9c0d8; opacity: 1; }
+select:not([multiple]):hover:not(:disabled) { border-color: var(--accent); background-color: #182940; }
+select:not([multiple]):focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(134, 207, 255, .18); }
 select:not([multiple]) option, .picker__muscle-filter select option { color: var(--text); background: var(--surface); }
-select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c9f56d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2386cfff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 .select-with-icon select { background-image: none; }
 .field-control input, .field-control select, .field-control textarea, .search-field input { font-size: 14px; }
 .search-field input { background: transparent; }
@@ -110,14 +109,14 @@ select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns=
 .program-day__index > span:first-child, .program-rest-note { border-color: var(--line); background: var(--surface-soft); }
 .program-day--optional { border-color: var(--line); background: var(--surface); }
 .form-error, .storage-warning, .account-load-error, .student-nutrition-load-error,
-.coach-student-load-error, .student-ai-load-error, .student-profile-load-error { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
-.form-success, .badge--success { color: var(--accent); border-color: #516748; background: #253522; }
-.badge--danger { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
+.coach-student-load-error, .student-ai-load-error, .student-profile-load-error { color: #ffd8d4; border-color: #92545a; background: #3a2529; }
+.form-success, .badge--success { color: var(--accent); border-color: #366d60; background: #173d35; }
+.badge--danger { color: #ffd8d4; border-color: #92545a; background: #3a2529; }
 .account-form--inline, .person-card, .person-card__more-actions-menu { border-color: var(--line-soft); background: var(--surface); box-shadow: var(--shadow); }
 .person-card__avatar { color: var(--accent); background: var(--surface-raised); }
 .person-card__role, .person-card__row dt, .person-card__note { color: var(--muted); }
 .person-card__credentials, .person-card__students-box { background: var(--surface-soft); }
-.admin-overview-card, .coach-welcome { border-color: var(--line-soft); background: linear-gradient(125deg, #1e3023, #151d19 75%); }
+.admin-overview-card, .coach-welcome { border-color: var(--line-soft); background: linear-gradient(125deg, #1a3456, #111d30 75%); }
 .admin-overview-stats, .coach-welcome__count { border-color: var(--line); background: var(--surface); }
 .admin-stat-num, .admin-stat-label, .coach-welcome h3, .admin-students-heading h3,
 .independent-accounts summary { color: var(--text); }
@@ -135,31 +134,31 @@ select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns=
 
 /* Login and registration have the same visual language as the app. */
 .login-screen { background: radial-gradient(circle at 70% 0%, #213b28, transparent 45%), var(--bg); }
-.login-glow { inset: 0 0 auto auto; width: min(420px, 100%); height: min(420px, 100vw); background: radial-gradient(circle, rgba(201, 245, 109, .08), transparent 68%); }
+.login-glow { inset: 0 0 auto auto; width: min(420px, 100%); height: min(420px, 100vw); background: radial-gradient(circle, rgba(134, 207, 255, .08), transparent 68%); }
 .login-form { grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .login-field, .registration-role { min-width: 0; }
 .registration-role strong, .registration-role small { overflow-wrap: anywhere; }
 .auth-layout { border-color: var(--line-soft); background: var(--surface); box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
 .auth-layout .login-card, .login-card { color: var(--text); background: var(--surface); }
-.auth-intro { color: var(--text); background: linear-gradient(270deg, #101a14 3%, rgba(16, 26, 20, .94) 44%, rgba(16, 26, 20, .55)), url('./assets/meety-training-hero.webp') left center / cover no-repeat; }
+.auth-intro { color: var(--text); background: linear-gradient(270deg, #0c192a 3%, rgba(12, 25, 42, .94) 44%, rgba(12, 25, 42, .55)), url('./assets/meety-workout-hero.webp') left center / cover no-repeat; }
 .auth-intro__brand .brand-mark { color: var(--accent-ink); border: 0; background: var(--accent); }
-.auth-intro__brand small, .auth-intro__copy p, .auth-intro__points { color: #e0e9e1; }
+.auth-intro__brand small, .auth-intro__copy p, .auth-intro__points { color: #e1efff; }
 .auth-intro__eyebrow, .auth-intro__points svg, .auth-card-kicker { color: var(--accent); }
 .auth-intro__copy h2, .login-card h1, .login-brand strong, .auth-signup-prompt strong { color: var(--text); }
-.auth-intro__orbit { border-color: rgba(201, 245, 109, .22); }
-.auth-intro__dumbbell { color: var(--accent); background: rgba(201, 245, 109, .12); border-color: rgba(201, 245, 109, .28); }
+.auth-intro__orbit { border-color: rgba(134, 207, 255, .22); }
+.auth-intro__dumbbell { color: var(--accent); background: rgba(134, 207, 255, .12); border-color: rgba(134, 207, 255, .28); }
 .auth-intro__art-label { color: var(--text-soft); background: var(--surface-raised); }
 .login-brand small, .auth-layout .login-sub, .auth-layout .login-help, .registration-note,
 .auth-signup-prompt span, .registration-role small, .auth-back, .registration-complete p { color: var(--muted); }
 .auth-layout .login-field > span, .registration-consent { color: var(--text-soft); }
-.auth-layout .login-input { border-color: #526c59; color: var(--muted); background: #101813; }
+.auth-layout .login-input { border-color: #516a8d; color: var(--muted); background: #0b1728; }
 .login-input input { color: var(--text); }
-.login-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 245, 109, .15); }
-.login-error { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
+.login-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(134, 207, 255, .15); }
+.login-error { color: #ffd8d4; border-color: #92545a; background: #3a2529; }
 .auth-signup-prompt, .registration-note { border-color: var(--line); background: var(--surface-soft); }
 .registration-role { border-color: var(--line); color: var(--muted); background: var(--surface-soft); }
 .registration-role strong { color: var(--text); }
-.registration-role.is-selected { border-color: var(--accent); color: var(--accent); background: #273727; box-shadow: inset 0 0 0 1px var(--accent); }
+.registration-role.is-selected { border-color: var(--accent); color: var(--accent); background: #1d3e5d; box-shadow: inset 0 0 0 1px var(--accent); }
 .registration-role:focus-within { outline-color: var(--accent); }
 .registration-consent input { accent-color: var(--accent); }
 .auth-back a, .registration-complete > svg { color: var(--accent); }
@@ -172,17 +171,17 @@ select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns=
 .exercise-3d > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .exercise-3d > .button { justify-self: start; }
 .exercise-3d__player { display: grid; gap: 10px; min-width: 0; }
-.exercise-3d__stage { position: relative; min-height: 240px; height: min(320px, 70vw); overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: radial-gradient(circle at 50% 45%, #304b37, #101813 72%); }
+.exercise-3d__stage { position: relative; min-height: 240px; height: min(320px, 70vw); overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: radial-gradient(circle at 50% 45%, #315775, #0b1728 72%); }
 .exercise-3d__stage canvas { display: block; width: 100%; height: 100%; }
 .exercise-3d__message { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 18px; color: var(--text); text-align: center; line-height: 1.8; }
 .exercise-3d__controls { display: flex; flex-wrap: wrap; gap: 7px; }
 
 @media (max-width: 680px) {
-  .mobile-nav__bar { border-color: var(--line-soft); background: rgba(15, 23, 18, .98); box-shadow: 0 -8px 24px rgba(0, 0, 0, .25); }
+  .mobile-nav__bar { border-color: var(--line-soft); background: rgba(13, 25, 43, .98); box-shadow: 0 -8px 24px rgba(0, 0, 0, .25); }
   .mobile-nav__item { color: var(--muted); }
-  .mobile-nav__item.is-active { color: var(--accent); background: #263a29; }
+  .mobile-nav__item.is-active { color: var(--accent); background: #203e5d; }
   .mobile-sheet { border-color: var(--line); background: var(--surface); box-shadow: 0 -12px 48px rgba(0, 0, 0, .35); }
-  .mobile-sheet__handle { background: #778e7c; }
+  .mobile-sheet__handle { background: #7896b9; }
   .mobile-sheet__head, .mobile-sheet__card { border-color: var(--line); }
   .mobile-sheet__title, .mobile-sheet__card-title { color: var(--text); }
   .mobile-sheet__close, .mobile-sheet__card-icon { color: var(--accent); border-color: var(--line); background: var(--surface-raised); }
@@ -193,10 +192,207 @@ select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns=
   .next-workout-card__copy { max-width: 80%; }
   .next-workout-card h3 { font-size: clamp(24px, 8vw, 32px); }
   .next-workout-card__body { min-height: 130px; }
-  .workout-outline { display: none; }
   .dashboard-no-program .empty-state, .dashboard-program-message { max-width: 100%; }
   .program-day__heading .button { min-height: 40px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Meety 2: distinct midnight-blue surfaces, clear hierarchy and sport-led cards. */
+:root { --radius: 22px; --shadow: 0 16px 42px rgba(0, 4, 14, .22); }
+body { background: radial-gradient(ellipse at 82% -12%, #183a68 0%, transparent 38%), var(--bg); }
+.app-shell { background: linear-gradient(180deg, rgba(22, 47, 83, .1), transparent 400px); }
+.panel-card { border: 1px solid var(--line-soft); border-radius: var(--radius); background: linear-gradient(145deg, #16263e, var(--surface) 72%); box-shadow: var(--shadow); }
+.button, .login-submit { border-radius: 14px; font-weight: 750; }
+.button--primary, .login-submit { color: #061a2a; background: linear-gradient(110deg, #79e2e4, #86c5ff); border-color: transparent; }
+.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { color: #061a2a; background: #b2ebff; }
+.button--secondary, .button--ghost { color: var(--text); border-color: #405b7b; background: #1b304d; }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { background: #294a6c; border-color: var(--accent); }
+.brand-mark { border-radius: 13px; color: #071a2a; background: linear-gradient(135deg, #7ce6df, #78baff); }
+.sidebar { background: #0a1525f5; }
+.nav-link.is-active, .side-nav-more > summary:hover { background: #193855; color: var(--accent); border-color: #395e82; }
+.topbar { background: #0a1425ed; }
+.profile-avatar, .note-mark, .resume-pill, .sidebar-coach-note { color: var(--accent); background: #19334e; border-color: #355979; }
+.page-content { max-width: 1580px; }
+.section-heading { gap: 16px; }
+.section-heading h2, .panel-title { font-weight: 800; line-height: 1.55; }
+.eyebrow { color: #a9c3e0; font-weight: 700; }
+
+/* The personal home is shared by students and the admin, with real account data only. */
+.dashboard-page { gap: 22px; }
+.welcome-row { align-items: center; margin: 0; }
+.welcome-row__identity { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.welcome-row__identity > div { min-width: 0; overflow-wrap: anywhere; }
+.welcome-row__avatar { display: grid; flex: none; place-items: center; width: 52px; height: 52px; border: 1px solid #426c91; border-radius: 18px; color: #b8e9ff; background: linear-gradient(145deg, #29547a, #162c49); font-size: 21px; font-weight: 800; }
+.welcome-row h2 { margin: 3px 0 2px; font-size: clamp(23px, 2.8vw, 32px); line-height: 1.5; }
+.welcome-row__identity p { margin: 0; }
+.welcome-row__identity .muted { font-size: 13px; line-height: 1.8; }
+.dashboard-grid--home { grid-template-columns: minmax(0, 1.6fr) minmax(260px, .8fr); }
+.next-workout-card, .dashboard-no-program {
+  border: 1px solid #365b80;
+  border-radius: 26px;
+  background: linear-gradient(270deg, #0c1b2cf5 4%, #0c1b2cdd 47%, #0c1b2c25 100%), url('./assets/meety-workout-hero.webp') left center / cover no-repeat;
+  box-shadow: 0 20px 48px rgba(0, 4, 14, .28);
+}
+.next-workout-card { min-height: 340px; padding: clamp(20px, 3vw, 28px); }
+.next-workout-card__content { position: relative; z-index: 1; display: grid; align-content: space-between; min-height: 278px; gap: 14px; }
+.next-workout-card__top { justify-content: flex-start; flex-wrap: wrap; }
+.hero-kicker { display: inline-flex; align-items: center; gap: 8px; color: #d5f3ff; font-size: 12px; font-weight: 750; }
+.hero-kicker > span { width: 7px; height: 7px; border-radius: 50%; background: #83e1e2; box-shadow: 0 0 12px #83e1e2; }
+.day-chip { color: #d3eeff; border: 1px solid #557da0; background: #16324cdb; }
+.next-workout-card__body { min-height: 104px; align-items: flex-start; }
+.next-workout-card__copy { max-width: min(75%, 530px); }
+.workout-focus { color: #9de4f3; }
+.next-workout-card h3 { color: #fff; font-size: clamp(25px, 3.5vw, 42px); line-height: 1.5; }
+.next-workout-description, .next-workout-card .muted { color: #d7e6f5; line-height: 1.8; }
+.workout-meta-row { gap: 9px; color: #e0edfa; }
+.workout-meta-row span { padding: 6px 9px; border: 1px solid #7ba6c23d; border-radius: 11px; background: #122b41d9; }
+.workout-meta-row svg { color: #9ddff9; }
+.next-workout-card__footer { flex-wrap: wrap; gap: 15px; margin-top: 0; }
+.hero-program-link { display: inline-flex; align-items: center; gap: 5px; color: #d8efff; font-size: 13px; font-weight: 750; }
+.dashboard-no-program { min-height: 235px; display: flex; align-items: center; padding: 28px; }
+.dashboard-no-program .empty-state, .dashboard-program-message { max-width: 75%; }
+.dashboard-no-program h3 { color: #fff; }
+.dashboard-no-program .empty-state p, .dashboard-program-message p { color: #d4e6f4; }
+.weekly-card { align-content: space-between; min-height: 260px; padding: 22px; }
+.weekly-card__title strong { font-size: 19px; }
+.week-streak { color: #ffe2b4; border: 1px solid #6c5947; background: #3a3029; }
+.week-streak svg { color: #ffd394; }
+.weekly-card__body { display: flex; align-items: center; gap: 18px; }
+.week-progress-ring { display: grid; flex: none; place-items: center; width: 120px; height: 120px; border-radius: 50%; background: conic-gradient(#81e3e1 var(--weekly-progress), #2a405c 0); }
+.week-progress-ring > div { display: grid; align-content: center; justify-items: center; width: 98px; height: 98px; border-radius: 50%; color: var(--text); background: #14233a; }
+.week-progress-ring strong { font-size: 29px; line-height: 1.2; }
+.week-progress-ring span { color: var(--muted); font-size: 11px; }
+.weekly-card__footer { display: grid; justify-content: start; gap: 10px; }
+.weekly-card__footer p { color: var(--text-soft); font-size: 13px; }
+.dashboard-shortcuts { display: grid; gap: 12px; }
+.dashboard-shortcuts__heading h3 { margin: 4px 0 0; font-size: 19px; }
+.dashboard-shortcuts__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dashboard-shortcut { display: flex; align-items: center; gap: 11px; min-width: 0; min-height: 86px; padding: 14px; border: 1px solid var(--line-soft); border-radius: 18px; color: var(--text); background: #14243b; transition: border-color .18s, transform .18s; }
+.dashboard-shortcut:hover { border-color: var(--accent); transform: translateY(-2px); }
+.dashboard-shortcut__icon { display: grid; flex: none; place-items: center; width: 42px; height: 42px; border-radius: 14px; color: #a5e4ff; background: #244463; }
+.dashboard-shortcut__copy { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.dashboard-shortcut__copy strong { font-size: 13px; overflow-wrap: anywhere; }
+.dashboard-shortcut__copy small { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.dashboard-shortcut__arrow { flex: none; color: #a6c8e4; }
+
+/* Shared programme, exercise, nutrition, account and metric cards. */
+.program-day, .program-overview, .program-manager-bar, .account-form--inline, .person-card,
+.nutrition-context, .nutrition-editor, .nutrition-day-summary, .nutrition-add-meal, .nutrition-meal { border-color: var(--line-soft); border-radius: 20px; background: #14243b; }
+.program-day { padding: 19px; }
+.program-day__index > span:first-child, .program-rest-note, .program-day--optional { color: var(--text-soft); background: #1c3551; border-color: #385774; }
+.program-day__meta, .program-day__description, .program-day__heading p, .program-day__eyebrow { color: var(--muted); }
+.program-day__meta svg { color: #9fd7ee; }
+.program-overview__main strong, .nutrition-context > div strong, .nutrition-context__weight { color: var(--text); }
+.nutrition-context > div p, .nutrition-context__weight small, .nutrition-disclaimer, .nutrition-history-note { color: var(--muted); }
+.nutrition-context__icon, .program-empty-icon { color: var(--accent); border-color: #395e7f; background: #1c3b58; }
+.exercise-card { border-radius: 20px; background: #14243b; border-color: var(--line-soft); }
+.exercise-card__visual { height: 130px; background: radial-gradient(circle at 50% 25%, #335a79, transparent 70%), #1b314b; }
+.exercise-card__visual--pull, .exercise-card__visual--legs, .exercise-card__visual--core { background: radial-gradient(circle at 50% 25%, #335a79, transparent 70%), #1b314b; }
+.exercise-card__body { padding: 14px; }
+.exercise-card__body h3 { font-size: 14px; line-height: 1.7; }
+.exercise-card__category, .exercise-card__number, .exercise-card__footer span:last-child { color: #d3e4f6; }
+.person-card { gap: 16px; padding: 18px; box-shadow: 0 12px 30px #00000022; }
+.person-card__head { gap: 11px; }
+.person-card__avatar { width: 50px; height: 50px; border-radius: 16px; color: #c8efff; background: linear-gradient(145deg, #2b587d, #1b3553); }
+.person-card__identity strong { color: var(--text); font-size: 16px; }
+.person-card__role, .person-card__row dt, .person-card__note { color: var(--muted); }
+.person-card__account { padding: 12px; border: 1px solid #39516d; border-radius: 15px; background: #101e31; }
+.person-card__account-label { display: block; margin-bottom: 8px; color: #abc7e1; font-size: 11px; font-weight: 750; }
+.person-card__credentials { padding: 0; background: transparent; }
+.person-card__students-box, .person-card__more-actions-menu { color: var(--text); border-color: var(--line); background: var(--surface-soft); }
+.person-card__actions > .button, .person-card__more-actions > summary { border-radius: 12px; }
+.person-card--inactive { opacity: 1; border-color: #93646b; }
+.account-form--inline { padding: 20px; }
+.form-success, .badge--success { color: #bef7dc; border-color: #417967; background: #173d35; }
+.badge--danger, .form-error { color: #ffd8d4; border-color: #92545a; background: #3a2529; }
+
+/* Coach roster and the admin's management area are distinct destinations. */
+.coach-welcome { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 20px; min-height: 260px; padding: clamp(20px, 3vw, 28px); border: 1px solid #385b80; border-radius: 24px; color: var(--text); background: linear-gradient(270deg, #0b1a2bf7 4%, #0b1a2be0 49%, #0b1a2b2b), url('./assets/meety-coach-hero.webp') left center / cover no-repeat; }
+.coach-welcome__copy { position: relative; max-width: 420px; }
+.coach-welcome__label { color: #a8e5ff; }
+.coach-welcome h3 { color: #fff; font-size: clamp(21px, 3vw, 32px); line-height: 1.5; }
+.coach-welcome p { color: #d5e7f7; }
+.coach-welcome__stats { position: relative; display: grid; grid-template-columns: repeat(2, minmax(78px, 1fr)); gap: 8px; }
+.coach-welcome__count { min-width: 90px; border-color: #53799b; border-radius: 16px; color: #e5f4ff; background: #142b42e8; }
+.coach-welcome__count strong { color: #a9edff; line-height: 1.5; }
+.coach-welcome__count span { color: #c6dced; }
+.admin-overview-card { display: grid; gap: 18px; padding: clamp(19px, 3vw, 26px); border: 1px solid #395f85; border-radius: 24px; background: linear-gradient(130deg, #193a5c, #111e33 72%); }
+.admin-overview-heading h3 { margin: 4px 0; color: var(--text); font-size: 22px; }
+.admin-overview-heading p { margin: 0; color: var(--text-soft); font-size: 13px; line-height: 1.8; }
+.admin-overview-stats { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; background: transparent; border: 0; }
+.admin-stat-item { flex: 1 1 130px; min-width: 0; gap: 8px; padding: 14px; border: 1px solid #405d7b; border-radius: 16px; background: #142a41; }
+.admin-stat-ai { border: 1px solid #405d7b; padding: 14px; }
+.admin-stat-num { color: #c3efff; }
+.admin-stat-label { color: var(--text-soft); line-height: 1.7; }
+.admin-overview-actions { gap: 8px; }
+
+/* Auth and the optional 3D viewer follow the same palette. */
+.login-screen { background: radial-gradient(circle at 70% 0%, #1c3b60, transparent 45%), var(--bg); }
+.auth-layout { border-radius: 26px; }
+.auth-intro { background: linear-gradient(270deg, #0c192af0, #0c192ac9 46%, #0c192a59), url('./assets/meety-workout-hero.webp') left center / cover no-repeat; }
+.auth-intro__dumbbell, .auth-intro__art-label { background: #1c3c59; border-color: #496c8e; }
+.exercise-3d__stage { border-radius: 18px; background: radial-gradient(circle at 50% 45%, #315775, #0b1728 72%); }
+
+@media (max-width: 1180px) {
+  .dashboard-shortcuts__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 920px) {
+  .dashboard-grid--home { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .app-main { padding-bottom: calc(85px + env(safe-area-inset-bottom)); }
+  .topbar { min-height: 60px; padding-inline: 16px; }
+  .page-content { padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
+  .mobile-nav__bar { margin: 0 12px calc(10px + env(safe-area-inset-bottom)); padding: 6px; border: 1px solid #355371; border-radius: 22px; background: #102036f5; box-shadow: 0 12px 34px #000a; }
+  .mobile-nav__item { min-height: 48px; color: #b3c9dd; border-radius: 16px; }
+  .mobile-nav__item.is-active { color: #d1f1ff; background: #285477; }
+  .mobile-sheet { border-color: #476989; background: #111f33; }
+  .mobile-sheet__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mobile-sheet__card { min-width: 0; border-color: #35506d; background: #1a2e48; }
+  .mobile-sheet__card-icon { color: #b8e6ff; background: #294a69; border-color: #456788; }
+  .mobile-sheet__card-title, .mobile-sheet__card-desc { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+  .mobile-sheet__card-title { line-height: 1.6; }
+  .mobile-sheet__card-desc { color: #bdcee0; line-height: 1.6; }
+  .mobile-sheet__install { width: 100%; }
+  .welcome-row__avatar { width: 44px; height: 44px; border-radius: 15px; }
+  .welcome-row h2 { font-size: 22px; }
+  .welcome-row__identity .muted { font-size: 12px; }
+  .dashboard-page { gap: 19px; }
+  .dashboard-grid { gap: 12px; }
+  .next-workout-card { min-height: 300px; padding: 20px; }
+  .next-workout-card__content { min-height: 258px; }
+  .next-workout-card__copy { max-width: 82%; }
+  .next-workout-card h3 { font-size: clamp(23px, 7vw, 30px); }
+  .dashboard-no-program { min-height: 210px; padding: 20px; }
+  .dashboard-no-program .empty-state, .dashboard-program-message { max-width: 88%; }
+  .weekly-card { min-height: 0; padding: 18px; }
+  .week-progress-ring { width: 104px; height: 104px; }
+  .week-progress-ring > div { width: 84px; height: 84px; }
+  .dashboard-shortcut { min-height: 94px; align-items: flex-start; gap: 8px; padding: 12px; }
+  .dashboard-shortcut__icon { width: 36px; height: 36px; border-radius: 12px; }
+  .dashboard-shortcut__arrow { display: none; }
+  .coach-welcome { min-height: 250px; grid-template-columns: minmax(0, 1fr); align-content: space-between; padding: 20px; }
+  .coach-welcome__copy { max-width: 80%; }
+  .coach-welcome__stats { max-width: 260px; }
+  .coach-welcome__count { min-width: 0; padding: 8px 10px; }
+  .coach-welcome__count strong { font-size: 20px; }
+  .admin-overview-actions .button { flex: 1 1 auto; }
+}
+.account-entry, .install-topbar-pill, .sidebar-install-pill { color: #b7e5ff; border-color: #486a8a; background: #1a3450; }
+.account-entry:hover, .install-topbar-pill:hover, .sidebar-install-pill:hover { color: #e3f5ff; background: #274f72; }
+.progress-summary-card, .progress-session { border-radius: 18px; }
+.progress-summary-card > small, .history-table-empty, .week-strip-row small { color: var(--muted); }
+.progress-status--completed { color: #bfeee2; background: #214c47; }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shortcut { transition: none; }
+  .dashboard-shortcut:hover { transform: none; }
+}
+.chat-screen { background: radial-gradient(ellipse at 80% 0, #142f50, transparent 52%), #080f1c; }
+.chat-header, .chat-composer { background: #111f33; border-color: #35506d; }
+.chat-avatar { color: #c7efff; border-color: #476e92; background: #234563; }
+.chat-bubble { color: #f2f8ff; border-color: #3d5772; background: #182a40; }
+.chat-row--mine .chat-bubble { color: #f2faff; border-color: #4d789a; background: #21496a; }
+.chat-meta { color: #c4d8e9; }
+.chat-composer textarea:focus { border-color: var(--accent); }

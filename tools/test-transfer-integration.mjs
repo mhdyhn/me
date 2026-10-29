@@ -70,13 +70,42 @@ async function runScenario(base) {
     await expect(section).toContainText('دسترسی مربی قطع است');
   };
   try {
-    const studentPage = await newPage(); const secondDevice = await newPage(); const coachPage = await newPage(); const adminPage = await newPage();
+    const studentPage = await newPage(); const secondDevice = await newPage(); const coachPage = await newPage(); const adminPage = await newPage(); const adminSecondDevice = await newPage();
     await uiLogin(studentPage, 'teststudent'); await uiLogin(secondDevice, 'teststudent');
     for (const page of [studentPage, secondDevice]) {
       await page.goto(base + '/program', { waitUntil: 'domcontentloaded' });
       await expect(page.getByText('روز شخصی نمونه').first()).toBeVisible({ timeout: 15000 });
     }
     await uiLogin(coachPage, 'testcoacha'); await uiLogin(adminPage, 'localadmin', 'local-admin-password');
+    await expect(adminPage).toHaveURL(`${base}/`);
+    await expect(adminPage.getByText('برنامهٔ خودت را شروع کن')).toBeVisible();
+    const bar = adminPage.getByRole('navigation', { name: 'ناوبری موبایل' }).locator('.mobile-nav__bar');
+    for (const label of ['خانه', 'برنامه', 'پیشرفت']) await expect(bar.getByText(label, { exact: true })).toBeVisible();
+    await bar.getByRole('button', { name: 'سایر بخش‌ها و امکانات' }).click();
+    const more = adminPage.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+    await more.getByRole('link', { name: /مدیریت مربی‌ها و شاگردها/ }).click();
+    await expect(adminPage.getByRole('heading', { name: 'مدیریت مربی‌ها و باشگاه' })).toBeVisible();
+    await expect(adminPage.getByText('مربی الف').first()).toBeVisible();
+    await adminPage.goto(base + '/', { waitUntil: 'domcontentloaded' });
+    await adminPage.getByRole('link', { name: 'ساخت برنامهٔ شخصی' }).click();
+    await adminPage.getByRole('button', { name: 'تعریف برنامه جدید از الگوها' }).click();
+    const templates = adminPage.getByRole('dialog', { name: 'تعریف برنامهٔ تمرینی جدید' });
+    await templates.getByRole('button', { name: /برنامهٔ ۳ روزه فول بادی/ }).click();
+    await expect(adminPage.getByText('روز ۱: تمام بدن (اسکوات و سینه)').first()).toBeVisible();
+    const adminRecords = () => call('GET', `/me/personal-data?accountId=${admin.user.id}`, undefined, admin.token);
+    await expect.poll(async () => (await adminRecords()).records.some(item => item.kind === 'program' && !item.deleted), { timeout: 15000 }).toBe(true);
+    await uiLogin(adminSecondDevice, 'localadmin', 'local-admin-password');
+    await expect(adminSecondDevice).toHaveURL(`${base}/`);
+    await expect(adminSecondDevice.getByRole('heading', { name: 'روز ۱: تمام بدن (اسکوات و سینه)' })).toBeVisible({ timeout: 15000 });
+    await adminPage.goto(base + '/progress', { waitUntil: 'domcontentloaded' });
+    await adminPage.locator('.bodyweight-form-card input[type="number"]').fill('78.5');
+    await adminPage.getByRole('button', { name: 'ذخیرهٔ وزن' }).click();
+    await expect.poll(async () => (await adminRecords()).records.some(item => item.kind === 'bodyweight' && item.value?.weightKg === 78.5), { timeout: 15000 }).toBe(true);
+    await adminSecondDevice.goto(base + '/progress', { waitUntil: 'domcontentloaded' });
+    await adminSecondDevice.reload({ waitUntil: 'domcontentloaded' });
+    await expect(adminSecondDevice.getByRole('button', { name: 'حذف ثبت وزن 78.5 کیلوگرم' })).toBeVisible({ timeout: 15000 });
+    await call('GET', '/coaches', undefined, s.token, 403);
+    await call('GET', '/admin/transactions', undefined, a.token, 403);
     const invitation = await call('POST', '/coach/invitations', {}, a.token, 201);
     await connect(studentPage, invitation.code, 'مربی الف');
     const input = { title: 'برنامه اول مربی الف', priceTomans: 100000, days: [{ name: 'روز تمرین الف', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
@@ -148,7 +177,7 @@ async function runScenario(base) {
     const restored = await call('GET', '/me/program', undefined, s.token);
     if (!restored.isPaid || restored.program.id !== first.id || restored.program.version !== 2147483648) throw new Error('Restored purchase was not preserved');
     if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
-    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: independent program on 2 devices; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
+    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme on 2 devices; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
   } finally {
     await browser.close();
   }

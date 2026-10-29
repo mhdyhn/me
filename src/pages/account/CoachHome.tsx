@@ -133,11 +133,18 @@ function CoachStudents() {
   }
 
   return (
-    <PanelPage title="شاگردهای من">
-      <div className="coach-welcome">
-        <div><span className="coach-welcome__label">فضای مربی</span><h3>همراه شاگردها، قدم‌به‌قدم.</h3><p>شاگرد جدید بساز، برنامه‌ها را مدیریت کن و سهم فروش را یک‌جا ببین.</p></div>
-        <div className="coach-welcome__count"><strong>{students ? faNumber(students.length) : '—'}</strong><span>شاگرد</span></div>
-      </div>
+    <PanelPage title="شاگردهای من" className="coach-home">
+      <section className="coach-welcome" aria-label="نمای کلی مربی">
+        <div className="coach-welcome__copy">
+          <span className="coach-welcome__label">فضای مربی · میتی</span>
+          <h3>همراه شاگردها،<br />قدم‌به‌قدم.</h3>
+          <p>برنامه‌ها، پیشرفت شاگردها و سهم فروش را در یک فضای منظم دنبال کن.</p>
+        </div>
+        <div className="coach-welcome__stats">
+          <div className="coach-welcome__count"><strong>{students ? faNumber(students.length) : '—'}</strong><span>همهٔ شاگردها</span></div>
+          <div className="coach-welcome__count"><strong>{students ? faNumber(students.filter((student) => student.isActive !== false).length) : '—'}</strong><span>حساب فعال</span></div>
+        </div>
+      </section>
       <CoachInvitations />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: '12px', flexWrap: 'wrap' }}>
         <Link to="/coach/transactions" className="button button--ghost">

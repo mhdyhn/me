@@ -47,8 +47,8 @@ export default defineConfig(({ mode }) => {
                 lang: 'fa-IR',
                 dir: 'rtl',
                 description: 'همراه تمرین شخصی و خصوصی برای برنامه‌ریزی، ثبت ست‌ها و پیگیری پیشرفت در باشگاه.',
-                theme_color: '#101312',
-                background_color: '#101312',
+                theme_color: '#0a1425',
+                background_color: '#0a1425',
                 display: 'standalone',
                 start_url: '/',
                 icons: [

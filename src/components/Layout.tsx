@@ -48,10 +48,6 @@ const coachPrimaryTabs: NavItem[] = [
   { label: 'برنامه‌سازی', to: '/coach/programs/new', icon: ListPlus },
   { label: 'درآمدها', to: '/coach/transactions', icon: Receipt },
 ];
-const adminPrimaryTabs: NavItem[] = [
-  { label: 'مربی‌ها', to: '/coach', icon: ShieldCheck, end: true },
-  { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt },
-];
 
 const personalSecondaryNavigation: NavItem[] = [
   { label: 'حرکت‌ها', to: '/exercises', icon: Dumbbell, desc: 'کتابخانه و راهنمای اجرای حرکت‌ها' },
@@ -61,7 +57,10 @@ const personalSecondaryNavigation: NavItem[] = [
 const roleSecondaryNavigation: Record<Role, NavItem[]> = {
   student: [{ label: 'مربی', to: '/chat', icon: MessageCircle, desc: 'گفتگو و ارسال پیام به مربی' }],
   coach: [{ label: 'گفتگو با مدیر', to: '/coach/chat', icon: MessageCircle, desc: 'ارتباط با مدیر باشگاه' }],
-  admin: [],
+  admin: [
+    { label: 'مدیریت مربی‌ها و شاگردها', to: '/coach', icon: ShieldCheck, desc: 'حساب‌ها، تأیید مربی و شاگردها' },
+    { label: 'مالی باشگاه', to: '/coach/admin/transactions', icon: Receipt, desc: 'تراکنش‌ها و سهم مدیریت' },
+  ],
 };
 const settingsNavigation: NavItem = { label: 'تنظیمات', to: '/settings', icon: Settings2, desc: 'پروفایل و شخصی‌سازی' };
 
@@ -88,18 +87,22 @@ export function Layout() {
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const moreSheetRef = useModalFocus(showMoreSheet, () => setShowMoreSheet(false));
 
-  const primaryTabs = user?.role === 'coach'
-    ? coachPrimaryTabs
-    : user?.role === 'admin'
-      ? adminPrimaryTabs
-      : studentPrimaryTabs;
+  const primaryTabs = user?.role === 'coach' ? coachPrimaryTabs : studentPrimaryTabs;
   const roleItems = user && !(user.role === 'student' && user.coachId === null) ? roleSecondaryNavigation[user.role] : [];
-  const secondaryItems = [
-    ...(user?.role !== 'student' ? [{ label: 'برنامهٔ شخصی', to: '/program', icon: CalendarDays, desc: 'برنامه تمرینی شخصی' }] : []),
+  const personalItems = [
+    ...(user?.role === 'coach' ? [
+      { label: 'برنامهٔ شخصی', to: '/program', icon: CalendarDays, desc: 'برنامه تمرینی شخصی' },
+      { label: 'پیشرفت شخصی', to: '/progress', icon: BarChart3, desc: 'گزارش تمرین‌های خودت' },
+    ] : []),
     ...personalSecondaryNavigation,
-    ...roleItems,
+    ...(user?.role === 'admin' ? [] : roleItems),
     settingsNavigation,
   ];
+  const managementItems = user?.role === 'admin' ? roleItems : [];
+  const secondaryItems = [...personalItems, ...managementItems];
+  const secondaryGroups = user?.role === 'admin'
+    ? [{ title: 'تمرین و سلامتی', items: personalItems }, { title: 'مدیریت باشگاه', items: managementItems }]
+    : [{ title: user?.role === 'coach' ? 'تمرین شخصی و امکانات بیشتر' : 'امکانات بیشتر', items: personalItems }];
   // Screens that bring their own heading (coach screens, a student's coach program and movements).
   const ownHeading = location.pathname.startsWith('/coach') || (user?.role === 'student' && (location.pathname === '/program' || location.pathname === '/exercises' || location.pathname === '/chat'));
 
@@ -170,7 +173,7 @@ export function Layout() {
   const isPrimaryActive = primaryTabs.some((tab) => tab.end
     ? location.pathname === tab.to
     : location.pathname === tab.to || location.pathname.startsWith(`${tab.to}/`));
-  const isMoreActive = !isPrimaryActive && location.pathname !== '/workout';
+  const isMoreActive = !isPrimaryActive && !location.pathname.startsWith('/workout/');
   const sidebarSecondaryItems = secondaryItems.filter((item) => item.to !== settingsNavigation.to);
 
   return (
@@ -248,7 +251,7 @@ export function Layout() {
               </NavLink>
             )}
             <NavLink to="/settings" className="profile-button" aria-label="بازکردن پروفایل و تنظیمات">
-              <span className="profile-avatar">م</span>
+              <span className="profile-avatar">{user?.displayName?.trim().charAt(0) || 'م'}</span>
               <span className="profile-button__text">پروفایل من</span>
             </NavLink>
           </div>
@@ -315,38 +318,42 @@ export function Layout() {
           </div>
 
           <div className="mobile-sheet__body">
+            {secondaryGroups.map(({ title: groupTitle, items }) => (
+              <section className="mobile-sheet__section" key={groupTitle} aria-label={groupTitle}>
+                <div className="mobile-sheet__group-label">{groupTitle}</div>
+                <div className="mobile-sheet__grid">
+                  {items.map(({ label, to, icon: Icon, desc }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
+                      onClick={() => setShowMoreSheet(false)}
+                    >
+                      <span className="mobile-sheet__card-icon"><Icon size={20} /></span>
+                      <div className="mobile-sheet__card-info">
+                        <strong className="mobile-sheet__card-title">{label}</strong>
+                        {desc && <span className="mobile-sheet__card-desc">{desc}</span>}
+                      </div>
+                    </NavLink>
+                  ))}
+                </div>
+              </section>
+            ))}
             <div className="mobile-sheet__section">
-              <div className="mobile-sheet__group-label">{user?.role === 'coach' ? 'امکانات مربی' : user?.role === 'admin' ? 'امکانات مدیریت' : 'امکانات بیشتر'}</div>
-              <div className="mobile-sheet__grid">
-                {secondaryItems.map(({ label, to, icon: Icon, desc }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) => `mobile-sheet__card${isActive ? ' is-active' : ''}`}
-                    onClick={() => setShowMoreSheet(false)}
-                  >
-                    <span className="mobile-sheet__card-icon"><Icon size={20} /></span>
-                    <div className="mobile-sheet__card-info">
-                      <strong className="mobile-sheet__card-title">{label}</strong>
-                      {desc && <span className="mobile-sheet__card-desc">{desc}</span>}
-                    </div>
-                  </NavLink>
-                ))}
-                <button
-                  type="button"
-                  className="mobile-sheet__card"
-                  onClick={() => {
-                    setShowMoreSheet(false);
-                    setShowInstallModal(true);
-                  }}
-                >
-                  <span className="mobile-sheet__card-icon"><Smartphone size={20} /></span>
-                  <div className="mobile-sheet__card-info">
-                    <strong className="mobile-sheet__card-title">نصب اپلیکیشن</strong>
-                    <span className="mobile-sheet__card-desc">نسخهٔ نصب‌شدنی و وب</span>
-                  </div>
-                </button>
-              </div>
+              <button
+                type="button"
+                className="mobile-sheet__card mobile-sheet__install"
+                onClick={() => {
+                  setShowMoreSheet(false);
+                  setShowInstallModal(true);
+                }}
+              >
+                <span className="mobile-sheet__card-icon"><Smartphone size={20} /></span>
+                <div className="mobile-sheet__card-info">
+                  <strong className="mobile-sheet__card-title">نصب اپلیکیشن</strong>
+                  <span className="mobile-sheet__card-desc">نسخهٔ نصب‌شدنی و وب</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>

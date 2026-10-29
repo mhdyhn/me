@@ -1,5 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { App } from '../src/App';
 
 /** Every role gets the whole app; a coach or the admin gets extra sections in the same toolbar. */
@@ -30,13 +31,18 @@ describe('toolbar per role', () => {
     expect(await screen.findByRole('heading', { name: 'شاگردهای من' })).toBeInTheDocument();
   });
 
-  it('the admin keeps the whole app and adds the coach section', async () => {
+  it('the admin lands on personal training and keeps management and finance in More', async () => {
     stubUser('admin');
     render(<App />);
+    expect(await screen.findByRole('heading', { name: 'مسیر تمرین تو' })).toBeInTheDocument();
     const mobile = await screen.findByRole('navigation', { name: 'ناوبری موبایل' });
-    for (const label of ['مربی‌ها', 'مالی باشگاه']) {
-      expect(within(mobile).getByText(label)).toBeInTheDocument();
-    }
-    expect(within(mobile).queryByText('شاگردها')).not.toBeInTheDocument();
+    const bar = mobile.querySelector('.mobile-nav__bar') as HTMLElement;
+    for (const label of ['خانه', 'برنامه', 'پیشرفت']) expect(within(bar).getByText(label)).toBeInTheDocument();
+    expect(within(bar).queryByText('مالی باشگاه')).not.toBeInTheDocument();
+    await userEvent.setup().click(within(bar).getByRole('button', { name: 'سایر بخش‌ها و امکانات' }));
+    const sheet = within(mobile).getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+    expect(within(sheet).getByRole('link', { name: /مدیریت مربی‌ها و شاگردها/ })).toHaveAttribute('href', '/coach');
+    expect(within(sheet).getByRole('link', { name: /مالی باشگاه/ })).toHaveAttribute('href', '/coach/admin/transactions');
+    for (const label of ['حرکت‌ها', 'هوش سلامتی', 'تغذیه', 'تنظیمات']) expect(within(sheet).getByText(label)).toBeInTheDocument();
   });
 });

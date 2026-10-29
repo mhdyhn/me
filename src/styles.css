@@ -136,8 +136,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .weekly-card__title strong { color: var(--text); font-size: 16px; }
 .week-streak { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--brand); background: #F0E9F8; font-size: 11px; font-weight: 650; }
 .week-streak svg { color: #D4AF6A; }
-.week-progress { height: 8px; overflow: hidden; border-radius: 999px; background: #F0E9F8; }
-.week-progress__fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #A67BD9, #5B2E91); transition: width .25s ease; }
 .weekly-card__footer p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .weekly-card__footer .inline-link { flex: 0 0 auto; font-size: 11px; }
 .dashboard-recent-session { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
@@ -153,17 +151,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .workout-focus { margin: 0 0 8px; color: #a2b08f; font-size: 13px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 .next-workout-card h3 { margin: 0; font: 800 clamp(32px, 4.7vw, 54px)/.98 var(--font-display); letter-spacing: -.065em; }
 .next-workout-description { max-width: 340px; margin: 14px 0 0; color: #9ca89f; font-size: 11px; line-height: 1.6; }
-.workout-outline { position: relative; display: grid; flex: 0 0 158px; height: 150px; place-items: center; color: rgba(217, 246, 111, .88); }
-.workout-outline > svg { position: relative; z-index: 1; transform: rotate(-14deg); filter: drop-shadow(0 0 19px rgba(217, 246, 111, .14)); }
-.outline-circle { position: absolute; border: 1px solid rgba(217, 246, 111, .11); border-radius: 50%; }
-.outline-circle--one { width: 124px; height: 124px; }
-.outline-circle--two { width: 151px; height: 151px; border-style: dashed; opacity: .65; }
-.outline-label { position: absolute; bottom: 2px; color: #72806f; font-size: 11px; letter-spacing: .14em; }
 .workout-meta-row { display: flex; flex-wrap: wrap; gap: 17px; padding: 12px 0 13px; border-top: 1px solid rgba(166, 183, 172, .12); color: #b4beb6; font-size: 13px; }
 .workout-meta-row span { display: inline-flex; align-items: center; gap: 6px; }
 .workout-meta-row svg { color: #a6b091; }
 .next-workout-card__footer { justify-content: flex-start; margin-top: 13px; }
-.quiet-note { color: #727d75; font-size: 13px; }
 .dashboard-lower-grid { display: grid; grid-template-columns: 1fr 1fr 1.1fr; gap: 15px; }
 .dashboard-lower-grid > .panel-card { min-height: 170px; padding: 17px 18px; }
 .records-card .empty-state { min-height: auto; padding: 16px 0 0; }
@@ -798,7 +789,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 @media (max-width: 1180px) {
   .dashboard-grid { grid-template-columns: minmax(0, 1.45fr) minmax(220px, .8fr); }
-  .workout-outline { flex-basis: 125px; }
   .exercise-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-lower-grid { grid-template-columns: 1fr 1fr; }
   .next-step-card { grid-column: 1 / -1; min-height: auto !important; }
@@ -1086,16 +1076,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .next-workout-card__body { min-height: 136px; }
   .next-workout-card h3 { font-size: clamp(30px, 9vw, 42px); }
   .next-workout-description { max-width: 225px; margin-top: 9px; font-size: 12px; }
-  .workout-outline { flex: 0 0 95px; height: 100px; margin-inline-end: -4px; }
-  .workout-outline > svg { width: 45px; }
-  .outline-circle--one { width: 85px; height: 85px; }
-  .outline-circle--two { width: 105px; height: 105px; }
-  .outline-label { font-size: 11px; }
   .workout-meta-row { gap: 8px 13px; padding: 10px 0; font-size: 11px; }
   .workout-meta-row svg { width: 13px; }
   .next-workout-card__footer { align-items: center; margin-top: 9px; }
   .next-workout-card__footer .button { min-height: 45px; }
-  .quiet-note { display: none; }
   .builder-program-basics { grid-template-columns: 1fr; }
   .builder-section__head { align-items: stretch; flex-direction: column; }
   .builder-section__actions .button { flex: 1 1 140px; justify-content: center; }
@@ -1281,10 +1265,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .page-content { padding-inline-end: 12px; padding-inline-start: 12px; }
   .topbar { padding-inline-end: 12px; padding-inline-start: 12px; }
   .next-workout-card { padding-inline-end: 12px; padding-inline-start: 12px; }
-  .workout-outline { flex-basis: 78px; }
-  .outline-circle--one { width: 74px; height: 74px; }
-  .outline-circle--two { width: 90px; height: 90px; }
-  .workout-outline > svg { width: 37px; }
   .program-day__heading .button { font-size: 11px; }
   .program-day__heading p { max-width: 155px; }
   .profile-summary small { max-width: 125px; }

@@ -1,23 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, Flame, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { ArrowLeft, BarChart3, CalendarCheck2, CalendarDays, Clock3, Dumbbell, Flame, RefreshCw, Utensils } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { CoachConnection } from '../components/CoachConnection';
 import { RouteLoading } from '../components/RouteLoading';
+import { usePersonalSyncState } from '../components/PersonalSync';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
-import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
+import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedMeta, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { workoutSessionTemplate } from '../lib/workoutSessionTemplate';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout } from '../lib/analytics';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate } from '../lib/format';
 
+const shortcuts = [
+  { to: '/program', label: 'برنامهٔ تمرین', detail: 'جلسه‌ها و روزهای تمرین', icon: CalendarDays },
+  { to: '/progress', label: 'مرور پیشرفت', detail: 'سوابق و آمار شخصی', icon: BarChart3 },
+  { to: '/nutrition', label: 'دفتر تغذیه', detail: 'وعده‌ها و یادداشت‌ها', icon: Utensils },
+  { to: '/exercises', label: 'کتابخانهٔ حرکت‌ها', detail: 'راهنمای اجرای حرکت', icon: Dumbbell },
+];
+
 export function Dashboard() {
   const { sessions, loading, activeSession } = useGym();
   const { user } = useSession();
   const program = useProgram();
   const assignedProgramLoadState = useAssignedProgramLoadState();
+  const assignedMeta = useAssignedMeta();
+  const personalSync = usePersonalSyncState();
   const [slowProgram, setSlowProgram] = useState(false);
   useEffect(() => {
     setSlowProgram(false);
@@ -26,6 +36,8 @@ export function Dashboard() {
     return () => window.clearTimeout(timer);
   }, [assignedProgramLoadState]);
   const independent = user?.role === 'student' && (user.coachId === null || user.personalProgramMode === true);
+  // The admin's personal programme is independent of the club-management screens.
+  const personal = !user || user.role !== 'student' || independent;
   const navigate = useNavigate();
 
   const quote = useMotivationalQuote();
@@ -46,62 +58,76 @@ export function Dashboard() {
   const workoutName = activeSession ? displayedWorkout?.name ?? activeSession.name : displayedWorkout?.name ?? '';
 
   const startOrResume = () => {
-    if (activeSession) {
-      navigate(`/workout/${activeSession.templateId}`);
-    } else if (nextWorkout) {
-      navigate(`/workout/${nextWorkout.id}`);
-    }
+    if (activeSession) navigate(`/workout/${activeSession.templateId}`);
+    else if (nextWorkout) navigate(`/workout/${nextWorkout.id}`);
   };
 
   if (loading) return <RouteLoading />;
   return (
     <div className="page-stack dashboard-page">
       <section className="welcome-row">
-        <div>
-          <p className="eyebrow">{formatDate(now, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-          <h2>{greeting}{user?.displayName ? `، ${user.displayName}` : ''}<span className="accent-dot">.</span></h2>
-          <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
+        <div className="welcome-row__identity">
+          <span className="welcome-row__avatar" aria-hidden="true">{user?.displayName?.trim().charAt(0) || 'م'}</span>
+          <div>
+            <p className="eyebrow">{formatDate(now, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <h2>{greeting}{user?.displayName ? `، ${user.displayName}` : ''}<span className="accent-dot">.</span></h2>
+            <p className="muted"><strong>{quote.title}</strong> {quote.subtitle}</p>
+          </div>
         </div>
-        <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowRight size={15} /></Link>
+        <Link className="text-link desktop-only" to="/program">دیدن برنامهٔ هفتگی <ArrowLeft size={15} /></Link>
       </section>
 
       <div className={`dashboard-grid ${targetCount > 0 ? 'dashboard-grid--home' : 'dashboard-grid--single'}`}>
         {displayedWorkout || activeSession ? (
           <section className={`next-workout-card${activeSession ? ' next-workout-card--active' : ''}`}>
-            <div className="next-workout-card__top">
-              <span className="eyebrow">{activeSession ? 'تمرین ادامه‌دار' : 'جلسهٔ بعدی'}</span>
-              <span className="day-chip">{activeSession ? 'در حال انجام' : displayedWorkout?.dayLabel ?? 'تمرین'}</span>
-            </div>
-            <div className="next-workout-card__body">
-              <div className="next-workout-card__copy">
-                <p className="workout-focus">{displayedWorkout?.focus ?? 'جلسهٔ تمرینی'}</p>
-                <h3>{workoutName}</h3>
-                {displayedWorkout?.description && <p className="next-workout-description">{displayedWorkout.description}</p>}
-                {activeSession && <p className="muted small-text">{displayedWorkout ? 'ست‌هایی که ثبت کرده‌ای ذخیره شده‌اند؛ هر وقت آماده‌ای ادامه بده.' : 'برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.'}</p>}
+            <div className="next-workout-card__content">
+              <div className="next-workout-card__top">
+                <span className="hero-kicker"><span aria-hidden="true" /> {activeSession ? 'تمرین ادامه‌دار' : 'جلسهٔ بعدی'}</span>
+                <span className="day-chip">{activeSession ? 'در حال انجام' : displayedWorkout?.dayLabel ?? 'تمرین'}</span>
               </div>
-              <div className="workout-outline" aria-hidden="true">
-                <span className="outline-circle outline-circle--one" />
-                <span className="outline-circle outline-circle--two" />
-                <Dumbbell size={57} strokeWidth={1.2} />
-                <span className="outline-label">میتی / ۰۱</span>
+              <div className="next-workout-card__body">
+                <div className="next-workout-card__copy">
+                  <p className="workout-focus">{displayedWorkout?.focus ?? 'جلسهٔ تمرینی'}</p>
+                  <h3>{workoutName}</h3>
+                  {displayedWorkout?.description && <p className="next-workout-description">{displayedWorkout.description}</p>}
+                  {activeSession && <p className="muted small-text">{displayedWorkout ? 'ست‌هایی که ثبت کرده‌ای ذخیره شده‌اند؛ هر وقت آماده‌ای ادامه بده.' : 'برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.'}</p>}
+                </div>
+              </div>
+              {displayedWorkout && (
+                <div className="workout-meta-row">
+                  <span><Dumbbell size={15} /> {faNumber(exerciseCount)} حرکت</span>
+                  <span><CalendarCheck2 size={15} /> {faNumber(setCount)} ست کاری</span>
+                  <span><Clock3 size={15} /> حدود {faNumber(displayedWorkout.durationMinutes)} دقیقه</span>
+                </div>
+              )}
+              <div className="next-workout-card__footer">
+                <button className="button button--primary button--large" onClick={startOrResume}>
+                  {activeSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowLeft size={17} />
+                </button>
+                <Link to="/program" className="hero-program-link">برنامهٔ من <ArrowLeft size={15} /></Link>
               </div>
             </div>
-            <div className="workout-meta-row">
-              <span><Dumbbell size={15} /> {faNumber(exerciseCount)} حرکت</span>
-              <span><CalendarCheck2 size={15} /> {faNumber(setCount)} ست کاری</span>
-              <span><Clock3 size={15} /> حدود {faNumber(displayedWorkout?.durationMinutes ?? 0)} دقیقه</span>
+          </section>
+        ) : personal && user && !personalSync.lastSyncAt && personalSync.phase === 'syncing' ? (
+          <section className="dashboard-no-program panel-card" role="status" aria-live="polite">
+            <div className="dashboard-program-message">
+              <span className="hero-kicker"><span aria-hidden="true" /> برنامهٔ شخصی</span>
+              <h3>در حال بررسی اطلاعات حساب…</h3>
+              <p>برنامهٔ ذخیره‌شده را از سرور و این دستگاه بررسی می‌کنیم.</p>
             </div>
-            <div className="next-workout-card__footer">
-              <button className="button button--primary button--large" onClick={startOrResume}>
-                {activeSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowRight size={17} />
-              </button>
-              <span className="quiet-note">عجله‌ای نیست؛ هر وقت آماده‌ای تمرین کن.</span>
-            </div>
+          </section>
+        ) : personal && user && !personalSync.lastSyncAt && (personalSync.phase === 'offline' || personalSync.phase === 'error') ? (
+          <section className="dashboard-no-program panel-card">
+            <EmptyState
+              title="بررسی برنامهٔ شخصی کامل نشد"
+              detail="نبود برنامه در سرور هنوز تأیید نشده است؛ وضعیت همگام‌سازی را بررسی کن یا برنامهٔ محلی را باز کن."
+              action={<><Link to="/settings" className="button button--primary">بررسی همگام‌سازی <ArrowLeft size={15} /></Link> <Link to="/program" className="button button--secondary">برنامهٔ محلی</Link></>}
+            />
           </section>
         ) : user?.role === 'student' && !independent && assignedProgramLoadState !== 'ready' && assignedProgramLoadState !== 'error' ? (
           <section className="dashboard-no-program panel-card" role="status" aria-live="polite">
             <div className="dashboard-program-message">
-              <span className="eyebrow">برنامهٔ تمرینی</span>
+              <span className="hero-kicker"><span aria-hidden="true" /> برنامهٔ تمرینی</span>
               <h3>در حال دریافت برنامه از مربی…</h3>
               <p className="muted">{slowProgram ? 'ارتباط بیشتر از معمول طول کشیده است. اگر پاسخ نرسد، امکان تلاش دوباره نمایش داده می‌شود.' : 'کمی صبر کن؛ برنامه پس از دریافت نمایش داده می‌شود.'}</p>
             </div>
@@ -114,19 +140,27 @@ export function Dashboard() {
               action={<button className="button button--primary" type="button" onClick={() => void loadAssignedProgram()}>تلاش دوباره <RefreshCw size={15} /></button>}
             />
           </section>
+        ) : !personal && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid && !assignedMeta.isTestPurchase ? (
+          <section className="dashboard-no-program panel-card">
+            <EmptyState
+              title="برنامهٔ مربی آماده است"
+              detail="برای دیدن جزئیات و فعال‌سازی برنامه، صفحهٔ برنامه را باز کن."
+              action={<Link to="/program" className="button button--primary">بررسی برنامه <ArrowLeft size={15} /></Link>}
+            />
+          </section>
         ) : (
           <section className="dashboard-no-program panel-card">
-            {independent ? (
+            {personal ? (
               <EmptyState
                 title="برنامهٔ خودت را شروع کن"
-                detail="بدون مربی هم می‌توانی یک الگو انتخاب کنی یا برنامهٔ شخصی خودت را بسازی."
-                action={<Link to="/program" className="button button--primary">ساخت برنامهٔ شخصی <ArrowRight size={15} /></Link>}
+                detail="یک الگو انتخاب کن یا برنامهٔ شخصی خودت را بساز."
+                action={<Link to="/program" className="button button--primary">ساخت برنامهٔ شخصی <ArrowLeft size={15} /></Link>}
               />
             ) : (
               <EmptyState
                 title="برنامهٔ تمرینی‌ات هنوز آماده نیست"
                 detail="برای دریافت یا تغییر برنامه، از مربی‌ات پیام بگیر."
-                action={<Link to="/chat" className="button button--primary">گفتگو با مربی <ArrowRight size={15} /></Link>}
+                action={<Link to="/chat" className="button button--primary">گفتگو با مربی <ArrowLeft size={15} /></Link>}
               />
             )}
           </section>
@@ -137,20 +171,37 @@ export function Dashboard() {
             <div className="weekly-card__header">
               <div className="weekly-card__title">
                 <span className="eyebrow">این هفته</span>
-                <strong>{faNumber(completedCount)} از {faNumber(targetCount)} جلسه</strong>
+                <strong>قدم‌های تو</strong>
               </div>
               <span className="week-streak"><Flame size={15} /> {faNumber(streak)} روز پیاپی</span>
             </div>
-            <div className="week-progress" role="progressbar" aria-label="پیشرفت تمرین هفتگی" aria-valuemin={0} aria-valuemax={targetCount} aria-valuenow={completedCount}>
-              <span className="week-progress__fill" style={{ width: `${weeklyProgress}%` }} />
-            </div>
-            <div className="weekly-card__footer">
-              <p>{completedCount >= targetCount ? 'هدف هفتگی انجام شد؛ آفرین.' : `برای رسیدن به هدف، ${faNumber(targetCount - completedCount)} جلسه مانده.`}</p>
-              <Link to="/progress" className="inline-link">گزارش تمرین‌ها <ArrowRight size={14} /></Link>
+            <div className="weekly-card__body">
+              <div className="week-progress-ring" role="progressbar" aria-label="پیشرفت تمرین هفتگی" aria-valuemin={0} aria-valuemax={targetCount} aria-valuenow={completedCount} aria-valuetext={`${faNumber(completedCount)} از ${faNumber(targetCount)} جلسه`} style={{ '--weekly-progress': `${weeklyProgress}%` } as CSSProperties}>
+                <div aria-hidden="true"><strong>{faNumber(completedCount)}</strong><span>از {faNumber(targetCount)} جلسه</span></div>
+              </div>
+              <div className="weekly-card__footer">
+                <p>{completedCount >= targetCount ? 'هدف هفتگی انجام شد؛ آفرین.' : `برای رسیدن به هدف، ${faNumber(targetCount - completedCount)} جلسه مانده.`}</p>
+                <Link to="/progress" className="inline-link">گزارش تمرین‌ها <ArrowLeft size={14} /></Link>
+              </div>
             </div>
           </section>
         )}
       </div>
+
+      <section className="dashboard-shortcuts" aria-labelledby="dashboard-shortcuts-title">
+        <div className="dashboard-shortcuts__heading">
+          <div><span className="eyebrow">همه‌چیز در یک نگاه</span><h3 id="dashboard-shortcuts-title">مسیر تمرین تو</h3></div>
+        </div>
+        <div className="dashboard-shortcuts__grid">
+          {shortcuts.map(({ to, label, detail, icon: Icon }) => (
+            <Link key={to} to={to} className="dashboard-shortcut">
+              <span className="dashboard-shortcut__icon"><Icon size={20} /></span>
+              <span className="dashboard-shortcut__copy"><strong>{label}</strong><small>{detail}</small></span>
+              <ArrowLeft size={16} className="dashboard-shortcut__arrow" />
+            </Link>
+          ))}
+        </div>
+      </section>
       <CoachConnection />
     </div>
   );
