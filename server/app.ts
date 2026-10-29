@@ -4,16 +4,17 @@ import { changeOwnPassword, createSession, deleteSession, generatePassword, gene
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, registerAccount } from './registration.ts';
+import { makeClientAddressResolver } from './clientAddress.ts';
 import { requireMobile } from './phone.ts';
-import { acceptCoachInvitation, makeCoachInvitation, previewCoachInvitation, revokeCoachInvitations, withdrawCoachAccess } from './coachInvites.ts';
-import { deleteProgramme, listPurchasedProgrammes, loadProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
-import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listMessages } from './chat.ts';
+import { acceptCoachInvitation, makeCoachInvitation, previewCoachInvitation, returnToPersonalProgram, revokeCoachInvitations, withdrawCoachAccess } from './coachInvites.ts';
+import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
+import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
-import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
+import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
-import { loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
+import { listFormerCoachBiometrics, loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
 import { loadStudentProfile, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
 import { applyPersonalChange, getPersonalRecord, listPersonalRecords, validateChange } from './personalData.ts';
 
@@ -25,8 +26,10 @@ export interface AppOptions {
   now?: () => Date;
   maxFailedLogins?: number;
   lockMinutes?: number;
-  /** Registration attempts per socket address and 15-minute window. */
+  /** Registration attempts per source address and 15-minute window. */
   maxRegistrationAttempts?: number;
+  /** Explicitly verified proxy IPs/CIDRs; no forwarded headers are trusted by default. */
+  trustedProxyRanges?: string[];
 }
 
 interface Context {
@@ -104,6 +107,7 @@ export function createApp(options: AppOptions) {
   const lockMs = (options.lockMinutes ?? 15) * 60 * 1000;
   const failures = new Map<string, { count: number; lockedUntil: number; lastFailure: number }>();
   const allowedOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
+  const clientAddress = makeClientAddressResolver(options.trustedProxyRanges ?? (process.env.MEETY_TRUSTED_PROXIES ?? '').split(','));
 
   function cleanExpiredFailures(): void {
     const current = now().getTime();
@@ -208,7 +212,7 @@ export function createApp(options: AppOptions) {
           throw new HttpError(415, 'درخواست باید JSON باشد.');
         }
         const at = now();
-        await limitRegistration(db, secretKey, request.socket.remoteAddress ?? 'unknown', at, options.maxRegistrationAttempts);
+        await limitRegistration(db, secretKey, clientAddress(request), at, options.maxRegistrationAttempts);
         const result = await registerAccount(db, body, at);
         return { status: 201, body: result, headers: { 'Cache-Control': 'no-store' } };
       },
@@ -379,7 +383,7 @@ export function createApp(options: AppOptions) {
         const coach = await ownCoach(Number(params[0]));
         const students = await countStudents(db, coach.id);
         if (students > 0) {
-          throw new HttpError(409, `این مربی هنوز ${students} شاگرد دارد. ابتدا شاگردهایش را حذف کنید.`);
+          throw new HttpError(409, `این مربی هنوز ${students} شاگرد دارد. به‌جای حذف، می‌توانید حساب مربی را غیرفعال کنید.`);
         }
         await deleteUser(db, coach.id);
         return { status: 200, body: { ok: true } };
@@ -460,6 +464,12 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'POST', pattern: /^\/api\/me\/personal-program\/activate$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => ({ status: 200, body: { user: toPublic(await returnToPersonalProgram(db, user!, body)) }, headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
       method: 'GET',
       pattern: /^\/api\/students$/,
       auth: ['coach'],
@@ -497,7 +507,33 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { student: toPublic(student), program: await loadProgramme(db, student.id) } };
+        return { status: 200, body: { student: toPublic(student), program: student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId) } };
+      },
+    },
+
+    {
+      method: 'GET', pattern: /^\/api\/students\/(\d+)\/programs\/archive$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, url }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const cursor = url.searchParams.get('cursor');
+        if (cursor !== null && (!cursor || cursor.length > 80)) throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
+        return { status: 200, body: student.coachId === null ? { programs: [], nextCursor: null } : await listCoachProgrammes(db, student.id, student.coachId, cursor), headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST', pattern: /^\/api\/students\/(\d+)\/programs\/restore$/,
+      auth: ['coach', 'admin'],
+      handler: async ({ user, params, body }) => {
+        const student = await ownStudent(user!, Number(params[0]));
+        const input = requireObject(body);
+        const offerId = requireText(input, 'offerId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.offerVersion) || (input.offerVersion as number) < 1 || (input.offerVersion as number) >= Number.MAX_SAFE_INTEGER) throw new HttpError(409, 'نسخهٔ بایگانی نامعتبر است؛ صفحه را دوباره بارگذاری کنید.');
+        const current = validateProgrammeSave(input);
+        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
+        const program = await restoreCoachProgramme(db, student.id, student.coachId, offerId, input.offerVersion as number, current.expectedId, current.expectedVersion, now(), student.coachAccessVersion, user!.role === 'admin');
+        return { status: 200, body: { program }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -507,7 +543,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        const programme = await loadProgramme(db, student.id);
+        const programme = student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId);
         const state = programme ? await testPurchaseState(db, student.id, programme.id, now()) : null;
         const mode = await getTestMode(db, now());
         return {
@@ -530,16 +566,18 @@ export function createApp(options: AppOptions) {
         if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
           throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
         }
-        const programme = await loadProgramme(db, student.id);
+        const programme = student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId);
         if (!programme || programme.id !== expectedId || programme.version !== input.expectedVersion) {
           throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
         }
+        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
+        const relationship = { coachId: student.coachId, version: student.coachAccessVersion, allowRevoked: user!.role === 'admin' };
         if (!input.enabled) {
-          await revokeTestPurchase(db, student.id, expectedId, now());
+          await revokeTestPurchase(db, student.id, expectedId, now(), relationship);
           return { status: 200, body: { enabled: false } };
         }
         if (await isProgramPaid(db, student.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
-        const expiresAt = await allowTestPurchase(db, student.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        const expiresAt = await allowTestPurchase(db, student.id, { id: expectedId, version: input.expectedVersion as number }, now(), relationship);
         return { status: 200, body: { enabled: true, expiresAt } };
       },
     },
@@ -554,7 +592,7 @@ export function createApp(options: AppOptions) {
         const options = validateProgrammeSave(body);
         // The programme belongs to the student's coach even when an admin edits it.
         if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
-        return { status: 200, body: { program: await saveProgramme(db, student.id, student.coachId, programme, options, now()) } };
+        return { status: 200, body: { program: await saveProgramme(db, student.id, student.coachId, programme, options, now(), student.coachAccessVersion, user!.role === 'admin') } };
       },
     },
 
@@ -565,7 +603,8 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const options = validateProgrammeSave(body);
-        await deleteProgramme(db, student.id, options.expectedId, options.expectedVersion);
+        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
+        await deleteProgramme(db, student.id, student.coachId, options.expectedId, options.expectedVersion, student.coachAccessVersion, user!.role === 'admin');
         return { status: 200, body: { ok: true } };
       },
     },
@@ -576,7 +615,19 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user }) => {
         const coach = user!.coachId === null ? null : await findUserById(db, user!.coachId);
-        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: user!.coachId === null ? null : await loadPlan(db, user!.id) } };
+        return { status: 200, body: { coachName: coach?.displayName ?? null, plan: user!.coachId === null ? null : await loadPlan(db, user!.id, user!.coachId) }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'GET', pattern: /^\/api\/me\/nutrition\/archive$/,
+      auth: ['student'],
+      handler: async ({ user, url }) => {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor !== null && (!/^[1-9]\d{0,9}$/.test(cursor) || !Number.isSafeInteger(Number(cursor)) || Number(cursor) > 2147483647)) {
+          throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
+        }
+        return { status: 200, body: await listFormerCoachPlans(db, user!.id, user!.coachId, cursor ? Number(cursor) : 0), headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -607,7 +658,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { plan: await loadPlan(db, student.id) ?? emptyPlan() } };
+        return { status: 200, body: { plan: student.coachId === null ? emptyPlan() : await loadPlan(db, student.id, student.coachId) ?? emptyPlan() }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -629,7 +680,7 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const plan = validatePlan(body);
-        return { status: 200, body: { plan: await savePlan(db, student.id, user!.id, plan, now().toISOString()) } };
+        return { status: 200, body: { plan: await savePlan(db, student.id, user!.id, plan, now().toISOString(), student.coachAccessVersion) } };
       },
     },
 
@@ -645,6 +696,31 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET', pattern: /^\/api\/me\/chat\/archive$/,
+      auth: ['student'],
+      handler: async ({ user, url }) => {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor !== null && (!/^[1-9]\d{0,9}$/.test(cursor) || !Number.isSafeInteger(Number(cursor)) || Number(cursor) > 2147483647)) {
+          throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
+        }
+        return { status: 200, body: await listFormerCoachThreads(db, user!.id, user!.coachId, cursor ? Number(cursor) : 0), headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'GET', pattern: /^\/api\/me\/chat\/archive\/(\d+)$/,
+      auth: ['student'],
+      handler: async ({ user, params }) => {
+        const coachId = Number(params[0]);
+        if (!Number.isSafeInteger(coachId) || coachId < 1 || coachId > 2147483647) throw new HttpError(404, 'گفتگو پیدا نشد.');
+        const coach = (await db.query<{ display_name: string }>(`SELECT c.display_name FROM users c
+          WHERE c.id = $1 AND EXISTS (SELECT 1 FROM messages m WHERE m.coach_id = c.id AND m.student_id = $2)`, [coachId, user!.id]))[0];
+        if (!coach) throw new HttpError(404, 'گفتگو پیدا نشد.');
+        return { status: 200, body: { coachName: coach.display_name, messages: await listMessages(db, coachId, user!.id) }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
       method: 'POST',
       pattern: /^\/api\/me\/chat$/,
       auth: ['student'],
@@ -652,7 +728,7 @@ export function createApp(options: AppOptions) {
         if (user!.coachId === null) throw new HttpError(409, 'این حساب هنوز مربی ندارد.');
         if (!user!.coachAccess) throw new HttpError(409, 'دسترسی مربی قطع شده است؛ ارسال پیام فعال نیست.');
         const { text, mediaType, mediaData } = parseMessageInput(body);
-        return { status: 201, body: { message: await addMessage(db, user!.coachId, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
+        return { status: 201, body: { message: await addMessage(db, user!.coachId, user!.id, user!.id, text, now().toISOString(), mediaType, mediaData, user!.coachAccessVersion) } };
       },
     },
 
@@ -673,7 +749,7 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const { text, mediaType, mediaData } = parseMessageInput(body);
-        return { status: 201, body: { message: await addMessage(db, user!.id, student.id, user!.id, text, now().toISOString(), mediaType, mediaData) } };
+        return { status: 201, body: { message: await addMessage(db, user!.id, student.id, user!.id, text, now().toISOString(), mediaType, mediaData, student.coachAccessVersion) } };
       },
     },
 
@@ -727,7 +803,7 @@ export function createApp(options: AppOptions) {
         if (cursor !== null && (!cursor || cursor.length > 80)) throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
         return {
           status: 200,
-          body: await listPurchasedProgrammes(db, user!.id, cursor),
+          body: await listPurchasedProgrammes(db, user!.id, cursor, now()),
           headers: { 'Cache-Control': 'no-store' },
         };
       },
@@ -738,9 +814,9 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/program$/,
       auth: ['student'],
       handler: async ({ user }) => {
-        if (user!.coachId === null) return { status: 200, body: { program: null, coachName: null, isPaid: true } };
+        if (user!.coachId === null || user!.personalProgramMode) return { status: 200, body: { program: null, coachName: null, isPaid: true }, headers: { 'Cache-Control': 'no-store' } };
         const coach = await findUserById(db, user!.coachId);
-        const prog = await loadProgramme(db, user!.id);
+        const prog = await loadProgramme(db, user!.id, user!.coachId);
         if (!prog) {
           return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
         }
@@ -874,20 +950,21 @@ export function createApp(options: AppOptions) {
           const { coachShare, adminShare } = calculateCommission(amountTomans as number);
           return { status: 200, body: { simulation: true, programmeTitle: 'برنامهٔ نمونه', amountTomans, coachShareTomans: coachShare, adminShareTomans: adminShare } };
         }
-        let studentId = user!.id;
+        let student = user!;
         if (user!.role === 'student') {
-          if (input.studentId !== undefined && input.studentId !== studentId) throw new HttpError(404, 'شاگرد پیدا نشد.');
+          if (input.studentId !== undefined && input.studentId !== student.id) throw new HttpError(404, 'شاگرد پیدا نشد.');
         } else {
           if (!Number.isSafeInteger(input.studentId) || (input.studentId as number) <= 0) {
             throw new HttpError(400, 'شاگرد را انتخاب کنید.');
           }
-          studentId = (await ownStudent(user!, input.studentId as number)).id;
+          student = await ownStudent(user!, input.studentId as number);
         }
         const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
         if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
           throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
         }
-        const programme = await loadProgramme(db, studentId);
+        const programme = student.coachId === null || (user!.role === 'student' && student.personalProgramMode)
+          ? null : await loadProgramme(db, student.id, student.coachId);
         if (!programme) throw new HttpError(404, 'برنامه‌ای برای آزمایش وجود ندارد.');
         if (programme.id !== expectedId || programme.version !== input.expectedVersion) {
           throw new HttpError(409, 'برنامه یا قیمت آن تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
@@ -1065,8 +1142,20 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/ai-settings$/,
       auth: 'signed-in',
       handler: async ({ user }) => {
-        const biometrics = await loadBiometrics(db, user!.id);
+        const biometrics = await loadBiometrics(db, user!.id, user!.role === 'student' ? user!.coachId : null);
         return { status: 200, body: { biometrics } };
+      },
+    },
+
+    {
+      method: 'GET', pattern: /^\/api\/me\/ai-settings\/archive$/,
+      auth: ['student'],
+      handler: async ({ user, url }) => {
+        const cursor = url.searchParams.get('cursor');
+        if (cursor !== null && (!/^[1-9]\d{0,9}$/.test(cursor) || !Number.isSafeInteger(Number(cursor)) || Number(cursor) > 2147483647)) {
+          throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
+        }
+        return { status: 200, body: await listFormerCoachBiometrics(db, user!.id, user!.coachId, cursor ? Number(cursor) : 0), headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -1076,7 +1165,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        const biometrics = await loadBiometrics(db, student.id);
+        const biometrics = await loadBiometrics(db, student.id, student.coachId);
         return { status: 200, body: { studentName: student.displayName, biometrics } };
       },
     },
@@ -1088,7 +1177,8 @@ export function createApp(options: AppOptions) {
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
         const input = validateBiometricsInput(body);
-        const biometrics = await saveBiometrics(db, student.id, user!.id, input, now().toISOString());
+        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
+        const biometrics = await saveBiometrics(db, student.id, student.coachId, input, now().toISOString(), student.coachAccessVersion, user!.role === 'admin');
         return { status: 200, body: { studentName: student.displayName, biometrics } };
       },
     },

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
 import { paidTransactionCondition } from './payments.ts';
+import { studentTestPurchasesAvailable } from './testPurchases.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
 import { isValidReps, normalizeReps } from '../shared/repetitions.ts';
 export { normalizeReps } from '../shared/repetitions.ts';
@@ -29,6 +30,8 @@ export interface Programme extends ProgrammeInput {
   id: string;
   version: number;
   updatedAt: string;
+  isTestPurchase?: boolean;
+  testPurchaseExpiresAt?: string | null;
 }
 
 export interface ProgrammeSave {
@@ -97,7 +100,7 @@ export function validateProgrammeSave(input: unknown): ProgrammeSave {
   if (expectedId !== null && (typeof expectedId !== 'string' || expectedId.length < 1 || expectedId.length > 80)) {
     throw new HttpError(400, 'شناسهٔ برنامه نامعتبر است.');
   }
-  if (!Number.isSafeInteger(expectedVersion) || (expectedVersion as number) < 0 || (expectedVersion as number) > 2147483646) {
+  if (!Number.isSafeInteger(expectedVersion) || (expectedVersion as number) < 0 || (expectedVersion as number) >= Number.MAX_SAFE_INTEGER) {
     throw new HttpError(400, 'نسخهٔ برنامه نامعتبر است.');
   }
   if (mode === 'edit' && expectedId === null) throw new HttpError(409, 'ابتدا برنامهٔ فعلی را دوباره بارگذاری کنید.');
@@ -105,70 +108,145 @@ export function validateProgrammeSave(input: unknown): ProgrammeSave {
 }
 
 /** Save the active row and its offer atomically; a stale coach cannot overwrite a newer offer. */
-export async function saveProgramme(db: Db, studentId: number, coachId: number, programme: ProgrammeInput, options: ProgrammeSave, now: Date): Promise<Programme> {
+export async function saveProgramme(db: Db, studentId: number, coachId: number, programme: ProgrammeInput, options: ProgrammeSave, now: Date, relationshipVersion = 0, allowRevoked = false): Promise<Programme> {
   const updatedAt = now.toISOString();
   const priceTomans = programme.priceTomans ?? 0;
   const id = options.mode === 'edit' ? options.expectedId! : randomUUID();
   const rows = await db.query<{ id: string; version: number }>(`
-    WITH updated AS (
-      UPDATE student_programs SET coach_id = $2, body = $3, price_tomans = $4, updated_at = $5,
+    WITH relationship AS MATERIALIZED (
+      SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
+        AND coach_access_version = $9 AND (coach_access = 1 OR $10::boolean) FOR UPDATE
+    ), updated AS (
+      UPDATE student_programs SET body = $3, price_tomans = $4, updated_at = $5,
         programme_id = $6, version = version + 1
-      WHERE student_id = $1 AND programme_id = $7 AND version = $8 RETURNING *
+      WHERE student_id = $1 AND coach_id = $2 AND programme_id = $7 AND version = $8
+        AND EXISTS (SELECT 1 FROM relationship) RETURNING *
     ), inserted AS (
       INSERT INTO student_programs (student_id, coach_id, body, price_tomans, updated_at, programme_id, version)
-      SELECT $1, $2, $3, $4, $5, $6, 1 WHERE $7::text IS NULL
-      ON CONFLICT (student_id) DO NOTHING RETURNING *
+      SELECT $1, $2, $3, $4, $5, $6, 1 FROM relationship WHERE $7::text IS NULL
+      ON CONFLICT (student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body,
+        price_tomans = excluded.price_tomans, updated_at = excluded.updated_at,
+        programme_id = excluded.programme_id, version = excluded.version
+      WHERE student_programs.coach_id <> excluded.coach_id RETURNING *
     ), saved AS (
       SELECT * FROM updated UNION ALL SELECT * FROM inserted
     ), offered AS (
-      INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
-      SELECT programme_id, student_id, coach_id, body, price_tomans, updated_at, updated_at FROM saved
+      INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at, version)
+      SELECT programme_id, student_id, coach_id, body, price_tomans, updated_at, updated_at, version FROM saved
       ON CONFLICT (id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body,
-        price_tomans = excluded.price_tomans, updated_at = excluded.updated_at
+        price_tomans = excluded.price_tomans, updated_at = excluded.updated_at, version = excluded.version
       WHERE programme_offers.student_id = excluded.student_id
       RETURNING id
     )
     SELECT saved.programme_id AS id, saved.version FROM saved JOIN offered ON offered.id = saved.programme_id
-  `, [studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), priceTomans, updatedAt, id, options.expectedId, options.expectedVersion]);
+  `, [studentId, coachId, JSON.stringify({ title: programme.title, days: programme.days }), priceTomans, updatedAt, id, options.expectedId, options.expectedVersion, relationshipVersion, allowRevoked]);
   if (!rows[0]) throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری و نوع ذخیره را انتخاب کنید.');
-  return { ...programme, id: rows[0].id, version: rows[0].version, priceTomans, updatedAt };
+  return { ...programme, id: rows[0].id, version: Number(rows[0].version), priceTomans, updatedAt };
 }
 
-export async function loadProgramme(db: Db, studentId: number): Promise<Programme | null> {
+export async function loadProgramme(db: Db, studentId: number, coachId?: number): Promise<Programme | null> {
   const row = (await db.query<{ body: string; price_tomans: number | null; updated_at: string; programme_id: string; version: number }>(
-    'SELECT body, price_tomans, updated_at, programme_id, version FROM student_programs WHERE student_id = $1',
-    [studentId]
+    'SELECT body, price_tomans, updated_at, programme_id, version FROM student_programs WHERE student_id = $1 AND ($2::integer IS NULL OR coach_id = $2)',
+    [studentId, coachId ?? null]
   ))[0];
   if (!row) return null;
   const parsed = JSON.parse(row.body) as ProgrammeInput;
-  return { ...parsed, id: row.programme_id, version: row.version, priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at };
+  return { ...parsed, id: row.programme_id, version: Number(row.version), priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at };
 }
 
 /** Archive is read-only: never expose exercises from another student or an unpaid offer. */
-export async function listPurchasedProgrammes(db: Db, studentId: number, cursor: string | null): Promise<{ programs: Programme[]; nextCursor: string | null }> {
-  const rows = await db.query<{ id: string; body: string; price_tomans: number; updated_at: string }>(`
-    SELECT o.id, o.body, o.price_tomans, o.updated_at FROM programme_offers o
-    WHERE o.student_id = $1 AND NOT EXISTS (
-      SELECT 1 FROM student_programs sp WHERE sp.student_id = o.student_id AND sp.programme_id = o.id
-    ) AND (o.price_tomans = 0 OR EXISTS (
-      SELECT 1 FROM payment_transactions t WHERE t.student_id = o.student_id AND t.programme_id = o.id
-        AND ${paidTransactionCondition('t', '$2')}
-    )) AND ($3::text IS NULL OR (o.updated_at, o.id) < (
-      SELECT marker.updated_at, marker.id FROM programme_offers marker WHERE marker.student_id = $1 AND marker.id = $3
-    )) ORDER BY o.updated_at DESC, o.id DESC LIMIT 21
-  `, [studentId, process.env.NODE_ENV === 'production' ? 1 : 0, cursor]);
+export async function listPurchasedProgrammes(db: Db, studentId: number, cursor: string | null, now = new Date()): Promise<{ programs: Programme[]; nextCursor: string | null }> {
+  const rows = await db.query<{ id: string; body: string; price_tomans: number; updated_at: string; paid: boolean; test_expires_at: string | null }>(`
+    WITH candidates AS (
+      SELECT o.id, o.body, o.price_tomans, o.updated_at,
+        EXISTS (SELECT 1 FROM payment_transactions t WHERE t.student_id = o.student_id AND t.programme_id = o.id
+          AND ${paidTransactionCondition('t', '$2')}) AS paid,
+        CASE WHEN $4::boolean AND (u.personal_program_mode = 1 OR u.coach_id IS DISTINCT FROM o.coach_id)
+          AND p.programme_id = o.id AND p.status = 'paid' AND p.expires_at > $5
+          AND (p.mode_token IS NULL OR (p.mode_token = m.token AND m.expires_at > $5))
+          THEN p.expires_at ELSE NULL END AS test_expires_at
+      FROM programme_offers o JOIN users u ON u.id = o.student_id
+      LEFT JOIN payment_test_purchases p ON p.student_id = o.student_id
+      LEFT JOIN payment_test_mode m ON m.id = 1
+      WHERE o.student_id = $1 AND NOT EXISTS (
+        SELECT 1 FROM student_programs sp WHERE sp.student_id = o.student_id AND sp.programme_id = o.id
+          AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0
+      ) AND ($3::text IS NULL OR (o.updated_at, o.id) < (
+        SELECT marker.updated_at, marker.id FROM programme_offers marker WHERE marker.student_id = $1 AND marker.id = $3
+      ))
+    )
+    SELECT * FROM candidates WHERE price_tomans = 0 OR paid OR test_expires_at IS NOT NULL
+    ORDER BY updated_at DESC, id DESC LIMIT 21
+  `, [studentId, process.env.NODE_ENV === 'production' ? 1 : 0, cursor, studentTestPurchasesAvailable(), now.toISOString()]);
   const page = rows.slice(0, 20);
   return {
-    programs: page.map((row) => ({ ...(JSON.parse(row.body) as ProgrammeInput), id: row.id, version: 0, priceTomans: row.price_tomans, updatedAt: row.updated_at })),
+    programs: page.map((row) => ({
+      ...(JSON.parse(row.body) as ProgrammeInput), id: row.id, version: 0, priceTomans: row.price_tomans, updatedAt: row.updated_at,
+      ...(row.price_tomans > 0 && !row.paid && row.test_expires_at ? { isTestPurchase: true, testPurchaseExpiresAt: row.test_expires_at } : {}),
+    })),
     nextCursor: rows.length > 20 ? page[page.length - 1]!.id : null,
   };
 }
 
-export async function deleteProgramme(db: Db, studentId: number, expectedId: string | null, expectedVersion: number): Promise<void> {
+/** A coach may view only their own prior offers for this student, even after a transfer. */
+export async function listCoachProgrammes(db: Db, studentId: number, coachId: number, cursor: string | null): Promise<{ programs: Programme[]; nextCursor: string | null }> {
+  const rows = await db.query<{ id: string; version: number; body: string; price_tomans: number; updated_at: string }>(`
+    SELECT o.id, o.version, o.body, o.price_tomans, o.updated_at FROM programme_offers o
+    WHERE o.student_id = $1 AND o.coach_id = $2 AND NOT EXISTS (
+      SELECT 1 FROM student_programs sp WHERE sp.student_id = o.student_id AND sp.programme_id = o.id
+    ) AND ($3::text IS NULL OR (o.updated_at, o.id) < (
+      SELECT marker.updated_at, marker.id FROM programme_offers marker
+      WHERE marker.student_id = $1 AND marker.coach_id = $2 AND marker.id = $3
+    )) ORDER BY o.updated_at DESC, o.id DESC LIMIT 21`, [studentId, coachId, cursor]);
+  const page = rows.slice(0, 20);
+  return {
+    programs: page.map((row) => ({ ...(JSON.parse(row.body) as ProgrammeInput), id: row.id, version: Number(row.version), priceTomans: row.price_tomans, updatedAt: row.updated_at })),
+    nextCursor: rows.length > 20 ? page[page.length - 1]!.id : null,
+  };
+}
+
+/** Reactivating an offer retains its purchase identity and always advances its version. */
+export async function restoreCoachProgramme(db: Db, studentId: number, coachId: number, offerId: string, offerVersion: number, expectedId: string | null, expectedVersion: number, now: Date, relationshipVersion: number, allowRevoked = false): Promise<Programme> {
+  const rows = await db.query<{ programme_id: string; version: number; body: string; price_tomans: number; updated_at: string }>(`
+    WITH relationship AS MATERIALIZED (
+      SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
+        AND coach_access_version = $8 AND (coach_access = 1 OR $9::boolean) FOR UPDATE
+    ), selected AS MATERIALIZED (
+      SELECT * FROM programme_offers WHERE student_id = $1 AND coach_id = $2 AND id = $3 AND version = $4
+        AND id IS DISTINCT FROM $5::text FOR UPDATE
+    ), restored AS (
+      INSERT INTO student_programs (student_id, coach_id, body, price_tomans, updated_at, programme_id, version)
+      -- Older archived offers did not record their last version. A new epoch cannot match an old 32-bit client.
+      SELECT $1, $2, o.body, o.price_tomans, $7, o.id, GREATEST(o.version + 1, 2147483648::bigint) FROM selected o, relationship
+      WHERE $5::text IS NULL OR EXISTS (SELECT 1 FROM student_programs sp
+        WHERE sp.student_id = $1 AND sp.coach_id = $2 AND sp.programme_id = $5 AND sp.version = $6)
+      ON CONFLICT (student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body,
+        price_tomans = excluded.price_tomans, updated_at = excluded.updated_at,
+        programme_id = excluded.programme_id, version = excluded.version
+      WHERE (student_programs.coach_id = $2 AND student_programs.programme_id = $5 AND student_programs.version = $6)
+         OR (student_programs.coach_id <> $2 AND $5::text IS NULL)
+      RETURNING *
+    ), offered AS (
+      UPDATE programme_offers o SET version = r.version, updated_at = r.updated_at
+      FROM restored r WHERE o.id = r.programme_id AND o.student_id = r.student_id RETURNING o.id
+    )
+    SELECT restored.* FROM restored JOIN offered ON offered.id = restored.programme_id`,
+    [studentId, coachId, offerId, offerVersion, expectedId, expectedVersion, now.toISOString(), relationshipVersion, allowRevoked]);
+  const row = rows[0];
+  if (!row) throw new HttpError(409, 'برنامه یا ارتباط مربی تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
+  return { ...(JSON.parse(row.body) as ProgrammeInput), id: row.programme_id, version: Number(row.version), priceTomans: row.price_tomans, updatedAt: row.updated_at };
+}
+
+export async function deleteProgramme(db: Db, studentId: number, coachId: number, expectedId: string | null, expectedVersion: number, relationshipVersion: number, allowRevoked = false): Promise<void> {
   if (!expectedId) throw new HttpError(409, 'ابتدا برنامهٔ فعلی را دوباره بارگذاری کنید.');
-  const rows = await db.query<{ student_id: number }>(
-    'DELETE FROM student_programs WHERE student_id = $1 AND programme_id = $2 AND version = $3 RETURNING student_id',
-    [studentId, expectedId, expectedVersion]
+  const rows = await db.query<{ student_id: number }>(`
+    WITH relationship AS MATERIALIZED (
+      SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
+        AND coach_access_version = $5 AND (coach_access = 1 OR $6::boolean) FOR UPDATE
+    )
+    DELETE FROM student_programs WHERE student_id = $1 AND coach_id = $2 AND programme_id = $3 AND version = $4
+      AND EXISTS (SELECT 1 FROM relationship) RETURNING student_id`,
+    [studentId, coachId, expectedId, expectedVersion, relationshipVersion, allowRevoked]
   );
   if (!rows[0]) throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
 }

@@ -269,17 +269,17 @@ describe('explicit student test purchase in production', () => {
     expect(history[0]).toMatchObject({ amountTomans: 100001, coachShareTomans: 87500, adminShareTomans: 12501, status: 'paid' });
   });
 
-  it('attributes a test transaction to the assigned coach, as real checkout does, even with an old mismatched program row', async () => {
+  it('does not sell a former coach’s programme or attribute it to the newly assigned coach', async () => {
     const admin = await signIn('owner', 'owner-pass-123');
     const coach = await createCoach(admin);
     const otherCoach = await createCoach(admin);
     const student = await createStudent(coach.token);
     const program = await saveProgram(coach.token, student.id);
     await db.query('UPDATE student_programs SET coach_id = $1 WHERE student_id = $2', [otherCoach.id, student.id]);
-    await allow(coach.token, student.id, program);
-    const checkout = await start(student.token, program);
-    await confirm(student.token, checkout.json.authority, 'success');
-    expect((await call('GET', '/api/coach/transactions', undefined, coach.token)).json.testTransactions[0]).toMatchObject({ coachId: coach.id, studentId: student.id });
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.program).toBeNull();
+    expect((await allow(coach.token, student.id, program)).status).toBe(409);
+    expect((await start(student.token, program)).status).toBe(409);
+    expect((await call('GET', '/api/coach/transactions', undefined, coach.token)).json.testTransactions).toEqual([]);
     expect((await call('GET', '/api/coach/transactions', undefined, otherCoach.token)).json.testTransactions).toEqual([]);
   });
 

@@ -16,6 +16,10 @@ export async function migrateRegistration(db: Db): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_approval INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_access INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_access_version INTEGER NOT NULL DEFAULT 0;
+    -- A withdrawn student may explicitly return to their own editable programme.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_program_mode INTEGER NOT NULL DEFAULT 0;
+    -- Synchronize relationship changes with in-flight session writes.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS session_guard_version BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number TEXT;
     DO $migration$
     DECLARE old_check RECORD;
@@ -54,8 +58,7 @@ export async function migrateRegistration(db: Db): Promise<void> {
 export async function limitRegistration(db: Db, key: SecretKey, address: string, now: Date, perSourceLimit = 30): Promise<void> {
   const timestamp = now.toISOString();
   const expires = new Date(now.getTime() + WINDOW_MS).toISOString();
-  // Store no raw IP. Behind a proxy the socket may represent multiple visitors; it is intentionally
-  // conservative until the actual proxy chain is configured and verified. Never trust client XFF.
+  // Store no raw IP. Proxy addresses are resolved only when explicitly configured and verified.
   const source = createHmac('sha256', key).update(`registration:${address}`).digest('hex');
   await db.query('DELETE FROM registration_attempts WHERE expires_at <= $1', [timestamp]);
   for (const [bucket, limit] of [[`source:${source}`, perSourceLimit], ['global', GLOBAL_LIMIT]] as const) {

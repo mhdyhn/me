@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setStoredUser, setToken, USER_KEY, type PublicUser } from '../lib/api';
 import { getActiveProgram, isProgramReadOnly, setActiveProgram } from '../lib/programStore';
 
-const mocks = vi.hoisted(() => ({ loadAssigned: vi.fn(), loadStored: vi.fn() }));
-vi.mock('../lib/assignedProgram', () => ({ loadAssignedProgram: mocks.loadAssigned }));
+const mocks = vi.hoisted(() => ({ loadAssigned: vi.fn(), cancelAssigned: vi.fn(), loadStored: vi.fn() }));
+vi.mock('../lib/assignedProgram', () => ({ loadAssignedProgram: mocks.loadAssigned, cancelAssignedProgramLoad: mocks.cancelAssigned }));
 vi.mock('../lib/programPersistence', () => ({ loadStoredProgram: mocks.loadStored }));
 import { SessionProvider, useSession } from './SessionContext';
 
@@ -13,11 +13,11 @@ const connected: PublicUser = { ...independent, coachId: 40 };
 function result(user: PublicUser): Response { return { ok: true, status: 200, json: async () => ({ user }) } as Response; }
 function Probe() {
   const { user, setUser } = useSession();
-  return <><p data-testid="relationship">{`${user?.id}:${user?.coachId ?? 'none'}:${user?.coachAccess}`}</p><button onClick={() => setUser(connected)}>connect</button></>;
+  return <><p data-testid="relationship">{`${user?.id}:${user?.coachId ?? 'none'}:${user?.coachAccess}`}</p><button onClick={() => setUser(connected)}>connect</button><button onClick={() => setUser({ ...connected, coachAccess: false, personalProgramMode: true })}>personal</button></>;
 }
 beforeEach(() => {
   window.localStorage.clear(); setToken('session-for-24'); setStoredUser(independent); setActiveProgram([]);
-  mocks.loadAssigned.mockReset().mockResolvedValue(undefined); mocks.loadStored.mockReset().mockResolvedValue(undefined);
+  mocks.loadAssigned.mockReset().mockResolvedValue(undefined); mocks.cancelAssigned.mockReset(); mocks.loadStored.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -34,6 +34,19 @@ describe('relationship changes in SessionProvider', () => {
     expect(mocks.loadAssigned).toHaveBeenCalled();
     await act(async () => { resolve(result(independent)); });
     expect(screen.getByTestId('relationship')).toHaveTextContent('24:40:true');
+  });
+
+  it('switches back to the personal programme and invalidates an in-flight coach response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(result(independent)));
+    render(<SessionProvider><Probe /></SessionProvider>);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'connect' }));
+    expect(isProgramReadOnly()).toBe(true);
+    mocks.cancelAssigned.mockClear(); mocks.loadStored.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'personal' }));
+    await waitFor(() => expect(mocks.cancelAssigned).toHaveBeenCalled());
+    expect(mocks.loadStored).toHaveBeenCalled();
+    expect(isProgramReadOnly()).toBe(false);
   });
 
   it('re-reads relationship changes made in another tab without switching accounts', async () => {

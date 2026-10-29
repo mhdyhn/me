@@ -43,8 +43,8 @@ export async function migratePayments(db: Db): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS payment_transactions (
       id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      coach_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES users(id),
+      coach_id INTEGER NOT NULL REFERENCES users(id),
       amount_tomans INTEGER NOT NULL,
       coach_share_tomans INTEGER NOT NULL,
       admin_share_tomans INTEGER NOT NULL,
@@ -64,7 +64,12 @@ export async function migratePayments(db: Db): Promise<void> {
     ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS gateway_mode TEXT NOT NULL DEFAULT 'legacy';
     ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS price_tomans INTEGER DEFAULT 0;
     ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS programme_id TEXT;
-    ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE student_programs ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'student_programs' AND column_name = 'version' AND data_type <> 'bigint') THEN
+        ALTER TABLE student_programs ALTER COLUMN version TYPE BIGINT;
+      END IF;
+    END $$;
     ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS programme_id TEXT;
     ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS programme_mapping TEXT NOT NULL DEFAULT 'legacy_unmapped';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS iban TEXT;
@@ -77,8 +82,15 @@ export async function migratePayments(db: Db): Promise<void> {
       body TEXT NOT NULL,
       price_tomans INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      version BIGINT NOT NULL DEFAULT 1
     );
+    ALTER TABLE programme_offers ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 1;
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'programme_offers' AND column_name = 'version' AND data_type <> 'bigint') THEN
+        ALTER TABLE programme_offers ALTER COLUMN version TYPE BIGINT;
+      END IF;
+    END $$;
     CREATE INDEX IF NOT EXISTS idx_programme_offers_student ON programme_offers(student_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_payment_programme ON payment_transactions(student_id, programme_id, status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_one_pending_explicit
@@ -91,6 +103,8 @@ export async function migratePayments(db: Db): Promise<void> {
     SELECT programme_id, student_id, coach_id, body, COALESCE(price_tomans, 0), updated_at, updated_at
     FROM student_programs WHERE programme_id IS NOT NULL
     ON CONFLICT (id) DO NOTHING;
+    UPDATE programme_offers AS o SET version = sp.version FROM student_programs AS sp
+      WHERE o.id = sp.programme_id AND o.student_id = sp.student_id AND o.version < sp.version;
   `);
   // Old payments had no programme identity. Preserve the access they already gave to the
   // currently active programme. Only clearly attributable pending checkouts are attached.
@@ -224,7 +238,7 @@ export async function createPaymentRequest(
      FROM users u
      JOIN student_programs sp ON sp.student_id = u.id
      JOIN users c ON c.id = u.coach_id
-     WHERE u.id = $1`,
+     WHERE u.id = $1 AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0`,
     [studentId]
   );
 
@@ -232,7 +246,7 @@ export async function createPaymentRequest(
   if (!info || !info.price_tomans || info.price_tomans <= 0) {
     throw new HttpError(400, 'این برنامه رایگان است یا نیازی به پرداخت ندارد.');
   }
-  if (info.programme_id !== expected.id || info.version !== expected.version) {
+  if (info.programme_id !== expected.id || Number(info.version) !== expected.version) {
     throw new HttpError(409, 'برنامه یا قیمت آن تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
   }
 
@@ -302,13 +316,18 @@ export async function createPaymentRequest(
   }
 
   const inserted = await db.query<{ authority: string }>(
-    `INSERT INTO payment_transactions
+    `WITH current_offer AS MATERIALIZED (
+       SELECT u.id FROM users u JOIN student_programs sp ON sp.student_id = u.id
+       WHERE u.id = $1 AND u.coach_id = $2 AND u.personal_program_mode = 0 AND sp.coach_id = $2
+         AND sp.programme_id = $9 AND sp.version = $11 AND sp.price_tomans = $3 FOR UPDATE OF u, sp
+     )
+     INSERT INTO payment_transactions
      (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, gateway_mode, programme_id, programme_mapping)
-     SELECT $1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, 'explicit'
+     SELECT $1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, 'explicit' FROM current_offer
      WHERE NOT EXISTS (SELECT 1 FROM payment_transactions t WHERE t.student_id = $1 AND t.programme_id = $9
        AND ${paidTransactionCondition('t', '$10')})
      ON CONFLICT DO NOTHING RETURNING authority`,
-    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live', info.programme_id, process.env.NODE_ENV === 'production' ? 1 : 0]
+    [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live', info.programme_id, process.env.NODE_ENV === 'production' ? 1 : 0, expected.version]
   );
   if (!inserted.length) {
     const raced = await pendingCheckout(db, studentId, info.programme_id, origin, { amount, coachId: info.coach_id });
@@ -322,7 +341,8 @@ async function successMessage(db: Db, row: TransactionRow, alreadyPaid: boolean)
   if (!row.programme_id) {
     return 'پرداخت تأیید شد، اما برنامهٔ این تراکنش قدیمی مشخص نیست. برای بررسی دسترسی با پشتیبانی تماس بگیرید و دوباره پرداخت نکنید.';
   }
-  const active = await db.query<{ programme_id: string }>('SELECT programme_id FROM student_programs WHERE student_id = $1', [row.student_id]);
+  const active = await db.query<{ programme_id: string }>(`SELECT sp.programme_id FROM student_programs sp JOIN users u ON u.id = sp.student_id
+    WHERE sp.student_id = $1 AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0`, [row.student_id]);
   if (active[0]?.programme_id !== row.programme_id) {
     return 'پرداخت مربوط به برنامهٔ قبلی تأیید شد. آن برنامه در بایگانی قابل مشاهده است و برنامهٔ جدید خرید جداگانه دارد.';
   }

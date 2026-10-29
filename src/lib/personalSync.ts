@@ -291,10 +291,13 @@ async function run(): Promise<void> {
     if (engine !== currentEngine) return;
     if (result.applied) notifyPersonalDataApplied();
     else window.dispatchEvent(new Event(PERSONAL_DATA_APPLIED)); // A previous tab may have committed while this view was starting.
-    setState({ phase: result.conflicts.length ? 'conflict' : result.errors.length ? 'error' : 'synced', conflicts: result.conflicts,
-      message: result.conflicts.length ? 'چند تغییر هم‌زمان نیاز به بررسی دارد؛ هیچ‌کدام خودکار رونویسی نشد.' : result.errors.length ? result.errors[0]! : 'اطلاعات شخصی با سرور همگام است.', lastSyncAt: new Date().toISOString() });
+    // A partially failed initial sync is not proof that all remote sessions were applied.
+    setState({ phase: result.errors.length ? 'error' : result.conflicts.length ? 'conflict' : 'synced', conflicts: result.conflicts,
+      message: result.errors.length ? result.errors[0]! : result.conflicts.length ? 'چند تغییر هم‌زمان نیاز به بررسی دارد؛ هیچ‌کدام خودکار رونویسی نشد.' : 'اطلاعات شخصی با سرور همگام است.',
+      lastSyncAt: result.errors.length ? currentState.lastSyncAt : new Date().toISOString() });
   } catch (error) {
-    if (engine === currentEngine) setState({ phase: error instanceof ApiError && error.status !== 0 ? 'error' : 'offline', message: error instanceof Error ? error.message : 'اتصال به سرور برقرار نشد؛ تغییرات روی دستگاه باقی می‌مانند.' });
+    // Only a failed network request is offline; malformed data and storage errors need attention.
+    if (engine === currentEngine) setState({ phase: error instanceof ApiError && error.status === 0 ? 'offline' : 'error', message: error instanceof ApiError ? error.message : 'بررسی اطلاعات یا حافظهٔ دستگاه کامل نشد؛ تغییرات روی دستگاه باقی می‌مانند.' });
   } finally {
     busy = false;
     if (again && currentEngine) { again = false; schedulePersonalSync(); }

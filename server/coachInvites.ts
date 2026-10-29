@@ -59,9 +59,6 @@ export async function previewCoachInvitation(db: Db, key: SecretKey, student: St
     WHERE i.token_hash = $1 AND i.consumed_at IS NULL AND i.expires_at > $2 AND c.role = 'coach' AND c.is_active = 1
   `, [codeHash(key, code), now.toISOString()]))[0];
   if (!row) throw new HttpError(400, INVITE_ERROR);
-  if (student.coachId !== null && student.coachId !== Number(row.coach_id)) {
-    throw new HttpError(409, 'تغییر مربی هنوز در دسترس نیست؛ فقط می‌توانی دسترسی مربی قبلی را دوباره برقرار کنی.');
-  }
   return { coachName: row.display_name, expiresAt: row.expires_at };
 }
 
@@ -79,16 +76,23 @@ export async function acceptCoachInvitation(db: Db, key: SecretKey, student: Sto
         AND c.role = 'coach' AND c.is_active = 1
       FOR UPDATE OF i, c
     ), attached AS (
-      UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1 FROM candidate
+      UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1, personal_program_mode = 0,
+        coach_access_version = s.coach_access_version + 1 FROM candidate
       WHERE s.id = $2 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $3
-        AND (s.coach_id IS NULL OR (s.coach_id = candidate.coach_id AND s.coach_access = 0))
+        AND s.coach_access_version = $5 AND s.session_guard_version = $6 AND (s.coach_id IS NULL OR s.coach_access = 0)
         AND NOT EXISTS (SELECT 1 FROM personal_data_records d WHERE d.user_id = s.id AND d.kind = 'session' AND d.deleted = 0 AND d.body::jsonb ->> 'status' = 'active')
       RETURNING s.id
+    ), preserve_offer AS (
+      INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
+      SELECT sp.programme_id, sp.student_id, sp.coach_id, sp.body, COALESCE(sp.price_tomans, 0), sp.updated_at, sp.updated_at
+      FROM student_programs sp JOIN attached ON attached.id = sp.student_id
+      WHERE sp.programme_id IS NOT NULL
+      ON CONFLICT (id) DO NOTHING
     ), consumed AS (
       UPDATE coach_invitations SET consumed_at = $4, consumed_by = $2
       WHERE token_hash = $1 AND EXISTS (SELECT 1 FROM attached) RETURNING token_hash
     ) SELECT attached.id FROM attached CROSS JOIN consumed
-  `, [codeHash(key, code), student.id, student.authVersion, now.toISOString()]);
+  `, [codeHash(key, code), student.id, student.authVersion, now.toISOString(), student.coachAccessVersion, student.sessionGuardVersion]);
   if (!rows.length) {
     const active = await db.query("SELECT 1 FROM personal_data_records WHERE user_id = $1 AND kind = 'session' AND deleted = 0 AND body::jsonb ->> 'status' = 'active' LIMIT 1", [student.id]);
     if (active.length) throw new HttpError(409, 'یک تمرین فعال همگام‌شده وجود دارد. ابتدا آن را تمام و همگام کن، سپس دوباره اتصال را تأیید کن.');
@@ -105,12 +109,43 @@ export async function withdrawCoachAccess(db: Db, student: StoredUser, body: unk
   const rows = await db.query<{ id: number }>(`
     WITH withdrawn AS (
       UPDATE users SET coach_access = 0, coach_access_version = coach_access_version + 1
-      WHERE id = $1 AND role = 'student' AND self_registered = 1 AND is_active = 1 AND auth_version = $2 AND coach_id IS NOT NULL
+      WHERE id = $1 AND role = 'student' AND self_registered = 1 AND is_active = 1 AND auth_version = $2
+        AND coach_id = $3 AND coach_access = 1 AND coach_access_version = $4
       RETURNING id
     ), profile AS (
       UPDATE student_profiles SET share_with_coach = 0 WHERE student_id = $1 AND EXISTS (SELECT 1 FROM withdrawn)
     ) SELECT id FROM withdrawn
-  `, [student.id, student.authVersion]);
-  if (!rows.length) throw new HttpError(409, 'وضعیت حساب تغییر کرده است؛ دوباره وارد شوید.');
+  `, [student.id, student.authVersion, student.coachId, student.coachAccessVersion]);
+  if (!rows.length) throw new HttpError(409, 'وضعیت حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  return (await findUserById(db, student.id))!;
+}
+
+/** Access can be withdrawn immediately; switching programmes is a separate, workout-safe action. */
+export async function returnToPersonalProgram(db: Db, student: StoredUser, body: unknown): Promise<StoredUser> {
+  const input = requireObject(body);
+  if (input.accountId !== student.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  if (!student.selfRegistered || student.coachId === null || student.coachAccess) {
+    throw new HttpError(409, 'ابتدا دسترسی مربی را قطع کنید.');
+  }
+  const rows = await db.query<{ id: number }>(`
+    WITH switched AS (
+      UPDATE users s SET personal_program_mode = 1, coach_access_version = coach_access_version + 1
+      WHERE s.id = $1 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $2
+        AND s.coach_id = $3 AND s.coach_access = 0 AND s.coach_access_version = $4 AND s.session_guard_version = $5
+        AND NOT EXISTS (SELECT 1 FROM personal_data_records d WHERE d.user_id = s.id AND d.kind = 'session'
+          AND d.deleted = 0 AND d.body::jsonb ->> 'status' = 'active')
+      RETURNING s.id
+    ), preserve_offer AS (
+      INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
+      SELECT sp.programme_id, sp.student_id, sp.coach_id, sp.body, COALESCE(sp.price_tomans, 0), sp.updated_at, sp.updated_at
+      FROM student_programs sp JOIN switched ON switched.id = sp.student_id
+      WHERE sp.programme_id IS NOT NULL ON CONFLICT (id) DO NOTHING
+    ) SELECT id FROM switched
+  `, [student.id, student.authVersion, student.coachId, student.coachAccessVersion, student.sessionGuardVersion]);
+  if (!rows.length) {
+    const active = await db.query("SELECT 1 FROM personal_data_records WHERE user_id = $1 AND kind = 'session' AND deleted = 0 AND body::jsonb ->> 'status' = 'active' LIMIT 1", [student.id]);
+    if (active.length) throw new HttpError(409, 'یک تمرین فعال همگام‌شده وجود دارد. ابتدا آن را تمام و همگام کن.');
+    throw new HttpError(409, 'وضعیت حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  }
   return (await findUserById(db, student.id))!;
 }

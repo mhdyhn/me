@@ -9,6 +9,7 @@ import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
 import { migrateTestPurchases } from './testPurchases.ts';
 import { migrateRegistration } from './registration.ts';
+import { migrateAccountHistory } from './accountHistory.ts';
 
 /**
  * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
@@ -161,6 +162,7 @@ async function migrate(db: Db): Promise<void> {
   await migrateBiometrics(db);
   await migrateStudentProfiles(db);
   await migratePersonalData(db);
+  await migrateAccountHistory(db);
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT;');
   await db.exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;');
 }

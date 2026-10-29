@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, ShieldAlert, Sparkles, Trash2, X } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { PaymentPractice } from '../../components/PaymentPractice';
+import { CoachProgrammeArchive } from '../../components/CoachProgrammeArchive';
 import { StudentTestAccess } from '../../components/StudentTestAccess';
 import { exercises as catalog } from '../../data/exercises';
 import { exerciseSearchText } from '../../data/exerciseCategories';
@@ -300,6 +301,11 @@ function Builder() {
   return (
     <PanelPage title={student ? `برنامهٔ ${student.displayName}` : 'برنامه'}>
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> شاگردها</Link>
+      <CoachProgrammeArchive key={`${id}:${currentProgram?.id ?? 'none'}:${currentProgram?.version ?? 0}`} studentId={id} currentProgram={currentProgram} onRestore={(program) => {
+        setCurrentProgram(program); setSaveMode('edit'); setTitle(program.title); setPriceTomans(program.priceTomans ?? 0);
+        setDays(program.days); setActiveDay(0); setSaveError(''); setShowExercisePicker(false);
+        setMessage('برنامهٔ قبلی فعال شد؛ ویرایش آن برای خریدار قبلی رایگان است.');
+      }} />
 
       <section className="builder-section">
         <div className="builder-program-basics">

@@ -8,7 +8,8 @@ import { SectionHeading } from '../components/SectionHeading';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
-import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
+import { exerciseNames } from '../data/exerciseNames';
+import { useProgram } from '../lib/programStore';
 import { getBestSet, getExercisePerformances, getSessionTotals, getWeekComparison, getWeeklyTotals } from '../lib/analytics';
 import { faNumber, dateInputValue, formatDate, formatDuration, kg } from '../lib/format';
 
@@ -20,8 +21,15 @@ export function Progress() {
     for (const item of program.flatMap((day) => day.exercises)) {
       byId.set(item.exerciseId, { id: item.exerciseId, name: item.name });
     }
+    for (const session of sessions) {
+      for (const item of session.exercises) {
+        if (byId.has(item.exerciseId)) continue;
+        const captured = session.templateSnapshot?.exercises.find((exercise) => exercise.exerciseId === item.exerciseId)?.name;
+        byId.set(item.exerciseId, { id: item.exerciseId, name: captured ?? exerciseNames[item.exerciseId] ?? item.exerciseId });
+      }
+    }
     return [...byId.values()];
-  }, [program]);
+  }, [program, sessions]);
 
   const completedSessions = useMemo(() => {
     return sessions
@@ -149,7 +157,7 @@ export function Progress() {
             <span className="badge badge--success">
               <CheckCircle2 size={13} /> آخرین جلسهٔ کامل‌شده
             </span>
-            <h3>{getWorkoutTemplate(completedSessions[0].templateId)?.name ?? completedSessions[0].name}</h3>
+            <h3>{completedSessions[0].name}</h3>
             <p className="muted text-xs">
               {formatDate(completedSessions[0].completedAt || completedSessions[0].startedAt, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} · {faNumber(getSessionTotals(completedSessions[0]).setCount)} ست کاری ثبت شد
             </p>
@@ -172,7 +180,7 @@ export function Progress() {
         <p className="muted">{metricDescription}</p>
         <ProgressChart points={chartPoints} unit={metricUnit} label={`${selectedName} · ${metricName}`} />
         <div className="history-table-wrap">
-          <table className="history-table"><thead><tr><th>تاریخ</th><th>ست کاری</th><th>تکرار در ذخیره (RIR)</th><th>جلسه</th></tr></thead><tbody>{performanceSets.slice(0, visibleSets).map(({ performance, set }) => <tr key={`${performance.session.id}-${set.setNumber}`}><td>{formatDate(performance.session.startedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong></td><td>{faNumber(set.rir)}</td><td>{getWorkoutTemplate(performance.session.templateId)?.name ?? performance.session.name}</td></tr>)}</tbody></table>
+          <table className="history-table"><thead><tr><th>تاریخ</th><th>ست کاری</th><th>تکرار در ذخیره (RIR)</th><th>جلسه</th></tr></thead><tbody>{performanceSets.slice(0, visibleSets).map(({ performance, set }) => <tr key={`${performance.session.id}-${set.setNumber}`}><td>{formatDate(performance.session.startedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong></td><td>{faNumber(set.rir)}</td><td>{performance.session.name}</td></tr>)}</tbody></table>
           {!performances.length && <p className="history-table-empty">هنوز عملکردی برای «{selectedName}» ثبت نشده است. در حالت تمرین یک ست ثبت کن تا اینجا نمایش داده شود.</p>}
         </div>
         {performanceSets.length > visibleSets && <button type="button" className="button button--secondary button--small history-more" onClick={() => setVisibleSets((count) => count + 30)}>نمایش {faNumber(Math.min(30, performanceSets.length - visibleSets))} ست دیگر</button>}
@@ -254,7 +262,7 @@ export function Progress() {
           <div className="session-history-list">
             {completedSessions.slice(0, visibleSessions).map((session) => {
               const totals = getSessionTotals(session);
-              const workoutName = getWorkoutTemplate(session.templateId)?.name ?? session.name;
+              const workoutName = session.name;
               return (
                 <details className="session-history-disclosure" key={session.id}>
                   <summary className="session-history-row">
@@ -266,7 +274,7 @@ export function Progress() {
                   <div className="session-history-detail">
                     {session.exercises.filter((item) => item.sets.length > 0).map((item) => (
                       <div className="session-history-exercise" key={item.exerciseId}>
-                        <strong>{programExerciseName(item.exerciseId) ?? progressExercises.find((exercise) => exercise.id === item.exerciseId)?.name ?? item.exerciseId}</strong>
+                        <strong>{session.templateSnapshot?.exercises.find((exercise) => exercise.exerciseId === item.exerciseId)?.name ?? exerciseNames[item.exerciseId] ?? item.exerciseId}</strong>
                         <div>{item.sets.map((set) => <span key={set.setNumber}>ست {faNumber(set.setNumber)}: {kg(set.weightKg)} × {faNumber(set.reps)} · {faNumber(set.rir)} تکرار در ذخیره{set.notes ? ` · ${set.notes}` : ''}</span>)}</div>
                       </div>
                     ))}

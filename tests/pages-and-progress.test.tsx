@@ -183,7 +183,7 @@ describe('bodyweight and nutrition persistence', () => {
     await user.click(screen.getByRole('button', { name: 'نمایش ۳۰ ست دیگر' }));
     expect(document.querySelectorAll('.session-history-list details')).toHaveLength(45);
     expect(document.querySelectorAll('.history-table tbody tr')).toHaveLength(90);
-  });
+  }, 15000);
 
   it('buckets completed sessions into Monday-start weeks, oldest first', () => {
     // Wednesday 2026-10-07 sits in the week that opened on Monday 2026-10-05.

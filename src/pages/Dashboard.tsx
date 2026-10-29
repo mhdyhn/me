@@ -6,8 +6,9 @@ import { CoachConnection } from '../components/CoachConnection';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
-import { getWorkoutTemplate, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
+import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
 import { loadAssignedProgram } from '../lib/assignedProgram';
+import { workoutSessionTemplate } from '../lib/workoutSessionTemplate';
 import { getCompletedThisWeek, getCurrentStreak, getNextWorkout } from '../lib/analytics';
 import { useMotivationalQuote } from '../lib/motivationalQuotes';
 import { faNumber, formatDate } from '../lib/format';
@@ -17,7 +18,7 @@ export function Dashboard() {
   const { user } = useSession();
   const program = useProgram();
   const assignedProgramLoadState = useAssignedProgramLoadState();
-  const independent = user?.role === 'student' && user.coachId === null;
+  const independent = user?.role === 'student' && (user.coachId === null || user.personalProgramMode === true);
   const navigate = useNavigate();
 
   const quote = useMotivationalQuote();
@@ -26,7 +27,7 @@ export function Dashboard() {
   const greeting = hour < 12 ? 'صبح به‌خیر' : hour < 18 ? 'روز به‌خیر' : 'عصر به‌خیر';
   const nextWorkout = useMemo(() => getNextWorkout(sessions), [sessions, program]);
   const displayedWorkout = activeSession
-    ? getWorkoutTemplate(activeSession.templateId) ?? null
+    ? workoutSessionTemplate(activeSession, getWorkoutTemplate(activeSession.templateId), isProgramReadOnly() ? getAssignedMeta() : null) ?? null
     : nextWorkout;
   const weeklyCount = useMemo(() => getCompletedThisWeek(sessions, now), [sessions, now]);
   const streak = useMemo(() => getCurrentStreak(sessions, now), [sessions, now]);
@@ -69,7 +70,7 @@ export function Dashboard() {
                 <p className="workout-focus">{displayedWorkout?.focus ?? 'جلسهٔ تمرینی'}</p>
                 <h3>{workoutName}</h3>
                 {displayedWorkout?.description && <p className="next-workout-description">{displayedWorkout.description}</p>}
-                {activeSession && <p className="muted small-text">ست‌هایی که ثبت کرده‌ای ذخیره شده‌اند؛ هر وقت آماده‌ای ادامه بده.</p>}
+                {activeSession && <p className="muted small-text">{displayedWorkout ? 'ست‌هایی که ثبت کرده‌ای ذخیره شده‌اند؛ هر وقت آماده‌ای ادامه بده.' : 'برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.'}</p>}
               </div>
               <div className="workout-outline" aria-hidden="true">
                 <span className="outline-circle outline-circle--one" />

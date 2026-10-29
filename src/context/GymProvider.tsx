@@ -4,7 +4,7 @@ import { db } from '../lib/db';
 import { usesOwnerData } from '../lib/accountScope';
 import { PERSONAL_DATA_APPLIED, notifyPersonalDataApplied, notifyPersonalDataChanged } from '../lib/personalSyncEvents';
 import { DraftChangedError, requireUnchanged } from '../lib/draftGuard';
-import { getWorkoutTemplate } from '../lib/programStore';
+import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly } from '../lib/programStore';
 import { dateInputValue } from '../lib/format';
 import type { BodyweightEntry, NutritionDay, NutritionGoals, UserProfile, WorkoutSession } from '../types';
 
@@ -112,9 +112,14 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const template = getWorkoutTemplate(templateId);
     if (!template) return null;
 
+    const assigned = isProgramReadOnly() ? getAssignedMeta() : null;
     const session: WorkoutSession = {
       id: newId(),
       templateId,
+      // A temporary test keeps only the offer/version, not a permanent paid prescription.
+      ...(assigned?.isTestPurchase
+        ? { templateReference: { programmeId: assigned.id, version: assigned.version } }
+        : { templateSnapshot: structuredClone(template) }),
       name: template.name,
       startedAt: new Date().toISOString(),
       status: 'active',
@@ -123,8 +128,20 @@ export function GymProvider({ children }: { children: ReactNode }) {
       currentExerciseIndex: 0,
       currentSetIndex: 0,
     };
-    setSessions((current) => [session, ...current]);
-    const pending = persist(() => db.transaction('rw', db.sessions, db.syncDeleted, async () => { await db.sessions.put(session); await db.syncDeleted.delete(`session:${session.id}`); })).then(() => session);
+    let result: WorkoutSession | null = null;
+    const pending = persist(() => db.transaction('rw', db.sessions, db.syncDeleted, async () => {
+      // A remote session may have reached IndexedDB before React refreshed its state.
+      result = (await db.sessions.toArray()).find((item) => item.status === 'active') ?? null;
+      if (result) return;
+      await db.sessions.put(session);
+      await db.syncDeleted.delete(`session:${session.id}`);
+      result = session;
+    })).then((stored) => {
+      if (!stored || !result) return null;
+      const actual: WorkoutSession = result;
+      setSessions((current) => [actual, ...current.filter((item) => item.id !== actual.id)]);
+      return actual;
+    });
     startingRef.current = pending;
     try {
       return await pending;

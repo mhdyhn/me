@@ -30,6 +30,18 @@ export function ProgrammeArchive({ studentId }: { studentId: number }) {
     return () => { generation.current += 1; };
   }, [studentId]);
 
+  // Temporary test access never becomes a permanent purchase in the archive.
+  useEffect(() => {
+    const deadlines = programs.filter((program) => program.isTestPurchase && program.testPurchaseExpiresAt)
+      .map((program) => Date.parse(program.testPurchaseExpiresAt!)).filter(Number.isFinite);
+    if (!deadlines.length) return;
+    const delay = Math.max(0, Math.min(...deadlines) - Date.now());
+    const timer = window.setTimeout(() => {
+      setPrograms((current) => current.filter((program) => !program.isTestPurchase || !program.testPurchaseExpiresAt || Date.parse(program.testPurchaseExpiresAt) > Date.now()));
+    }, Math.min(delay + 250, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [programs]);
+
   async function loadMore() {
     if (!cursor || loading) return;
     const request = generation.current;
@@ -52,10 +64,11 @@ export function ProgrammeArchive({ studentId }: { studentId: number }) {
   return (
     <details className="panel-card programme-archive">
       <summary>بایگانی برنامه‌های قبلی</summary>
-      <p className="account-muted">برنامه‌های خریداری‌شده و رایگان قبلی در اینجا برای مشاهده محفوظ‌اند. تمرین فعال از برنامهٔ فعلی شروع می‌شود.</p>
+      <p className="account-muted">برنامه‌های خریداری‌شده و رایگان قبلی برای مشاهده محفوظ‌اند؛ تمرین از برنامهٔ فعلی شروع می‌شود. دسترسی آزمایشی خرید واقعی نیست و با پایان یا لغو آزمایش تمام می‌شود.</p>
       {programs.map((program) => (
         <details key={program.id} className="programme-archive__item">
-          <summary>{program.title}</summary>
+          <summary>{program.title}{program.isTestPurchase && ' · دسترسی آزمایشی موقت'}</summary>
+          {program.isTestPurchase && program.testPurchaseExpiresAt && <p className="account-muted">حداکثر اعتبار: {new Date(program.testPurchaseExpiresAt).toLocaleString('fa-IR')}</p>}
           {program.days.map((day, dayIndex) => (
             <section key={`${program.id}-${dayIndex}`}>
               <h3>{day.name}</h3>

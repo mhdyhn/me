@@ -220,15 +220,23 @@ export async function saveStudentBiometricsApi(
 }
 
 export async function getMyAiSettings(): Promise<StudentBiometricsData> {
-  const studentId = getStoredUser()?.id ?? 0;
+  const user = getStoredUser();
+  const studentId = user?.id ?? 0;
+  // Do not reuse a previous coach's cached guidance for the new relationship.
+  const key = personalStorageKey(`meety.my-ai-settings-${studentId}-${user?.coachId ?? 'none'}-${user?.personalProgramMode === true ? 'personal' : 'coach'}-${user?.coachAccess === false ? 'revoked' : 'active'}`);
   try {
     const res = await api<{ biometrics: StudentBiometricsData }>('GET', '/me/ai-settings');
     if (!res?.biometrics) throw new ApiError(0, 'تنظیمات از سرور دریافت نشد.');
-    saveLocalFallbackBiometrics(res.biometrics);
+    try { localStorage.setItem(key, JSON.stringify(res.biometrics)); } catch {}
     return res.biometrics;
   } catch (error) {
     // Only an unreachable server permits local use. An explicit access denial must not.
     if (error instanceof ApiError && error.status !== 0 && error.status < 500) throw error;
-    return getLocalFallbackBiometrics(studentId);
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw) as StudentBiometricsData;
+    } catch {}
+    const maxHr = 190;
+    return { studentId, enabledModules: [...ALL_AI_MODULES], age: null, restingHr: null, maxHr, maxHrMethod: 'tanaka', limitations: '', contraindicatedMovements: [], zones: calculateHeartRateZones(maxHr, null), updatedAt: null };
   }
 }

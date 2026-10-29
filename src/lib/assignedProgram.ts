@@ -50,6 +50,9 @@ export function assignedToTemplates(program: Programme): WorkoutTemplate[] {
 
 let assignedLoadVersion = 0;
 
+/** Ignore an in-flight coach response after the account switches to its personal programme. */
+export function cancelAssignedProgramLoad(): void { assignedLoadVersion += 1; }
+
 /** Loads only the latest programme response for the session that started the request. */
 export async function loadAssignedProgram(): Promise<void> {
   const requestVersion = ++assignedLoadVersion;

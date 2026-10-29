@@ -62,9 +62,14 @@ export async function migrateTestPurchases(db: Db): Promise<void> {
       expires_at TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('allowed', 'pending', 'paid', 'canceled')),
       authority TEXT UNIQUE,
-      checkout_version INTEGER,
+      checkout_version BIGINT,
       amount_tomans INTEGER
     );
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'payment_test_purchases' AND column_name = 'checkout_version' AND data_type <> 'bigint') THEN
+        ALTER TABLE payment_test_purchases ALTER COLUMN checkout_version TYPE BIGINT;
+      END IF;
+    END $$;
     -- NULL means an individual coach grant; a token belongs to one global test session.
     ALTER TABLE payment_test_purchases ADD COLUMN IF NOT EXISTS mode_token TEXT;
     CREATE TABLE IF NOT EXISTS payment_test_mode (
@@ -76,10 +81,10 @@ export async function migrateTestPurchases(db: Db): Promise<void> {
     INSERT INTO payment_test_mode (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
     CREATE TABLE IF NOT EXISTS payment_test_transactions (
       id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      coach_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES users(id),
+      coach_id INTEGER NOT NULL REFERENCES users(id),
       programme_id TEXT NOT NULL,
-      programme_version INTEGER NOT NULL,
+      programme_version BIGINT NOT NULL,
       amount_tomans INTEGER NOT NULL CHECK (amount_tomans > 0),
       coach_share_tomans INTEGER NOT NULL CHECK (coach_share_tomans >= 0),
       admin_share_tomans INTEGER NOT NULL CHECK (admin_share_tomans >= 0),
@@ -90,6 +95,11 @@ export async function migrateTestPurchases(db: Db): Promise<void> {
       verified_at TEXT,
       CHECK (coach_share_tomans + admin_share_tomans = amount_tomans)
     );
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'payment_test_transactions' AND column_name = 'programme_version' AND data_type <> 'bigint') THEN
+        ALTER TABLE payment_test_transactions ALTER COLUMN programme_version TYPE BIGINT;
+      END IF;
+    END $$;
     CREATE INDEX IF NOT EXISTS idx_test_payment_coach ON payment_test_transactions(coach_id, id);
     CREATE INDEX IF NOT EXISTS idx_test_payment_student ON payment_test_transactions(student_id, status);
   `);
@@ -151,13 +161,16 @@ export async function testPurchaseState(db: Db, studentId: number, programmeId: 
 }
 
 /** The assigned coach/admin may still authorize just one student without enabling global mode. */
-export async function allowTestPurchase(db: Db, studentId: number, expected: { id: string; version: number }, now: Date): Promise<string> {
+export async function allowTestPurchase(db: Db, studentId: number, expected: { id: string; version: number }, now: Date, relationship?: { coachId: number; version: number; allowRevoked: boolean }): Promise<string> {
   assertTestAvailable();
   const expiresAt = new Date(now.getTime() + TEST_ACCESS_HOURS * 60 * 60 * 1000).toISOString();
   const rows = await db.query<{ expires_at: string }>(`
-    WITH active_program AS (
-      SELECT student_id, programme_id FROM student_programs
-      WHERE student_id = $1 AND programme_id = $2 AND version = $3 AND COALESCE(price_tomans, 0) > 0 FOR UPDATE
+    WITH active_program AS MATERIALIZED (
+      SELECT sp.student_id, sp.programme_id FROM users u JOIN student_programs sp ON sp.student_id = u.id
+      WHERE sp.student_id = $1 AND sp.programme_id = $2 AND sp.version = $3 AND COALESCE(sp.price_tomans, 0) > 0
+        AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0
+        AND ($6::integer IS NULL OR (u.coach_id = $6 AND u.coach_access_version = $7 AND (u.coach_access = 1 OR $8::boolean)))
+      FOR UPDATE OF u, sp
     ), grant_access AS (
       INSERT INTO payment_test_purchases (student_id, programme_id, expires_at, status, mode_token)
       SELECT sp.student_id, sp.programme_id, $4, 'allowed', NULL FROM active_program sp
@@ -169,19 +182,26 @@ export async function allowTestPurchase(db: Db, studentId: number, expected: { i
       WHERE student_id = $1 AND status = 'pending' AND EXISTS (SELECT 1 FROM grant_access)
     )
     SELECT expires_at FROM grant_access
-  `, [studentId, expected.id, expected.version, expiresAt, now.toISOString()]);
+  `, [studentId, expected.id, expected.version, expiresAt, now.toISOString(), relationship?.coachId ?? null, relationship?.version ?? null, relationship?.allowRevoked ?? false]);
   if (!rows[0]) throw new HttpError(409, 'برنامه تغییر کرده یا رایگان است؛ صفحه را دوباره بارگذاری کنید.');
   return rows[0].expires_at;
 }
 
-export async function revokeTestPurchase(db: Db, studentId: number, programmeId: string, now: Date): Promise<void> {
-  await db.query(`
-    WITH revoked AS (
-      DELETE FROM payment_test_purchases WHERE student_id = $1 AND programme_id = $2 RETURNING authority
-    )
-    UPDATE payment_test_transactions SET status = 'canceled', verified_at = $3
-    WHERE student_id = $1 AND status = 'pending' AND authority IN (SELECT authority FROM revoked)
-  `, [studentId, programmeId, now.toISOString()]);
+export async function revokeTestPurchase(db: Db, studentId: number, programmeId: string, now: Date, relationship?: { coachId: number; version: number; allowRevoked: boolean }): Promise<void> {
+  const rows = await db.query(`
+    WITH relationship AS MATERIALIZED (
+      SELECT u.id FROM users u JOIN student_programs sp ON sp.student_id = u.id
+      WHERE u.id = $1 AND sp.programme_id = $2 AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0
+        AND ($4::integer IS NULL OR (u.coach_id = $4 AND u.coach_access_version = $5 AND (u.coach_access = 1 OR $6::boolean)))
+      FOR UPDATE OF u, sp
+    ), revoked AS (
+      DELETE FROM payment_test_purchases WHERE student_id = $1 AND programme_id = $2 AND EXISTS (SELECT 1 FROM relationship) RETURNING authority
+    ), canceled AS (
+      UPDATE payment_test_transactions SET status = 'canceled', verified_at = $3
+      WHERE student_id = $1 AND status = 'pending' AND authority IN (SELECT authority FROM revoked)
+    ) SELECT id FROM relationship
+  `, [studentId, programmeId, now.toISOString(), relationship?.coachId ?? null, relationship?.version ?? null, relationship?.allowRevoked ?? false]);
+  if (!rows.length) throw new HttpError(409, 'برنامه یا دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
 }
 
 /** A global session creates an authorization lazily, without overwriting a live individual grant. */
@@ -191,8 +211,9 @@ async function ensureGlobalGrant(db: Db, studentId: number, expected: { id: stri
       SELECT token, expires_at FROM payment_test_mode
       WHERE id = 1 AND token IS NOT NULL AND expires_at > $4 FOR SHARE
     ), active_program AS (
-      SELECT student_id, programme_id FROM student_programs
-      WHERE student_id = $1 AND programme_id = $2 AND version = $3 AND COALESCE(price_tomans, 0) > 0 FOR UPDATE
+      SELECT sp.student_id, sp.programme_id FROM student_programs sp JOIN users u ON u.id = sp.student_id
+      WHERE sp.student_id = $1 AND sp.programme_id = $2 AND sp.version = $3 AND COALESCE(sp.price_tomans, 0) > 0
+        AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0 FOR UPDATE OF u, sp
     )
     INSERT INTO payment_test_purchases AS p (student_id, programme_id, expires_at, status, mode_token)
     SELECT sp.student_id, sp.programme_id, m.expires_at, 'allowed', m.token FROM active_program sp CROSS JOIN active_mode m
@@ -209,6 +230,7 @@ export async function startTestPurchase(db: Db, studentId: number, expected: { i
   const program = (await db.query<{ price_tomans: number; coach_id: number }>(`
     SELECT sp.price_tomans, u.coach_id FROM student_programs sp JOIN users u ON u.id = sp.student_id
     WHERE sp.student_id = $1 AND sp.programme_id = $2 AND sp.version = $3 AND COALESCE(sp.price_tomans, 0) > 0
+      AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0
   `, [studentId, expected.id, expected.version]))[0];
   if (!program) throw new HttpError(409, 'برنامه تغییر کرده یا رایگان است؛ صفحه را دوباره بارگذاری کنید.');
   const { coachShare, adminShare } = calculateCommission(program.price_tomans);
@@ -219,7 +241,7 @@ export async function startTestPurchase(db: Db, studentId: number, expected: { i
       SELECT sp.student_id, u.coach_id, sp.programme_id, sp.version, sp.price_tomans
       FROM student_programs sp JOIN users u ON u.id = sp.student_id
       WHERE sp.student_id = $1 AND sp.programme_id = $2 AND sp.version = $3
-        AND sp.price_tomans = $6 AND u.coach_id = $9 FOR UPDATE OF sp, u
+        AND sp.price_tomans = $6 AND u.coach_id = $9 AND sp.coach_id = u.coach_id AND u.personal_program_mode = 0 FOR UPDATE OF sp, u
     ), mode AS (
       SELECT token, expires_at FROM payment_test_mode WHERE id = 1 FOR SHARE
     ), checkout AS (
@@ -307,12 +329,12 @@ export async function listTestTransactions(db: Db, now: Date, coachId?: number):
     // A pending checkout that can no longer be confirmed is shown as ended, without inventing a verification time.
     const expired = row.status === 'pending' && (!studentTestPurchasesAvailable() || row.expires_at <= instant ||
       row.grant_status !== 'pending' || row.active_programme_id !== row.programme_id ||
-      row.active_programme_version !== row.programme_version || row.active_price_tomans !== row.amount_tomans ||
+      Number(row.active_programme_version) !== Number(row.programme_version) || row.active_price_tomans !== row.amount_tomans ||
       (row.grant_mode_token !== null && (row.grant_mode_token !== row.current_mode_token || !row.mode_expires_at || row.mode_expires_at <= instant)));
     return {
       id: row.id, studentId: row.student_id, studentName: row.student_name,
       coachId: row.coach_id, coachName: row.coach_name,
-      programmeId: row.programme_id, programmeVersion: row.programme_version,
+      programmeId: row.programme_id, programmeVersion: Number(row.programme_version),
       amountTomans: row.amount_tomans, coachShareTomans: row.coach_share_tomans,
       adminShareTomans: row.admin_share_tomans, authority: row.authority,
       status: expired ? 'expired' : row.status,

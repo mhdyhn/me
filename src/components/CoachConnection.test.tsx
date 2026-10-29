@@ -25,7 +25,7 @@ describe('coach connection controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'بررسی کد' }));
     expect(await screen.findByText('اتصال به مربی سارا')).toBeInTheDocument();
     expect(screen.getByText(/دفتر خوراک و امکانات مدیریت برنامه/)).toBeInTheDocument();
-    expect(screen.getByText(/بازگشت به برنامهٔ شخصی یا تغییر مربی هنوز/)).toBeInTheDocument();
+    expect(screen.getByText(/برنامهٔ غذایی، تنظیمات پایش و گفتگوهای مربی قبلی/)).toBeInTheDocument();
     const accept = screen.getByRole('button', { name: 'تأیید اتصال به مربی' });
     expect(accept).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox'));
@@ -37,7 +37,7 @@ describe('coach connection controls', () => {
   it('does not allow connection while a workout is active or account data is loading', () => {
     mocks.activeSession = { id: 'active' };
     const view = render(<CoachConnection />);
-    expect(screen.getByText(/پیش از اتصال، تمرین در حال انجام را تمام کن/)).toBeInTheDocument();
+    expect(screen.getByText(/پیش از اتصال یا تغییر برنامه، تمرین در حال انجام را تمام کن/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'بررسی کد' })).toBeDisabled();
     mocks.activeSession = null; mocks.loading = true; view.rerender(<CoachConnection />);
     expect(screen.getByRole('button', { name: 'بررسی کد' })).toBeDisabled();
@@ -53,6 +53,21 @@ describe('coach connection controls', () => {
     await waitFor(() => expect(mocks.setUser).toHaveBeenCalledWith(revoked));
     expect(mocks.confirm.mock.calls[0]![0].message).toContain('درخواست‌هایی که پیش از قطع شروع شده‌اند ممکن است کامل شوند');
     expect(mocks.api).toHaveBeenCalledWith('POST', '/me/coach-access/withdraw', { accountId: 17 });
+  });
+
+  it('returns to the personal programme only after confirmation and blocks active workouts', async () => {
+    mocks.user = { ...independent, coachId: 12, coachAccess: false };
+    mocks.activeSession = { id: 'active' };
+    const view = render(<CoachConnection />);
+    expect(screen.getByRole('button', { name: 'بازگشت به برنامهٔ شخصی' })).toBeDisabled();
+    mocks.activeSession = null; view.rerender(<CoachConnection />);
+    mocks.confirm.mockResolvedValue(true);
+    const personal = { ...mocks.user, personalProgramMode: true };
+    mocks.api.mockResolvedValue({ user: personal });
+    fireEvent.click(screen.getByRole('button', { name: 'بازگشت به برنامهٔ شخصی' }));
+    await waitFor(() => expect(mocks.setUser).toHaveBeenCalledWith(personal));
+    expect(mocks.api).toHaveBeenCalledWith('POST', '/me/personal-program/activate', { accountId: 17 });
+    expect(mocks.confirm.mock.calls[0]![0].message).toContain('خرید آزمایشی');
   });
 
   it('hides the control for manually provisioned students', () => {

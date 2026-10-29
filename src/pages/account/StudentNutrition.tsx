@@ -66,6 +66,48 @@ export function StudentNutritionPlan() {
   );
 }
 
+type ArchivedNutritionPlan = { coachId: number; coachName: string; plan: NutritionPlan };
+type NutritionArchivePage = { plans: ArchivedNutritionPlan[]; nextCursor: number | null };
+
+/** Previous coach plans remain private to the student and never replace the current plan. */
+export function CoachNutritionArchive() {
+  const [plans, setPlans] = useState<ArchivedNutritionPlan[]>([]);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api<NutritionArchivePage>('GET', '/me/nutrition/archive')
+      .then((page) => { if (active) { setPlans(Array.isArray(page.plans) ? page.plans : []); setCursor(page.nextCursor ?? null); } })
+      .catch((caught) => { if (active) setError(caught instanceof ApiError ? caught.message : 'بایگانی تغذیه بارگذاری نشد.'); });
+    return () => { active = false; };
+  }, []);
+  async function more() {
+    if (cursor === null || busy) return;
+    setBusy(true); setError('');
+    try {
+      const page = await api<NutritionArchivePage>('GET', `/me/nutrition/archive?cursor=${cursor}`);
+      setPlans((current) => [...current, ...page.plans]); setCursor(page.nextCursor);
+    } catch (caught) { setError(caught instanceof ApiError ? caught.message : 'ادامهٔ بایگانی بارگذاری نشد.'); }
+    finally { setBusy(false); }
+  }
+  if (!plans.length) return error ? <p className="account-muted" role="status">{error}</p> : null;
+  return <details className="panel-card coach-history">
+    <summary>برنامه‌های غذایی مربیان قبلی</summary>
+    <p className="account-muted">این برنامه‌ها فقط برای مشاهدهٔ خودت هستند و با مربی جدید به اشتراک گذاشته نمی‌شوند.</p>
+    {plans.map((item) => <ArchivedPlan key={item.coachId} item={item} />)}
+    {error && <p className="form-error" role="status">{error}</p>}
+    {cursor !== null && <button type="button" className="button button--secondary button--small" disabled={busy} onClick={() => void more()}>{busy ? 'در حال بارگذاری…' : 'نمایش بیشتر'}</button>}
+  </details>;
+}
+
+function ArchivedPlan({ item }: { item: ArchivedNutritionPlan }) {
+  const [dayIndex, setDayIndex] = useState(todayDayIndex());
+  return <details className="coach-history__item"><summary>مربی {item.coachName}</summary>
+    <PlanView plan={item.plan} dayIndex={dayIndex} onDay={setDayIndex} />
+  </details>;
+}
+
 function PlanView({ plan, dayIndex, onDay }: { plan: NutritionPlan; dayIndex: number; onDay: (index: number) => void }) {
   const day = plan.days[dayIndex];
   if (!day) return null;

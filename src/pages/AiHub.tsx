@@ -81,6 +81,7 @@ export function AiHub() {
 
   useEffect(() => {
     let mounted = true;
+    setBiometricsData(null);
     void getMyAiSettings()
       .then((data) => {
         if (mounted && data) {
@@ -96,7 +97,7 @@ export function AiHub() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user?.id, user?.coachId, user?.coachAccess, user?.personalProgramMode]);
 
   const enabledModules = biometricsData?.enabledModules ?? ALL_AI_MODULES;
   const hasBiometricMax = Boolean(biometricsData && (biometricsData.maxHrMethod === 'custom'
