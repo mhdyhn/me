@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { acceptCoachInvitation, makeCoachInvitation, returnToPersonalProgram, withdrawCoachAccess } from './coachInvites.ts';
+import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLink, makeCoachInvitation, returnToPersonalProgram, revokeCoachRegistrationLink, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listCoachProgrammes, restoreCoachProgramme, saveProgramme } from './programs.ts';
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan } from './nutrition.ts';
 import { loadBiometrics, migrateBiometrics, saveBiometrics } from './biometrics.ts';
@@ -138,6 +138,38 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     } finally {
       await sql!.query('ROLLBACK');
     }
+  }, 30000);
+
+  it('one reusable link can attach multiple students concurrently, but two coaches cannot take the same student', async () => {
+    const coach = await user('coach'); const other = await user('coach');
+    const first = await user('student', true); const second = await user('student', true);
+    const token = (await coachRegistrationLink(db!, key, coach, { accountId: coach.id }, now)).token;
+    const otherToken = (await coachRegistrationLink(db!, key, other, { accountId: other.id }, now)).token;
+    const acceptLink = (student: StoredUser, code: string) => acceptCoachRegistrationLink(db!, key, student, { accountId: student.id, token: code, consent: true }, now);
+    const connected = await Promise.all([acceptLink(first, token), acceptLink(second, token)]);
+    expect(connected.map((item) => item.coachId)).toEqual([coach.id, coach.id]);
+    const third = await user('student', true);
+    const race = await Promise.allSettled([acceptLink(third, token), acceptLink(third, otherToken)]);
+    expect(race.filter((item) => item.status === 'fulfilled')).toHaveLength(1);
+    expect(race.filter((item) => item.status === 'rejected')).toHaveLength(1);
+    await revokeCoachRegistrationLink(db!, coach, { accountId: coach.id });
+    expect((await findUserById(db!, first.id))?.coachId).toBe(coach.id);
+    const fourth = await user('student', true);
+    await expect(acceptLink(fourth, token)).rejects.toMatchObject({ status: 409 });
+  }, 30000);
+
+  it('does not attach a student through a link revoked in a concurrent transaction', async () => {
+    const coach = await user('coach'); const student = await user('student', true);
+    const token = (await coachRegistrationLink(db!, key, coach, { accountId: coach.id }, now)).token;
+    await sql!.query('BEGIN');
+    try {
+      await revokeCoachRegistrationLink(txDb(), coach, { accountId: coach.id });
+      const joining = acceptCoachRegistrationLink(db!, key, student, { accountId: student.id, token, consent: true }, now).then(() => null, (error: unknown) => error);
+      await waitForLock('coach_registration_links l');
+      await sql!.query('COMMIT');
+      expect(await joining).toMatchObject({ status: 409 });
+      expect((await findUserById(db!, student.id))?.coachId).toBeNull();
+    } finally { await sql!.query('ROLLBACK'); }
   }, 30000);
 
   it('one code cannot attach two students under simultaneous accepts', async () => {

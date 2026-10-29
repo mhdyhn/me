@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
+import { PersianDateInput } from '../components/PersianDateInput';
 import { SectionHeading } from '../components/SectionHeading';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
@@ -248,7 +249,7 @@ export function Progress() {
           <span className="eyebrow">ثبت وزن</span><h3>وزن بدن را وارد کن</h3><p className="muted">در شرایط مشابه وزن‌کشی کن و روند را در طول زمان بررسی کن.</p>
           <form onSubmit={(event) => void submitWeight(event)} className="form-stack">
             <label className="field-control"><span>وزن <small>کیلوگرم</small></span><input type="number" min="30" max="300" step="0.1" inputMode="decimal" placeholder="۷۷٫۰" disabled={savingWeight} value={weightInput} onChange={(event) => setWeightInput(event.target.value)} required /></label>
-            <label className="field-control"><span>تاریخ</span><input type="date" disabled={savingWeight} value={weightDate} onChange={(event) => setWeightDate(event.target.value)} required /></label>
+            <div className="field-control"><span>تاریخ شمسی</span><PersianDateInput value={weightDate} onChange={setWeightDate} label="تاریخ وزن" disabled={savingWeight} /></div>
             <label className="field-control"><span>یادداشت <small>اختیاری</small></span><input disabled={savingWeight} value={weightNote} onChange={(event) => setWeightNote(event.target.value)} placeholder="صبح، پیش از صبحانه…" /></label>
             {formError && <p role="alert" className="form-error">{formError}</p>}
             <button className="button button--primary button--full" type="submit" disabled={savingWeight}><Plus size={16} /> {savingWeight ? 'در حال ذخیره…' : 'ذخیرهٔ وزن'}</button>

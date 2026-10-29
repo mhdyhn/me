@@ -29,7 +29,7 @@ export const formatDuration = (seconds: number) => {
   return `${faNumber(minutes)} دقیقه`;
 };
 
-// Date inputs and persisted date keys stay ISO/Gregorian; only their visible labels are localized.
+// Persisted date keys stay ISO/Gregorian; PersianDateInput converts the visible selection.
 export const dateInputValue = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

@@ -88,6 +88,7 @@ async function mockAccount(page: Page, user: typeof student | typeof independent
       json = { available: true, enabled: globalTestEnabled, expiresAt: globalTestEnabled ? new Date(Date.now() + 86_400_000).toISOString() : null };
     }
     else if (path === '/api/coach/iban') json = { iban: null };
+    else if (path === '/api/coach/invitations') json = request.method() === 'DELETE' ? { ok: true } : { code: 'C'.repeat(32), expiresAt: '2026-11-01T12:00:00.000Z' };
     else if (path === '/api/students/5/ai-settings') json = { biometrics: { limitations: '' } };
     else if (path === '/api/students/5/sessions') json = {
       studentName: student.displayName,
@@ -602,16 +603,19 @@ for (const width of [320, 390, 1280]) {
     await expectNoPageOverflow(page);
   });
 
-  test(`coach creates a code and keeps manual student creation at ${width}px`, async ({ page }) => {
+  test(`coach shares a link and keeps manual student creation at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await mockAccount(page, coach);
     await page.route('**/api/students', (route) => route.fulfill({ json: { students: [] } }));
-    await page.route('**/api/coach/invitations', (route) => route.fulfill({ status: 201, json: { code: 'A'.repeat(32), expiresAt: new Date(Date.now() + 86_400_000).toISOString() } }));
+    await page.route('**/api/coach/registration-link', (route) => route.fulfill({ json: { token: 'A'.repeat(43) } }));
     await page.goto('/coach', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('نام شاگرد جدید')).toBeVisible();
-    await page.getByText('دعوت شاگرد با حساب خودش').click();
-    await page.getByRole('button', { name: 'ساخت کد دعوت' }).click();
-    await expect(page.getByText('A'.repeat(32))).toBeVisible();
+    await page.getByText('لینک ثبت‌نام شاگرد').click();
+    await page.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }).click();
+    await expect(page.getByText('لینک آمادهٔ ارسال است.')).toBeVisible();
+    await page.getByText('کدهای یک‌بارمصرف').click();
+    await page.getByRole('button', { name: 'ساخت کد یک‌بارمصرف' }).click();
+    await expect(page.getByText('C'.repeat(32))).toBeVisible();
     await expectNoPageOverflow(page);
   });
 }
@@ -749,3 +753,66 @@ for (const width of [320, 390]) {
     });
   }
 }
+
+for (const width of [320, 390, 1280]) {
+  test(`requested cards retain inner spacing and Persian date selection at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, independent);
+    await page.goto('/progress', { waitUntil: 'domcontentloaded' });
+    const weekly = page.locator('.weekly-volume-panel');
+    await expect(weekly).toBeVisible();
+    const checkInsets = async (parent: string, child: string) => {
+      const distances = await page.locator(parent).evaluate((element, target) => {
+        const inner = element.querySelector(target);
+        if (!inner) throw new Error(`Missing ${target}`);
+        const a = element.getBoundingClientRect(), b = inner.getBoundingClientRect();
+        return { left: b.left - a.left, right: a.right - b.right, top: b.top - a.top };
+      }, child);
+      expect(distances.left).toBeGreaterThanOrEqual(12);
+      expect(distances.right).toBeGreaterThanOrEqual(12);
+      expect(distances.top).toBeGreaterThanOrEqual(12);
+    };
+    await checkInsets('.weekly-volume-panel', '.card-topline');
+    const weightDate = page.getByRole('button', { name: 'تاریخ وزن' });
+    await weightDate.click();
+    await page.getByLabel('سال شمسی').selectOption('1403');
+    await page.getByLabel('ماه شمسی').selectOption('12');
+    await page.getByLabel('روز شمسی').selectOption('30');
+    await page.getByRole('button', { name: 'انتخاب تاریخ' }).click();
+    await expect(weightDate).toHaveAttribute('data-iso-date', '2025-03-20');
+    await expect(weightDate).toContainText('۱۴۰۳/۱۲/۳۰');
+    await expectNoPageOverflow(page);
+    await page.goto('/nutrition', { waitUntil: 'domcontentloaded' });
+    await checkInsets('.meal-diary', '.card-topline');
+    await checkInsets('.nutrition-note-card', '.card-topline');
+    await expect(page.getByRole('button', { name: 'روز', exact: true })).toContainText('۱۴');
+    await expectNoPageOverflow(page);
+  });
+}
+
+for (const width of [320, 390]) {
+  test(`workout footer sits above floating navigation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, student);
+    await page.goto('/workout/assigned-day-1', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByLabel('وزنه به کیلوگرم')).toBeVisible();
+    const footer = await page.locator('.workout-mobile-footer').boundingBox();
+    const nav = await page.locator('.mobile-nav__bar').boundingBox();
+    expect(footer).not.toBeNull(); expect(nav).not.toBeNull();
+    expect(footer!.y + footer!.height).toBeLessThanOrEqual(nav!.y);
+    await expect(page.locator('.workout-mobile-footer').getByRole('button', { name: 'خروج' })).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
+}
+
+test('weekly summary labels keep their own space on a small phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, independent);
+  await page.goto('/progress');
+  const columns = page.locator('.week-compare > div');
+  const first = await columns.nth(0).boundingBox(); const second = await columns.nth(1).boundingBox(); const third = await columns.nth(2).boundingBox();
+  expect(first).not.toBeNull(); expect(second).not.toBeNull(); expect(third).not.toBeNull();
+  expect(Math.abs(first!.y - second!.y)).toBeLessThan(2);
+  expect(third!.y).toBeGreaterThanOrEqual(Math.max(first!.y + first!.height, second!.y + second!.height));
+  await expectNoPageOverflow(page);
+});

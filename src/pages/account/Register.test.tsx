@@ -27,7 +27,7 @@ describe('direct registration screen', () => {
     mocks.api.mockResolvedValue({ username: 'sara.fit', pendingApproval: false });
     mocks.signIn.mockResolvedValue({ id: 4, role: 'student' });
     open(); fill();
-    expect(screen.getByText(/پس از ورود می‌توانی با کد دعوت/)).toBeInTheDocument();
+    expect(screen.getByText(/پس از ورود با کد دعوت/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'ساخت حساب شخصی' }));
     expect(await screen.findByText('خانهٔ شاگرد')).toBeInTheDocument();
     expect(mocks.api).toHaveBeenCalledWith('POST', '/auth/register', { role: 'student', displayName: 'سارا رضایی', phoneNumber: '09123456789', username: 'sara.fit', password: 'chosen-password-123', dataNoticeAccepted: true });
@@ -58,4 +58,17 @@ describe('direct registration screen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('یکسان نیست');
     await waitFor(() => expect(mocks.api).not.toHaveBeenCalled());
   });
+  it('does not claim a failed registration or immediately retry when the response is lost', async () => {
+    mocks.api.mockRejectedValue(new Error('network dropped'));
+    open(); fill();
+    const button = screen.getByRole('button', { name: 'ساخت حساب شخصی' });
+    fireEvent.submit(button.closest('form')!); fireEvent.submit(button.closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent('نتیجهٔ ثبت‌نام مشخص نیست');
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'بررسی با ورود به حساب' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'پس از بررسی، دوباره ثبت‌نام کنم' }));
+    expect(button).toBeEnabled();
+  });
+
 });

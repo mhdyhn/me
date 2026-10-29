@@ -141,7 +141,10 @@ export function calculateCommission(amountTomans: number): { coachShare: number;
 
 /** Validates Iranian IBAN (Sheba): IR followed by 24 digits. */
 export function normalizeIban(raw: string): string {
-  const cleaned = raw.replace(/\s+/g, '').toUpperCase();
+  const cleaned = raw.replace(/[۰-۹٠-٩]/g, (digit) => {
+    const code = digit.charCodeAt(0);
+    return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+  }).replace(/\s+/g, '').toUpperCase();
   if (!/^IR\d{24}$/.test(cleaned)) {
     throw new HttpError(400, 'شماره شبا نامعتبر است. شماره شبا باید با IR و ۲۴ رقم ادامه یابد.');
   }

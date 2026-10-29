@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
 import { ApiError, api, type PaymentTransaction, type TransactionsResponse } from '../../lib/api';
 import { confirmModal } from '../../components/ConfirmModal';
+import { useSession } from '../../context/SessionContext';
 import { PaymentPractice } from '../../components/PaymentPractice';
 import { faNumber } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
@@ -41,31 +42,43 @@ export function CoachTransactions() {
 
 function CoachTransactionsView() {
   const { report, error: loadError, loading, refresh } = useFinancialReport('/coach/transactions');
+  const { user } = useSession();
   const [iban, setIban] = useState('');
   const [savingIban, setSavingIban] = useState(false);
+  const savingIbanRef = useRef(false);
+  const ibanRequest = useRef(0);
+  const [ibanLoading, setIbanLoading] = useState(true);
+  const [ibanLoaded, setIbanLoaded] = useState(false);
   const [ibanMessage, setIbanMessage] = useState<string | null>(null);
   const [ibanError, setIbanError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api<{ iban: string | null }>('GET', '/coach/iban')
-      .then((res) => setIban(res.iban ?? ''))
-      .catch((caught) => setIbanError(caught instanceof ApiError ? caught.message : 'شمارهٔ شبا بارگذاری نشد.'));
-  }, []);
+  const loadIban = useCallback(async () => {
+    if (!user) return;
+    const request = ++ibanRequest.current;
+    setIbanLoading(true); setIbanLoaded(false); setIbanError(null);
+    try {
+      const res = await api<{ iban: string | null }>('GET', `/coach/iban?accountId=${user.id}`);
+      if (!res || !('iban' in res) || (res.iban !== null && typeof res.iban !== 'string')) throw new Error('Invalid response');
+      if (request === ibanRequest.current) { setIban(res.iban ?? ''); setIbanLoaded(true); }
+    } catch (caught) {
+      if (request === ibanRequest.current) setIbanError(caught instanceof ApiError ? caught.message : 'شمارهٔ شبا بارگذاری نشد؛ ابتدا دوباره بررسی کن.');
+    } finally { if (request === ibanRequest.current) setIbanLoading(false); }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadIban(); return () => { ibanRequest.current += 1; }; }, [loadIban]);
 
   async function onSaveIban(e: FormEvent) {
     e.preventDefault();
-    setSavingIban(true);
-    setIbanMessage(null);
-    setIbanError(null);
+    if (!user || !ibanLoaded || savingIbanRef.current) return;
+    savingIbanRef.current = true; setSavingIban(true); setIbanMessage(null); setIbanError(null);
     try {
-      const res = await api<{ ok: boolean; iban: string }>('PUT', '/coach/iban', { iban });
-      setIban(res.iban);
-      setIbanMessage('شماره شبا با موفقیت ذخیره شد.');
+      const res = await api<{ ok: boolean; iban: string }>('PUT', '/coach/iban', { accountId: user.id, iban });
+      if (!res || res.ok !== true || typeof res.iban !== 'string' || !/^IR\d{24}$/.test(res.iban) || res.iban !== iban.replace(/\s+/g, '').toUpperCase()) throw new Error('Unconfirmed');
+      setIban(res.iban); setIbanMessage('شماره شبا با موفقیت ذخیره شد.');
     } catch (err) {
-      setIbanError(err instanceof ApiError ? err.message : 'خطا در ذخیره شماره شبا.');
-    } finally {
-      setSavingIban(false);
-    }
+      const uncertain = !(err instanceof ApiError) || err.status === 0 || err.status === 408 || err.status === 409 || err.status >= 500 || (err.status >= 200 && err.status < 300);
+      if (uncertain) setIbanLoaded(false);
+      setIbanError(uncertain ? 'نتیجهٔ ذخیره تأیید نشد؛ شمارهٔ ذخیره‌شده را دوباره بررسی کن.' : err.message);
+    } finally { savingIbanRef.current = false; setSavingIban(false); }
   }
 
   return (
@@ -86,15 +99,18 @@ function CoachTransactionsView() {
         <p className="account-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
           ثبت شبا به‌تنهایی به معنی واریز وجه نیست. تسهیم و تسویهٔ بانکی باید پس از اتصال درگاه و بررسی قرارداد آن تأیید شوند؛ سهم پیش‌فرض مربی ۹۰٪ است و می‌تواند در تنظیمات سرور تغییر کند.
         </p>
-        <form onSubmit={(e) => void onSaveIban(e)} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <input aria-label="شماره شبای بانکی" value={iban} onChange={(e) => setIban(e.target.value)}
-            placeholder="IR..." dir="ltr" maxLength={34} required
-            style={{ width: 'min(100%, 260px)', minWidth: 0, fontFamily: 'monospace' }} />
-          <button type="submit" className="button button--primary" disabled={savingIban}>
+        <form className="iban-form" onSubmit={(e) => void onSaveIban(e)}>
+          <label className="iban-form__field"><span>شماره شبای بانکی</span>
+          <input aria-label="شماره شبای بانکی" value={iban} onChange={(e) => { setIban(e.target.value.replace(/[۰-۹٠-٩]/g, (digit) => { const code = digit.charCodeAt(0); return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660); }).toUpperCase()); setIbanMessage(null); }}
+            placeholder="IR..." dir="ltr" maxLength={34} autoCapitalize="characters" spellCheck={false} disabled={!ibanLoaded || savingIban} required /></label>
+          <button type="submit" className="button button--primary" disabled={!ibanLoaded || savingIban}>
             <Save size={16} /> {savingIban ? 'در حال ثبت…' : 'ذخیره شبا'}
           </button>
         </form>
-        {ibanMessage && <p style={{ color: '#4ade80', fontSize: 13, margin: '8px 0 0' }}>{ibanMessage}</p>}
+        <p className="field-hint">با IR و ۲۴ رقم؛ صحت شماره و مالکیت حساب توسط بانک تأیید نشده است.</p>
+        {ibanLoading && <p className="field-hint" role="status">در حال دریافت شمارهٔ شبا…</p>}
+        {!ibanLoaded && !ibanLoading && <button type="button" className="button button--secondary button--small" onClick={() => void loadIban()}>بررسی شمارهٔ ذخیره‌شده</button>}
+        {ibanMessage && <p role="status" style={{ color: '#4ade80', fontSize: 13, margin: '8px 0 0' }}>{ibanMessage}</p>}
         {ibanError && <p className="form-error" style={{ margin: '8px 0 0' }}>{ibanError}</p>}
       </section>
       <SampleCalculation isCoach />

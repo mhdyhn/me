@@ -106,6 +106,50 @@ async function runScenario(base) {
     await expect(adminSecondDevice.getByRole('button', { name: 'حذف ثبت وزن 78.5 کیلوگرم' })).toBeVisible({ timeout: 15000 });
     await call('GET', '/coaches', undefined, s.token, 403);
     await call('GET', '/admin/transactions', undefined, a.token, 403);
+    // A coach's single reusable link opens registration or login and never attaches without consent.
+    await coachPage.goto(base + '/coach', { waitUntil: 'domcontentloaded' });
+    await coachPage.getByText('لینک ثبت‌نام شاگرد').click();
+    await coachPage.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }).click();
+    await expect(coachPage.getByText('لینک آمادهٔ ارسال است.')).toBeVisible();
+    const linkToken = (await call('POST', '/coach/registration-link', { accountId: a.user.id }, a.token)).token;
+    const signupPage = await newPage();
+    await signupPage.goto(`${base}/invite#${linkToken}`, { waitUntil: 'domcontentloaded' });
+    await expect(signupPage.getByText('مربی الف', { exact: false })).toBeVisible();
+    await signupPage.getByRole('link', { name: 'ثبت‌نام شاگرد' }).click();
+    await signupPage.getByLabel('نام و نام خانوادگی').fill('شاگرد دعوتی');
+    await signupPage.getByLabel('شماره موبایل').fill('09121234567');
+    await signupPage.getByLabel('نام کاربری انگلیسی').fill('invitedstudent');
+    await signupPage.getByLabel('رمز عبور', { exact: true }).fill(pass);
+    await signupPage.getByLabel('تکرار رمز عبور').fill(pass);
+    await signupPage.getByRole('checkbox').check();
+    await signupPage.getByRole('button', { name: 'ساخت حساب شخصی' }).click();
+    await expect(signupPage).toHaveURL(/\/invite$/, { timeout: 15000 });
+    await expect(signupPage.getByText('مربی الف', { exact: false })).toBeVisible();
+    await expect(signupPage.getByRole('button', { name: 'تأیید و اتصال به مربی' })).toBeDisabled();
+    const invitedLogin = await login('invitedstudent');
+    if (invitedLogin.user.coachId !== null) throw new Error('Registration silently connected an account without consent');
+    await signupPage.getByRole('checkbox').check();
+    await signupPage.getByRole('button', { name: 'تأیید و اتصال به مربی' }).click();
+    await expect(signupPage.getByText(/به این مربی متصل است/)).toBeVisible();
+    if ((await login('invitedstudent')).user.coachId !== a.user.id) throw new Error('Invited signup was not attached to the correct coach');
+    await register('existinginvite', 'student', 'شاگرد موجود');
+    const existingPage = await newPage();
+    await existingPage.goto(`${base}/invite#${linkToken}`, { waitUntil: 'domcontentloaded' });
+    await existingPage.getByRole('link', { name: 'ورود به حساب موجود' }).click();
+    await existingPage.getByLabel('نام کاربری', { exact: true }).fill('existinginvite');
+    await existingPage.getByLabel('رمز عبور', { exact: true }).fill(pass);
+    await existingPage.getByRole('button', { name: 'ورود', exact: true }).click();
+    await expect(existingPage).toHaveURL(/\/invite$/, { timeout: 15000 });
+    await existingPage.getByRole('checkbox').check();
+    await existingPage.getByRole('button', { name: 'تأیید و اتصال به مربی' }).click();
+    await expect(existingPage.getByText(/به این مربی متصل است/)).toBeVisible();
+    if ((await login('existinginvite')).user.coachId !== a.user.id) throw new Error('Existing account did not attach');
+    const roster = (await call('GET', '/students', undefined, a.token)).students;
+    if (!roster.some(x => x.username === 'invitedstudent') || !roster.some(x => x.username === 'existinginvite')) throw new Error('Invited accounts are missing from the coach roster');
+    await signupPage.context().close(); await existingPage.context().close();
+
+    await call('POST', '/coach/invitations', { accountId: bId }, a.token, 409);
+    await call('DELETE', '/coach/invitations', { accountId: bId }, a.token, 409);
     const invitation = await call('POST', '/coach/invitations', {}, a.token, 201);
     await connect(studentPage, invitation.code, 'مربی الف');
 
@@ -138,7 +182,7 @@ async function runScenario(base) {
     }
     const firstDiary = studentPage.getByRole('region', { name: 'ثبت وعده‌های روزانه' });
     const staleDiary = secondDevice.getByRole('region', { name: 'ثبت وعده‌های روزانه' });
-    const day = await firstDiary.getByLabel('روز', { exact: true }).inputValue();
+    const day = await firstDiary.getByLabel('روز', { exact: true }).getAttribute('data-iso-date');
     for (const [diary, name] of [[firstDiary, 'صبحانه دستگاه اول'], [staleDiary, 'ناهار دستگاه دوم']]) {
       await diary.getByRole('region', { name: 'افزودن وعده' }).getByLabel('نام وعده').fill(name);
       await diary.getByRole('button', { name: 'افزودن وعده' }).click();
@@ -250,7 +294,7 @@ async function runScenario(base) {
     const restored = await call('GET', '/me/program', undefined, s.token);
     if (!restored.isPaid || restored.program.id !== first.id || restored.program.version !== 2147483648) throw new Error('Restored purchase was not preserved');
     if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
-    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme and concurrent diary/weekly nutrition conflict resolution on 2 devices; profile sharing and revocation; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
+    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme and concurrent diary/weekly nutrition conflict resolution on 2 devices; reusable coach-link signup and login with explicit consent; profile sharing and revocation; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
   } finally {
     await browser.close();
   }

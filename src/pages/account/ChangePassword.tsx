@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { AccountShell, homeFor } from './AccountShell';
+import { tokenFromState } from '../../lib/coachRegistrationLink';
 
 const MIN_PASSWORD = 8;
 
 export function ChangePassword() {
   const { status, user, refresh } = useSession();
   const navigate = useNavigate();
+  const inviteToken = tokenFromState(useLocation().state);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -26,7 +28,7 @@ export function ChangePassword() {
     try {
       await api('POST', '/me/password', { currentPassword: current, newPassword: next });
       await refresh();
-      navigate(homeFor(user!.role), { replace: true });
+      navigate(inviteToken ? '/invite' : homeFor(user!.role), { replace: true, state: inviteToken ? { inviteToken } : null });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'تغییر رمز انجام نشد.');
     } finally {

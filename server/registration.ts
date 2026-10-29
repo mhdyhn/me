@@ -51,6 +51,13 @@ export async function migrateRegistration(db: Db): Promise<void> {
       consumed_by INTEGER REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS coach_invitations_coach ON coach_invitations(coach_id, expires_at);
+    -- A separate, revocable reusable registration link; existing one-use codes remain valid.
+    CREATE TABLE IF NOT EXISTS coach_registration_links (
+      coach_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      nonce TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    );
   `);
 }
 

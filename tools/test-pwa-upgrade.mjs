@@ -318,6 +318,9 @@ try {
     await existingEditor.reload({ waitUntil: 'load' });
     await existingEditor.waitForFunction(() => !!navigator.serviceWorker.controller);
     assert.equal(await existingEditor.locator('script[src="/app-update.js"]').count(), 1, 'predecessor must have safe update prompts');
+    // The current predecessor also persists the initial blank-mode draft on reload.
+    const predecessorRecovery = existingEditor.getByRole('button', { name: 'ادامهٔ پیش‌نویس' });
+    if (await predecessorRecovery.isVisible()) await predecessorRecovery.click();
     const oldInput = existingEditor.getByLabel('نام روز').first();
     await oldInput.fill('پیش‌نویس نسخهٔ نصب‌شده');
     await putSentinels(existingEditor);

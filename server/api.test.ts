@@ -724,6 +724,11 @@ describe('ZarinPal payments with multi-settlement', () => {
     const getRes = await call('GET', '/api/coach/iban', undefined, coach.token);
     expect(getRes.status).toBe(200);
     expect(getRes.json.iban).toBe(validIban);
+    const persian = await call('PUT', '/api/coach/iban', { accountId: coach.id, iban: 'IR۱۲۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۰۱' }, coach.token);
+    expect(persian.status).toBe(200);
+    expect(persian.json.iban).toBe(validIban);
+    expect((await call('PUT', '/api/coach/iban', { accountId: coach.id + 1, iban: validIban }, coach.token)).status).toBe(409);
+    expect((await call('GET', `/api/coach/iban?accountId=${coach.id + 1}`, undefined, coach.token)).status).toBe(409);
   });
 
   it('handles full purchase flow: start, verify, unlock program, and prevents duplicate callback', async () => {

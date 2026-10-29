@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Save } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
+import { PersianDateInput } from '../../components/PersianDateInput';
 import { MealsConflictPreview } from '../../components/NutritionConflictPreview';
 import { DraftConflictNotice } from '../../components/DraftConflictNotice';
 import { SessionDraftRecovery, SessionDraftStatus } from '../../components/SessionDraftNotice';
@@ -122,7 +123,7 @@ export function MealDiary({ targets, accountId }: { targets: Targets; accountId?
       <div className="card-topline">
         <div><span className="eyebrow">ثبت وعده‌های روزانه</span><h2>آنچه خوردی.</h2></div>
         <div className="meal-diary__day">
-          <input type="date" value={day} max={today} onChange={(event) => void changeDay(event.target.value)} aria-label="روز" />
+          <PersianDateInput value={day} max={today} onChange={(next) => void changeDay(next)} label="روز" />
           {day !== today && <button type="button" className="button button--ghost" onClick={() => void changeDay(today)}><RotateCcw size={14} /> امروز</button>}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpen, ListOrdered, Save } from 'lucide-react';
 import { useSession } from '../../context/SessionContext';
 import { DraftConflictNotice } from '../../components/DraftConflictNotice';
+import { PersianDateInput } from '../../components/PersianDateInput';
 import { PlanConflictPreview } from '../../components/NutritionConflictPreview';
 import { SessionDraftRecovery, SessionDraftStatus } from '../../components/SessionDraftNotice';
 import { useSessionDraft } from '../../components/useSessionDraft';
@@ -251,16 +252,12 @@ function NutritionEditorScreen({ userId }: { userId: number }) {
       {viewMode === 'diary' ? (
         <section className="diary-coach-view page-stack" aria-label="دفتر خوراک شاگرد">
           <div className="card-topline" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <label className="field-control" style={{ margin: 0, minWidth: 200 }}>
-              <span>تاریخ روز <small>انتخاب تاریخ</small></span>
-              <input
-                type="date"
-                value={diaryDate}
-                onChange={(e) => setDiaryDate(e.target.value)}
-              />
-            </label>
+            <div className="field-control" style={{ margin: 0, minWidth: 200 }}>
+              <span>تاریخ روز <small>شمسی</small></span>
+              <PersianDateInput value={diaryDate} onChange={setDiaryDate} label="تاریخ روز" />
+            </div>
             <span className="today-pill">
-              {formatDate(diaryDate, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {formatDate(`${diaryDate}T00:00:00`, { weekday: 'long', day: 'numeric', month: 'long' })}
             </span>
           </div>
 
