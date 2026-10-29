@@ -83,7 +83,7 @@ describe('workout flow', () => {
     const finalPrescription = optional.exercises[finalExerciseIndex]?.prescription;
     if (!finalPrescription) throw new Error('Final exercise fixture is missing.');
     const session: WorkoutSession = {
-      id: 'finish-flow', templateId: optional.id, name: optional.name,
+      id: 'finish-flow', templateId: optional.id, templateSnapshot: structuredClone(optional), name: optional.name,
       startedAt: new Date(Date.now() - 120_000).toISOString(), status: 'active', notes: '',
       currentExerciseIndex: finalExerciseIndex, currentSetIndex: finalPrescription.sets - 1,
       exercises: optional.exercises.map(({ exerciseId }) => ({ exerciseId, sets: [] })),

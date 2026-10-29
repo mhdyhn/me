@@ -23,6 +23,7 @@ export interface PublicUser {
   selfRegistered?: boolean;
   pendingApproval?: boolean;
   coachAccess?: boolean;
+  personalProgramMode?: boolean;
   phoneNumber?: string | null;
 }
 
@@ -47,6 +48,8 @@ export interface Programme {
   days: ProgramDay[];
   priceTomans?: number;
   updatedAt: string;
+  isTestPurchase?: boolean;
+  testPurchaseExpiresAt?: string | null;
 }
 
 export interface PaymentTransaction {

@@ -33,10 +33,14 @@ export async function migratePersonalData(db: Db): Promise<void> {
   `);
 }
 
+function validProgram(value: unknown): boolean {
+  return Array.isArray(value) && value.length <= 40 && value.every((day) => object(day) && text(day.id, 120) && text(day.name, 200) && text(day.focus, 300) && text(day.dayLabel, 200) && number(day.durationMinutes) && text(day.description, 2000) && Array.isArray(day.exercises) && day.exercises.length <= 100 && day.exercises.every((ex: unknown) => object(ex) && text(ex.exerciseId, 120) && text(ex.name, 200) && object(ex.prescription) && number(ex.prescription.sets) && number(ex.prescription.minReps) && number(ex.prescription.maxReps) && number(ex.prescription.restSeconds)));
+}
+
 function validateValue(kind: PersonalKind, key: string, value: unknown): void {
   if (Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8') > limitBytes) throw new HttpError(413, 'اطلاعات این مورد بیش از حد بزرگ است.');
   if (kind === 'program') {
-    if (!Array.isArray(value) || value.length > 40 || value.some((day) => !object(day) || !text(day.id, 120) || !text(day.name, 200) || !text(day.focus, 300) || !text(day.dayLabel, 200) || !number(day.durationMinutes) || !text(day.description, 2000) || !Array.isArray(day.exercises) || day.exercises.length > 100 || day.exercises.some((ex: unknown) => !object(ex) || !text(ex.exerciseId, 120) || !text(ex.name, 200) || !object(ex.prescription) || !number(ex.prescription.sets) || !number(ex.prescription.minReps) || !number(ex.prescription.maxReps) || !number(ex.prescription.restSeconds)))) throw new HttpError(400, 'ساختار برنامهٔ شخصی نامعتبر است.');
+    if (!validProgram(value)) throw new HttpError(400, 'ساختار برنامهٔ شخصی نامعتبر است.');
     return;
   }
   if (kind === 'jointConcerns') {
@@ -49,6 +53,8 @@ function validateValue(kind: PersonalKind, key: string, value: unknown): void {
   }
   if (!object(value)) throw new HttpError(400, 'ساختار دادهٔ شخصی نامعتبر است.');
   if (kind === 'session') {
+    if (value.templateSnapshot !== undefined && (!object(value.templateSnapshot) || value.templateSnapshot.id !== value.templateId || !validProgram([value.templateSnapshot]))) throw new HttpError(400, 'نسخهٔ برنامهٔ جلسه نامعتبر است.');
+    if (value.templateReference !== undefined && (!object(value.templateReference) || !text(value.templateReference.programmeId, 80) || !value.templateReference.programmeId || !number(value.templateReference.version) || !Number.isSafeInteger(value.templateReference.version) || value.templateReference.version < 0)) throw new HttpError(400, 'شناسهٔ برنامهٔ جلسه نامعتبر است.');
     if (value.id !== key || !text(value.templateId, 120) || !text(value.name, 200) || !date(value.startedAt) || !['active', 'completed', 'abandoned'].includes(String(value.status)) || !text(value.notes, 5000) || !number(value.currentExerciseIndex) || !number(value.currentSetIndex) || !Array.isArray(value.exercises) || value.exercises.length > 200 || value.exercises.some((ex: unknown) => !object(ex) || !text(ex.exerciseId, 120) || !Array.isArray(ex.sets) || ex.sets.length > 100 || ex.sets.some((set: unknown) => !object(set) || !number(set.setNumber) || !number(set.weightKg) || !number(set.reps) || !number(set.rir) || !date(set.doneAt)))) throw new HttpError(400, 'جلسهٔ تمرین نامعتبر است.');
   } else if (kind === 'bodyweight') {
     if (value.id !== key || !date(value.date) || !number(value.weightKg) || value.weightKg < 30 || value.weightKg > 300 || (value.notes !== undefined && !text(value.notes, 5000))) throw new HttpError(400, 'ثبت وزن نامعتبر است.');
@@ -102,18 +108,25 @@ export async function applyPersonalChange(db: Db, userId: number, change: Person
   const params = [userId, change.kind, change.key, change.deleted ? null : JSON.stringify(change.value), change.deleted ? 1 : 0, at, change.operationId, change.baseVersion];
   const select = 'kind, item_key, version, body, deleted, updated_at, last_operation_id';
   // Compare-and-swap is atomic. A stale device cannot overwrite a newer version.
+  const session = change.kind === 'session';
   const write = change.baseVersion === 0
     ? `INSERT INTO personal_data_records (user_id, kind, item_key, version, body, deleted, updated_at, last_operation_id)
-       VALUES ($1, $2, $3, 1, $4, $5, $6, $7) ON CONFLICT (user_id, kind, item_key) DO NOTHING RETURNING ${select}`
+       ${session ? 'SELECT $1, $2, $3, 1, $4, $5, $6, $7 FROM session_lock' : 'VALUES ($1, $2, $3, 1, $4, $5, $6, $7)'}
+       ON CONFLICT (user_id, kind, item_key) DO NOTHING RETURNING ${select}`
     : `UPDATE personal_data_records SET version = version + 1, body = $4, deleted = $5, updated_at = $6, last_operation_id = $7
-       WHERE user_id = $1 AND kind = $2 AND item_key = $3 AND version = $8 RETURNING ${select}`;
+       WHERE user_id = $1 AND kind = $2 AND item_key = $3 AND version = $8 ${session ? 'AND EXISTS (SELECT 1 FROM session_lock)' : ''} RETURNING ${select}`;
   const writeParams = change.baseVersion === 0 ? params.slice(0, 7) : params;
-  // Deleting a shared profile also revokes consent atomically; recreating it must not silently re-share it.
-  const statement = change.kind === 'profile' && change.deleted
-    ? `WITH written AS (${write}), revoked AS (
-         UPDATE student_profiles SET share_with_coach = 0 WHERE student_id = $1 AND EXISTS (SELECT 1 FROM written)
+  // A relationship switch that races a session write must see a changed user row, not a stale snapshot.
+  const statement = session
+    ? `WITH session_lock AS MATERIALIZED (SELECT id FROM users WHERE id = $1 FOR UPDATE), written AS (${write}), bumped AS (
+         UPDATE users SET session_guard_version = session_guard_version + 1 WHERE id = $1 AND EXISTS (SELECT 1 FROM written)
        ) SELECT * FROM written`
-    : write;
+    // Deleting a shared profile also revokes consent atomically; recreating it must not silently re-share it.
+    : change.kind === 'profile' && change.deleted
+      ? `WITH written AS (${write}), revoked AS (
+           UPDATE student_profiles SET share_with_coach = 0 WHERE student_id = $1 AND EXISTS (SELECT 1 FROM written)
+         ) SELECT * FROM written`
+      : write;
   const rows = await db.query<RecordRow>(statement, writeParams);
   if (rows[0]) return { kind: change.kind, key: change.key, status: 'saved', current: fromRow(rows[0]) };
   const currentRows = await db.query<RecordRow>('SELECT kind, item_key, version, body, deleted, updated_at, last_operation_id FROM personal_data_records WHERE user_id = $1 AND kind = $2 AND item_key = $3', [userId, change.kind, change.key]);

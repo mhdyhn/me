@@ -3,13 +3,16 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, Dumbbell, Inf
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { DraftConflictNotice } from '../components/DraftConflictNotice';
+import { usePersonalSyncState } from '../components/PersonalSync';
+import { isOfflineBuild } from '../lib/accountScope';
 import { useGuardedDraft } from '../components/useGuardedDraft';
 import { DraftChangedError, samePersonalValue } from '../lib/draftGuard';
 import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
 import { exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
-import { getWorkoutTemplate, programExerciseName, useProgram } from '../lib/programStore';
+import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
+import { workoutSessionTemplate } from '../lib/workoutSessionTemplate';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
 import { faDigits, faNumber, formatDate, formatDuration, kg } from '../lib/format';
 import type { LoggedSet, RestTimerState, WorkoutSession } from '../types';
@@ -19,13 +22,22 @@ const timerLabel = (total: number) => faDigits(`${String(Math.floor(Math.max(0, 
 
 export function Workout() {
   const { templateId = '' } = useParams();
-  const template = getWorkoutTemplate(templateId);
   const navigate = useNavigate();
   const { sessions, loading, activeSession, startWorkout, saveSession, completeActiveSession, deleteSession } = useGym();
+  const sync = usePersonalSyncState();
+  const activeSessions = sessions.filter((item) => item.status === 'active');
+  const initialSyncPending = !isOfflineBuild && import.meta.env.MODE !== 'test' && !sync.lastSyncAt && (sync.phase === 'idle' || sync.phase === 'syncing');
+  const initialSyncFailed = !isOfflineBuild && !sync.lastSyncAt && sync.phase === 'error';
+  const sessionSyncConflict = sync.conflicts.some((item) => item.kind === 'session');
   useProgram();
+  const programLoadState = useAssignedProgramLoadState();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const previousTemplateId = useRef(templateId);
   const [summary, setSummary] = useState<WorkoutSession | null>(null);
+  const relatedSession = summary?.templateId === templateId ? summary : activeSession?.templateId === templateId ? activeSession : null;
+  const currentTemplate = getWorkoutTemplate(templateId);
+  const assigned = isProgramReadOnly() ? getAssignedMeta() : null;
+  const template = relatedSession ? workoutSessionTemplate(relatedSession, currentTemplate, assigned) : currentTemplate;
   const [weightValue, setWeightValue] = useState('');
   const [repsValue, setRepsValue] = useState('');
   const [rirInput, setRirInput] = useState('2');
@@ -35,6 +47,7 @@ export function Workout() {
   const [now, setNow] = useState(Date.now());
   const [timerBusy, setTimerBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
   const [previewFrame, setPreviewFrame] = useState<FigureState>('start');
 
   useEffect(() => {
@@ -46,7 +59,7 @@ export function Workout() {
 
   useEffect(() => {
     // Completing a session clears activeSession. Do not immediately create a fresh one while the summary is open.
-    if (!template || loading || summary) return;
+    if (!template || loading || summary || initialSyncPending || initialSyncFailed || sessionSyncConflict || activeSessions.length > 1) return;
     if (activeSession) {
       setSessionId(activeSession.id);
       return;
@@ -54,7 +67,7 @@ export function Workout() {
     // Do not recreate a session that another device just deleted or completed.
     if (sessionId) return;
     void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
-  }, [template, loading, activeSession?.id, startWorkout, summary, sessionId]);
+  }, [template, loading, activeSession?.id, activeSessions.length, initialSyncPending, initialSyncFailed, sessionSyncConflict, startWorkout, summary, sessionId]);
 
   const session = summary ? sessions.find((item) => item.id === summary.id) ?? summary : (sessionId ? sessions.find((item) => item.id === sessionId) ?? null : activeSession);
   const notes = useGuardedDraft(session?.notes ?? '');
@@ -82,7 +95,7 @@ export function Workout() {
     if (notes.conflict) { setFormError('ابتدا نسخهٔ تازه و پیش‌نویس یادداشت را بررسی کن.'); return; }
     if (await safeSave({ ...current, notes: notesDraft }, current)) setFormError('');
   };
-  const activeTemplate = session ? getWorkoutTemplate(session.templateId) : template;
+  const activeTemplate = session ? workoutSessionTemplate(session, getWorkoutTemplate(session.templateId), assigned) : template;
   const currentExerciseIndex = session?.currentExerciseIndex ?? 0;
   const currentWorkoutExercise = activeTemplate?.exercises[currentExerciseIndex];
   const exercise = currentWorkoutExercise ? getExerciseGuide(currentWorkoutExercise.exerciseId) : undefined;
@@ -127,7 +140,38 @@ export function Workout() {
   }, [session?.id, currentExerciseIndex, session?.currentSetIndex, currentWorkoutExercise?.exerciseId, summary]);
 
 
+  if (initialSyncPending) return <div className="workout-loading"><span className="loader-dot" /><p>در حال بررسی تمرین‌های دستگاه‌های دیگر…</p></div>;
+  if (initialSyncFailed) return <div className="page-stack"><EmptyState title="بررسی تمرین‌های سرور انجام نشد" detail="ممکن است تمرین فعالی روی دستگاه دیگر باشد. اطلاعات این دستگاه دست‌نخورده مانده‌اند؛ مشکل همگام‌سازی را در تنظیمات بررسی کن." action={<Link to="/settings" className="button button--secondary">بررسی همگام‌سازی</Link>} /></div>;
+  if (sessionSyncConflict) return <div className="page-stack"><EmptyState title="ابتدا تعارض تمرین را بررسی کن" detail="نسخهٔ تمرین روی این دستگاه و سرور متفاوت است. برای جلوگیری از حذف یا جایگزینی ناخواسته، پیش از ادامه نسخه‌ها را در تنظیمات بررسی کن." action={<Link to="/settings" className="button button--secondary">بررسی همگام‌سازی</Link>} /></div>;
+  if (activeSessions.length > 1) return <div className="page-stack">
+    <EmptyState title="چند جلسهٔ فعال پیدا شد" detail="ممکن است در دستگاه‌های مختلف تمرین شروع شده باشد. برای ادامه، جلسه‌های اضافی را با ست‌های ثبت‌شده ببند؛ هیچ ستی حذف نمی‌شود." />
+    {formError && <p className="form-error" role="alert">{formError}</p>}
+    {activeSessions.map((item) => <section className="panel-card" key={item.id}>
+      <h3>{item.name}</h3>
+      <p className="muted">{formatDate(item.startedAt)} · {faNumber(item.exercises.reduce((total, exercise) => total + exercise.sets.length, 0))} ست ثبت‌شده</p>
+      <button type="button" className="button button--secondary button--small" disabled={closingSessionId !== null} onClick={async () => {
+        const confirmed = await confirmModal({ title: 'بستن این جلسه', message: 'این جلسه با ست‌های ثبت‌شده بسته می‌شود و ست‌های باقی‌مانده انجام‌شده محسوب نمی‌شوند.', confirmText: 'ثبت و بستن جلسه', cancelText: 'انصراف' });
+        if (!confirmed) return;
+        setClosingSessionId(item.id); setFormError('');
+        try { if (!await completeActiveSession(item.id)) setFormError('بستن جلسه انجام نشد.'); }
+        catch (error) { setFormError(error instanceof Error ? error.message : 'بستن جلسه انجام نشد.'); }
+        finally { setClosingSessionId(null); }
+      }}>ثبت و بستن این جلسه</button>
+    </section>)}
+  </div>;
+
   if (!template) {
+    if (loading || programLoadState === 'loading') return <div className="workout-loading"><span className="loader-dot" /><p>در حال آماده‌سازی جلسه…</p></div>;
+    if (activeSession?.templateId === templateId) return <div className="page-stack">
+      <EmptyState title="برنامهٔ اصلی این جلسه در دسترس نیست" detail="ممکن است جلسهٔ قدیمی قبل از ذخیرهٔ نسخهٔ برنامه شروع شده یا دسترسی آزمایشی پایان یافته باشد. برای جلوگیری از ثبت روی برنامهٔ اشتباه، ادامهٔ خودکار ممکن نیست. ست‌های ثبت‌شده محفوظ‌اند." action={<Link to="/progress" className="button button--secondary">دیدن سوابق</Link>} />
+      {formError && <p className="form-error" role="alert">{formError}</p>}
+      <button type="button" className="button button--primary" onClick={async () => {
+        const confirmed = await confirmModal({ title: 'بستن جلسه با ست‌های ثبت‌شده', message: 'جلسه با همین ست‌های موجود ثبت می‌شود. حرکت‌ها یا ست‌های باقیمانده تکمیل‌شده محسوب نمی‌شوند. ادامه می‌دهی؟', confirmText: 'ثبت و بستن جلسه', cancelText: 'انصراف' });
+        if (!confirmed) return;
+        try { if (await completeActiveSession(activeSession.id)) navigate('/progress'); else setFormError('بستن جلسه انجام نشد.'); }
+        catch (error) { setFormError(error instanceof Error ? error.message : 'بستن جلسه انجام نشد.'); }
+      }}>ثبت و بستن جلسه با ست‌های موجود</button>
+    </div>;
     return <EmptyState title="جلسه پیدا نشد" detail="این جلسه در برنامهٔ تمرینی فعلی نیست." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />;
   }
 
@@ -141,7 +185,7 @@ export function Workout() {
   }
 
   if (isDifferentActiveSession && activeSession) {
-    const prevWorkoutName = getWorkoutTemplate(activeSession.templateId)?.name ?? activeSession.name;
+    const prevWorkoutName = activeSession.name;
     return (
       <div className="workout-conflict panel-card">
         <span className="eyebrow">جلسهٔ دیگری در حال انجام است</span>
@@ -207,8 +251,8 @@ export function Workout() {
           <div className="summary-stat panel-card"><span>زمان</span><strong>{formatDuration(totals.durationSeconds)}</strong><small>مدت جلسه</small></div>
         </div>
         <div className="workout-summary-grid">
-          <section className="panel-card summary-breakdown"><div className="card-topline"><span className="eyebrow">خلاصهٔ جلسه</span><Dumbbell size={16} className="icon-accent" /></div><h3>{getWorkoutTemplate(completed.templateId)?.name ?? completed.name}</h3><p className="muted">{formatDate(completed.startedAt, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{programExerciseName(item.exerciseId) ?? getExerciseGuide(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
+          <section className="panel-card summary-breakdown"><div className="card-topline"><span className="eyebrow">خلاصهٔ جلسه</span><Dumbbell size={16} className="icon-accent" /></div><h3>{completed.name}</h3><p className="muted">{formatDate(completed.startedAt, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            {completed.exercises.filter((item) => item.sets.length).map((item) => <div className="summary-exercise-row" key={item.exerciseId}><div><strong>{activeTemplate.exercises.find((exercise) => exercise.exerciseId === item.exerciseId)?.name ?? getExerciseGuide(item.exerciseId)?.name ?? item.exerciseId}</strong><small>{faNumber(item.sets.length)} ست · {faNumber(item.sets.reduce((sum, set) => sum + set.reps, 0))} تکرار</small></div><span>{kg(item.sets.reduce((max, set) => Math.max(max, set.weightKg), 0))} بهترین ست</span></div>)}
             <div className="volume-callout"><span>حجم کل تمرین</span><strong>{faNumber(Math.round(totals.volumeKg))} <small>کیلوگرم × تکرار</small></strong></div>
           </section>
           <section className="panel-card summary-notes"><div className="card-topline"><span className="eyebrow">یادداشت‌های جلسه</span><Info size={16} className="icon-muted" /></div><label htmlFor="workout-notes">نکته‌ای هست که بخواهی یادت بماند؟</label><textarea id="workout-notes" value={notesDraft} onChange={(event) => notes.setDraft(event.target.value)} onBlur={() => void saveNotes(completed)} placeholder="انرژی، نکتهٔ فرم حرکت یا تنظیم وسیله…" rows={5} /><span className="field-hint">همراه این تمرین ذخیره می‌شود.</span>

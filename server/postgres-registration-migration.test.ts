@@ -26,8 +26,10 @@ describe.skipIf(!url)('PostgreSQL migration from the previous account schema', (
       const token = (await createSession(db, student, 0, now))!;
       await db.query("INSERT INTO student_programs (student_id, coach_id, body, updated_at, price_tomans, programme_id, version) VALUES ($1, $2, $3, $4, 100, 'legacy-offer', 1)", [student, coach, JSON.stringify({ title: 'برنامهٔ قدیمی', days: [] }), now.toISOString()]);
       await db.query("INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, programme_id, programme_mapping) VALUES ($1, $2, 100, 90, 10, 'legacy-authority', 'paid', 'legacy-ref', $3, 'legacy-offer', 'explicit')", [student, coach, now.toISOString()]);
-      // Restore the old check and remove the new account fields before exercising startup migrations.
-      await db.exec("ALTER TABLE users DROP CONSTRAINT users_coach_role_check; ALTER TABLE users ADD CONSTRAINT legacy_coach_required CHECK ((role = 'student') = (coach_id IS NOT NULL)); ALTER TABLE users ADD CONSTRAINT unrelated_check CHECK (username <> 'forbidden'); ALTER TABLE users DROP COLUMN phone_number, DROP COLUMN self_registered, DROP COLUMN pending_approval, DROP COLUMN coach_access, DROP COLUMN coach_access_version;");
+      await db.query("INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)", [student, coach, JSON.stringify({ targets: { kcal: 2000 }, days: [] }), now.toISOString()]);
+      await db.query("INSERT INTO student_biometrics (student_id, coach_id, limitations, updated_at) VALUES ($1, $2, 'سابقهٔ قدیمی', $3)", [student, coach, now.toISOString()]);
+      // Restore the old checks, tables and account fields before exercising startup migrations.
+      await db.exec("DROP TABLE nutrition_coach_plans, student_coach_biometrics; DELETE FROM app_data_migrations WHERE name = 'coach-biometrics-v1'; ALTER TABLE users DROP CONSTRAINT users_coach_role_check; ALTER TABLE users ADD CONSTRAINT legacy_coach_required CHECK ((role = 'student') = (coach_id IS NOT NULL)); ALTER TABLE users ADD CONSTRAINT unrelated_check CHECK (username <> 'forbidden'); ALTER TABLE users DROP COLUMN phone_number, DROP COLUMN self_registered, DROP COLUMN pending_approval, DROP COLUMN coach_access, DROP COLUMN coach_access_version, DROP COLUMN personal_program_mode, DROP COLUMN session_guard_version;");
       await db.close(); db = undefined;
       for (let startup = 0; startup < 2; startup++) {
         db = await openDatabase(target.toString());
@@ -35,6 +37,8 @@ describe.skipIf(!url)('PostgreSQL migration from the previous account schema', (
         expect(await findUserByUsername(db, 'legacy-student')).toMatchObject({ coachId: coach, phoneNumber: null, selfRegistered: false });
         expect((await db.query('SELECT programme_id FROM student_programs WHERE student_id = $1', [student]))[0]).toMatchObject({ programme_id: 'legacy-offer' });
         expect((await db.query('SELECT authority, status, ref_id FROM payment_transactions WHERE student_id = $1', [student]))[0]).toMatchObject({ authority: 'legacy-authority', status: 'paid', ref_id: 'legacy-ref' });
+        expect((await db.query('SELECT coach_id, body FROM nutrition_coach_plans WHERE student_id = $1', [student]))[0]).toMatchObject({ coach_id: coach, body: expect.stringContaining('2000') });
+        expect((await db.query('SELECT coach_id, limitations FROM student_coach_biometrics WHERE student_id = $1', [student]))[0]).toMatchObject({ coach_id: coach, limitations: 'سابقهٔ قدیمی' });
         expect(await db.query("SELECT 1 FROM pg_constraint WHERE conrelid = 'users'::regclass AND conname = 'unrelated_check'")).toHaveLength(1);
         if (startup === 0) await insertUser(db, { username: 'new-independent', passwordHash: hashPassword('new-password'), role: 'student', displayName: 'مستقل', phoneNumber: '09123456789', coachId: null, selfRegistered: true, mustChangePassword: false, now });
         await db.close(); db = undefined;

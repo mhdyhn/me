@@ -81,7 +81,7 @@ function CoachStudents() {
   async function deleteStudent(student: PublicUser) {
     const ok = await confirmModal({
       title: 'حذف شاگرد',
-      message: `شاگرد «${student.displayName}» و برنامهٔ او حذف شود؟ این کار برگشت ندارد.`,
+      message: `شاگرد «${student.displayName}» و داده‌هایش حذف شوند؟ این کار برگشت ندارد. حساب دارای تراکنش حذف نمی‌شود؛ به‌جای آن می‌توانید حساب را غیرفعال کنید.`,
       confirmText: 'حذف شاگرد',
       cancelText: 'انصراف',
       variant: 'danger',

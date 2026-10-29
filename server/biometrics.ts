@@ -46,6 +46,28 @@ export async function migrateBiometrics(db: Db): Promise<void> {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_student_biometrics_coach_id ON student_biometrics(coach_id);
+    CREATE TABLE IF NOT EXISTS student_coach_biometrics (
+      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      coach_id INTEGER NOT NULL REFERENCES users(id),
+      enabled_modules TEXT NOT NULL DEFAULT '["recovery","muscles","hinge","noom"]',
+      age INTEGER,
+      resting_hr INTEGER,
+      max_hr INTEGER,
+      max_hr_method TEXT NOT NULL DEFAULT 'tanaka',
+      limitations TEXT NOT NULL DEFAULT '',
+      contraindicated_movements TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (student_id, coach_id)
+    );
+    -- Older administrator edits stored the editor's ID; associate them with the student's coach.
+    WITH migration AS (
+      INSERT INTO app_data_migrations (name) VALUES ('coach-biometrics-v1') ON CONFLICT DO NOTHING RETURNING name
+    )
+    INSERT INTO student_coach_biometrics (student_id, coach_id, enabled_modules, age, resting_hr, max_hr, max_hr_method, limitations, contraindicated_movements, updated_at)
+      SELECT b.student_id, CASE WHEN editor.role = 'coach' THEN b.coach_id ELSE COALESCE(s.coach_id, b.coach_id) END,
+        b.enabled_modules, b.age, b.resting_hr, b.max_hr, b.max_hr_method, b.limitations, b.contraindicated_movements, b.updated_at
+      FROM student_biometrics b JOIN users s ON s.id = b.student_id JOIN users editor ON editor.id = b.coach_id CROSS JOIN migration
+      ON CONFLICT (student_id, coach_id) DO NOTHING;
   `);
 }
 
@@ -156,7 +178,8 @@ export function defaultBiometrics(studentId: number, coachId = 0): StudentBiomet
   };
 }
 
-export async function loadBiometrics(db: Db, studentId: number): Promise<StudentBiometrics> {
+export async function loadBiometrics(db: Db, studentId: number, coachId: number | null): Promise<StudentBiometrics> {
+  if (coachId === null) return defaultBiometrics(studentId);
   const row = (
     await db.query<{
       student_id: number;
@@ -169,7 +192,7 @@ export async function loadBiometrics(db: Db, studentId: number): Promise<Student
       limitations: string;
       contraindicated_movements: string;
       updated_at: string;
-    }>('SELECT * FROM student_biometrics WHERE student_id = $1', [studentId])
+    }>('SELECT * FROM student_coach_biometrics WHERE student_id = $1 AND coach_id = $2', [studentId, coachId])
   )[0];
 
   if (!row) {
@@ -209,6 +232,19 @@ export async function loadBiometrics(db: Db, studentId: number): Promise<Student
   };
 }
 
+export async function listFormerCoachBiometrics(db: Db, studentId: number, currentCoachId: number | null, after: number): Promise<{ records: { coachId: number; coachName: string; biometrics: StudentBiometrics }[]; nextCursor: number | null }> {
+  const rows = await db.query<{ coach_id: number; display_name: string }>(`
+    SELECT b.coach_id, c.display_name FROM student_coach_biometrics b JOIN users c ON c.id = b.coach_id
+    WHERE b.student_id = $1 AND b.coach_id > $2 AND b.coach_id IS DISTINCT FROM $3::integer
+    ORDER BY b.coach_id LIMIT 21`, [studentId, after, currentCoachId]);
+  const page = rows.slice(0, 20);
+  return {
+    records: await Promise.all(page.map(async (row) => ({ coachId: Number(row.coach_id), coachName: row.display_name,
+      biometrics: await loadBiometrics(db, studentId, Number(row.coach_id)) }))),
+    nextCursor: rows.length > 20 ? Number(page[page.length - 1]!.coach_id) : null,
+  };
+}
+
 export async function saveBiometrics(
   db: Db,
   studentId: number,
@@ -223,8 +259,10 @@ export async function saveBiometrics(
     contraindicatedMovements?: string[];
   },
   now: string,
+  relationshipVersion = 0,
+  allowRevoked = false,
 ): Promise<StudentBiometrics> {
-  const existing = await loadBiometrics(db, studentId);
+  const existing = await loadBiometrics(db, studentId, coachId);
   const enabledModules = input.enabledModules
     ? input.enabledModules.filter((m): m is AiModuleKey => ALL_AI_MODULES.includes(m))
     : existing.enabledModules;
@@ -246,20 +284,26 @@ export async function saveBiometrics(
   const limitations = input.limitations !== undefined ? String(input.limitations).slice(0, 2000) : existing.limitations;
   const contraindicatedMovements = input.contraindicatedMovements ?? existing.contraindicatedMovements;
 
-  await db.query(
-    `INSERT INTO student_biometrics (
-      student_id, coach_id, enabled_modules, age, resting_hr, max_hr, max_hr_method, limitations, contraindicated_movements, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT (student_id) DO UPDATE SET
-      coach_id = excluded.coach_id,
-      enabled_modules = excluded.enabled_modules,
-      age = excluded.age,
-      resting_hr = excluded.resting_hr,
-      max_hr = excluded.max_hr,
-      max_hr_method = excluded.max_hr_method,
-      limitations = excluded.limitations,
-      contraindicated_movements = excluded.contraindicated_movements,
-      updated_at = excluded.updated_at`,
+  const rows = await db.query(
+    `WITH relationship AS MATERIALIZED (
+      SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
+        AND coach_access_version = $11 AND (coach_access = 1 OR $12::boolean) FOR UPDATE
+    ), saved AS (
+      INSERT INTO student_coach_biometrics (
+        student_id, coach_id, enabled_modules, age, resting_hr, max_hr, max_hr_method, limitations, contraindicated_movements, updated_at
+      ) SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10 FROM relationship
+      ON CONFLICT (student_id, coach_id) DO UPDATE SET
+        enabled_modules = excluded.enabled_modules, age = excluded.age, resting_hr = excluded.resting_hr,
+        max_hr = excluded.max_hr, max_hr_method = excluded.max_hr_method, limitations = excluded.limitations,
+        contraindicated_movements = excluded.contraindicated_movements, updated_at = excluded.updated_at
+      RETURNING *
+    ), legacy_projection AS (
+      INSERT INTO student_biometrics (student_id, coach_id, enabled_modules, age, resting_hr, max_hr, max_hr_method, limitations, contraindicated_movements, updated_at)
+      SELECT student_id, coach_id, enabled_modules, age, resting_hr, max_hr, max_hr_method, limitations, contraindicated_movements, updated_at FROM saved
+      ON CONFLICT (student_id) DO UPDATE SET coach_id = excluded.coach_id, enabled_modules = excluded.enabled_modules,
+        age = excluded.age, resting_hr = excluded.resting_hr, max_hr = excluded.max_hr, max_hr_method = excluded.max_hr_method,
+        limitations = excluded.limitations, contraindicated_movements = excluded.contraindicated_movements, updated_at = excluded.updated_at
+    ) SELECT student_id FROM saved`,
     [
       studentId,
       coachId,
@@ -271,8 +315,11 @@ export async function saveBiometrics(
       limitations,
       JSON.stringify(contraindicatedMovements),
       now,
+      relationshipVersion,
+      allowRevoked,
     ],
   );
+  if (!rows.length) throw new HttpError(409, 'دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
 
   const zones = calculateHeartRateZones(maxHr, restingHr);
 

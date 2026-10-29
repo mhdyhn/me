@@ -7,7 +7,7 @@ import { useGuardedDraft } from '../components/useGuardedDraft';
 import { DraftChangedError } from '../lib/draftGuard';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
-import { StudentNutritionPlan } from './account/StudentNutrition';
+import { CoachNutritionArchive, StudentNutritionPlan } from './account/StudentNutrition';
 import { MealDiary } from './account/MealDiary';
 import { faNumber, getLocalDateKey } from '../lib/format';
 import type { Targets } from '../lib/nutrition';
@@ -86,7 +86,8 @@ export function Nutrition() {
 
   return (
     <div className="page-stack nutrition-page">
-      {user?.role === 'student' && user.coachId !== null && <StudentNutritionPlan />}
+      {user?.role === 'student' && user.coachId !== null && <StudentNutritionPlan key={`${user.id}:${user.coachId}`} />}
+      {user?.role === 'student' && user.coachId !== null && <CoachNutritionArchive key={`${user.id}:${user.coachId}`} />}
       <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="وعده‌های روزانه‌ات را ثبت کن؛ کالری و درشت‌مغذی‌ها خودکار حساب می‌شوند و با هدف‌هایت مقایسه می‌شوند." />
       <div className="nutrition-context panel-card">
         <span className="nutrition-context__icon"><Leaf size={19} /></span>

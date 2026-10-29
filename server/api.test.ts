@@ -355,6 +355,42 @@ describe('deleting coaches and students', () => {
     expect((await login(coach.username, 'coach-new-pass-1')).status).toBe(401);
   });
 
+  it('keeps a former coach account and both sides of their archived conversation', async () => {
+    const former = await coachSession();
+    const current = await coachSession();
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد گفتگو' }, former.token);
+    const student = { id: created.json.user.id as number, token: (await login(created.json.username, created.json.password)).json.token as string };
+    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, student.token);
+    expect((await call('POST', `/api/students/${student.id}/chat`, { body: 'پیام مربی' }, former.token)).status).toBe(201);
+    expect((await call('POST', '/api/me/chat', { body: 'پیام شاگرد' }, student.token)).status).toBe(201);
+    await db.query('UPDATE users SET coach_id = $1 WHERE id = $2', [current.id, student.id]);
+
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const removed = await call('DELETE', `/api/coaches/${former.id}`, {}, admin);
+    expect(removed.status).toBe(409);
+    expect(removed.json.error).toContain('غیرفعال');
+    expect((await db.query('SELECT body FROM messages WHERE coach_id = $1 ORDER BY id', [former.id])).map((row) => row.body))
+      .toEqual(['پیام مربی', 'پیام شاگرد']);
+  });
+
+  it.each(['payment_transactions', 'payment_test_transactions'])('preserves %s when deletion is requested', async (table) => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد دارای تراکنش' }, coach.token);
+    const studentId = created.json.user.id as number;
+    if (table === 'payment_transactions') {
+      await db.query(`INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at)
+        VALUES ($1, $2, 100, 90, 10, 'financial-record', 'paid', $3)`, [studentId, coach.id, clock.toISOString()]);
+    } else {
+      await db.query(`INSERT INTO payment_test_transactions (student_id, coach_id, programme_id, programme_version, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, expires_at)
+        VALUES ($1, $2, 'offer', 1, 100, 90, 10, 'test-financial-record', 'paid', $3, $3)`, [studentId, coach.id, clock.toISOString()]);
+    }
+    const result = await call('DELETE', `/api/students/${studentId}`, {}, coach.token);
+    expect(result.status).toBe(409);
+    expect(result.json.error).toContain('غیرفعال');
+    expect(await db.query(`SELECT id FROM ${table} WHERE student_id = $1`, [studentId])).toHaveLength(1);
+    expect(await db.query('SELECT id FROM users WHERE id = $1', [studentId])).toHaveLength(1);
+  });
+
   it('only lets the admin delete coaches, and never a student or the admin', async () => {
     const coach = await coachSession();
     const student = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coach.token);

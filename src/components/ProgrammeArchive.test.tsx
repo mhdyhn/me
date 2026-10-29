@@ -13,7 +13,7 @@ it('shows purchased programme details read-only when a new programme is active',
   await user.click(await screen.findByText(/بایگانی برنامه‌های قبلی/));
   await user.click(screen.getByText('برنامهٔ خریداری‌شده'));
   expect(screen.getByText(/اسکوات/)).toHaveTextContent('۳ ست');
-  expect(screen.getByText(/تمرین فعال از برنامهٔ فعلی/)).toBeInTheDocument();
+  expect(screen.getByText(/تمرین از برنامهٔ فعلی شروع می‌شود/)).toBeInTheDocument();
 });
 
 function archiveResponse(title: string, nextCursor: string | null) {

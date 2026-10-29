@@ -76,6 +76,10 @@ export interface RestTimerState {
 export interface WorkoutSession {
   id: string;
   templateId: string;
+  /** The prescription at the start; older sessions may not have a snapshot. */
+  templateSnapshot?: WorkoutTemplate;
+  /** Temporary purchases keep only the offer identity, not a permanent prescription. */
+  templateReference?: { programmeId: string; version: number };
   name: string;
   startedAt: string;
   completedAt?: string;

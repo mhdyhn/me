@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadAssignedProgram } from './assignedProgram';
-import { getActiveProgram, getAssignedMeta, setAssignedMeta, setAssignedProgram } from './programStore';
+import { cancelAssignedProgramLoad, loadAssignedProgram } from './assignedProgram';
+import { getActiveProgram, getAssignedMeta, isProgramReadOnly, setActiveProgram, setAssignedMeta, setAssignedProgram } from './programStore';
 
 const program = { id: 'offer', version: 1, title: 'برنامه', priceTomans: 100000, updatedAt: '2026-10-28', days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -30,6 +30,20 @@ describe('assigned programme response ordering', () => {
     resolveOld(response(openTestAccess));
     await oldRequest;
     expect(getAssignedMeta()).toMatchObject({ isPaid: false, isTestPurchase: false });
+    expect(getActiveProgram()).toEqual([]);
+  });
+
+  it('does not replace the personal programme with a late coach response', async () => {
+    let resolveOld!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveOld = resolve; })));
+    const request = loadAssignedProgram();
+    cancelAssignedProgramLoad();
+    setAssignedMeta(null);
+    setActiveProgram([]);
+    resolveOld(response(openTestAccess));
+    await request;
+    expect(isProgramReadOnly()).toBe(false);
+    expect(getAssignedMeta()).toBeNull();
     expect(getActiveProgram()).toEqual([]);
   });
 

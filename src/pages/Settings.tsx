@@ -4,6 +4,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { RouteLoading } from '../components/RouteLoading';
 import { InstallAppModal } from '../components/InstallAppModal';
 import { PersonalDataPanel } from '../components/PersonalDataPanel';
+import { FormerCoachRecords } from '../components/FormerCoachRecords';
 import { DraftConflictNotice } from '../components/DraftConflictNotice';
 import { useGuardedDraft } from '../components/useGuardedDraft';
 import { DraftChangedError } from '../lib/draftGuard';
@@ -104,6 +105,7 @@ export function Settings() {
     <div className="page-stack settings-page">
       <SectionHeading eyebrow="پروفایل تمرینی" title="برنامه را برای خودت تنظیم کن." description={hasCoach ? 'پروفایل به حساب تو همگام می‌شود؛ اشتراک با مربی جداگانه و اختیاری است.' : 'پروفایل و تنظیمات شخصی پس از اتصال با حساب تو همگام می‌شوند.'} />
       <PersonalDataPanel />
+      {user?.role === 'student' && user.coachId !== null && <FormerCoachRecords key={`${user.id}:${user.coachId}`} />}
       <div className="settings-layout">
         <form className="settings-form panel-card" onSubmit={(event) => void submit(event)}>
           <div className="card-topline"><div><span className="eyebrow">پروفایل تمرینی</span><h2>دربارهٔ تو.</h2></div><UserRound size={18} className="icon-accent" /></div>

@@ -166,6 +166,20 @@ describe('direct registration and existing account paths', () => {
     expect((await call('GET', '/api/admin/students?before=-1', undefined, admin)).status).toBe(400);
   });
 
+  it('separates sources only behind an explicitly trusted proxy and ignores a spoofed earlier hop', async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = createServer(createApp({ db, secretKey: key, now: () => clock, maxRegistrationAttempts: 2, trustedProxyRanges: ['127.0.0.1/32'] }));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const attempt = (header: string) => call('POST', '/api/auth/register', { ...valid, role: 'admin' }, undefined, { 'X-Forwarded-For': header });
+    expect((await attempt('203.0.113.1, 198.51.100.10')).status).toBe(400);
+    expect((await attempt('203.0.113.2, 198.51.100.10')).status).toBe(400);
+    expect((await attempt('203.0.113.3, 198.51.100.10')).status).toBe(429);
+    expect((await attempt('203.0.113.1, 198.51.100.11')).status).toBe(400);
+    const buckets = await db.query<{ bucket: string }>('SELECT bucket FROM registration_attempts');
+    expect(buckets.every((row) => !row.bucket.includes('198.51.100'))).toBe(true);
+  });
+
   it('enforces a persistent per-socket rate limit without trusting spoofed forwarded addresses', async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     server = createServer(createApp({ db, secretKey: key, now: () => clock, maxRegistrationAttempts: 2 }));

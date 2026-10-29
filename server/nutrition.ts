@@ -46,6 +46,17 @@ export async function migrateNutrition(db: Db): Promise<void> {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_nutrition_plans_coach_id ON nutrition_plans(coach_id);
+    -- Keep each coach's plan separate; the legacy table remains a current-plan projection.
+    CREATE TABLE IF NOT EXISTS nutrition_coach_plans (
+      student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      coach_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (student_id, coach_id)
+    );
+    INSERT INTO nutrition_coach_plans (student_id, coach_id, body, updated_at)
+      SELECT student_id, coach_id, body, updated_at FROM nutrition_plans
+      ON CONFLICT (student_id, coach_id) DO NOTHING;
     CREATE TABLE IF NOT EXISTS nutrition_diary (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       day TEXT NOT NULL,
@@ -64,18 +75,45 @@ export function emptyPlan(): NutritionPlan {
   };
 }
 
-export async function loadPlan(db: Db, studentId: number): Promise<NutritionPlan | null> {
-  const row = (await db.query<{ body: string; updated_at: string }>('SELECT body, updated_at FROM nutrition_plans WHERE student_id = $1', [studentId]))[0];
+export async function loadPlan(db: Db, studentId: number, coachId: number): Promise<NutritionPlan | null> {
+  const row = (await db.query<{ body: string; updated_at: string }>(
+    'SELECT body, updated_at FROM nutrition_coach_plans WHERE student_id = $1 AND coach_id = $2', [studentId, coachId],
+  ))[0];
   if (!row) return null;
   return { ...(JSON.parse(row.body) as Omit<NutritionPlan, 'updatedAt'>), updatedAt: row.updated_at };
 }
 
-export async function savePlan(db: Db, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string): Promise<NutritionPlan> {
-  await db.query(
-    `INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)
-     ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at`,
-    [studentId, coachId, JSON.stringify(plan), at],
+export async function listFormerCoachPlans(db: Db, studentId: number, currentCoachId: number | null, after: number): Promise<{ plans: { coachId: number; coachName: string; plan: NutritionPlan }[]; nextCursor: number | null }> {
+  const rows = await db.query<{ coach_id: number; display_name: string; body: string; updated_at: string }>(`
+    SELECT p.coach_id, c.display_name, p.body, p.updated_at FROM nutrition_coach_plans p
+    JOIN users c ON c.id = p.coach_id
+    WHERE p.student_id = $1 AND p.coach_id > $2 AND p.coach_id IS DISTINCT FROM $3::integer
+    ORDER BY p.coach_id LIMIT 21`, [studentId, after, currentCoachId]);
+  const page = rows.slice(0, 20);
+  return {
+    plans: page.map((row) => ({ coachId: Number(row.coach_id), coachName: row.display_name,
+      plan: { ...(JSON.parse(row.body) as Omit<NutritionPlan, 'updatedAt'>), updatedAt: row.updated_at } })),
+    nextCursor: rows.length > 20 ? Number(page[page.length - 1]!.coach_id) : null,
+  };
+}
+
+export async function savePlan(db: Db, studentId: number, coachId: number, plan: Omit<NutritionPlan, 'updatedAt'>, at: string, relationshipVersion = 0): Promise<NutritionPlan> {
+  const rows = await db.query(`
+    WITH relationship AS MATERIALIZED (
+      SELECT id FROM users WHERE id = $1 AND role = 'student' AND is_active = 1 AND coach_id = $2
+        AND coach_access = 1 AND coach_access_version = $5 FOR UPDATE
+    ), saved AS (
+      INSERT INTO nutrition_coach_plans (student_id, coach_id, body, updated_at)
+      SELECT $1, $2, $3, $4 FROM relationship
+      ON CONFLICT(student_id, coach_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at RETURNING *
+    ), legacy_projection AS (
+      INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at)
+      SELECT student_id, coach_id, body, updated_at FROM saved
+      ON CONFLICT(student_id) DO UPDATE SET coach_id = excluded.coach_id, body = excluded.body, updated_at = excluded.updated_at
+    ) SELECT student_id FROM saved`,
+    [studentId, coachId, JSON.stringify(plan), at, relationshipVersion],
   );
+  if (!rows.length) throw new HttpError(409, 'دسترسی مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
   return { ...plan, updatedAt: at };
 }
 

@@ -1465,6 +1465,20 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .programme-archive__item { border-top: 1px solid var(--line); padding: 10px 0; }
 .programme-archive__item h3 { font-size: 0.95rem; }
 .programme-archive__item li { line-height: 1.9; overflow-wrap: anywhere; }
+.coach-history { min-width: 0; padding: 16px; overflow-wrap: anywhere; }
+.coach-history summary { cursor: pointer; font-weight: 700; }
+.coach-history__group { display: grid; gap: 8px; padding-top: 12px; }
+.coach-history__group h3 { margin: 0; font-size: 14px; }
+.coach-history__item { min-width: 0; border-top: 1px solid var(--line); padding: 12px 0; }
+.coach-history__item > summary { margin-bottom: 10px; }
+.coach-history__data { display: grid; gap: 8px; margin: 0; }
+.coach-history__data div { display: grid; grid-template-columns: minmax(92px, .4fr) minmax(0, 1fr); gap: 8px; }
+.coach-history__data dt { color: var(--muted); }
+.coach-history__data dd { margin: 0; }
+.coach-history__messages { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; padding: 0; list-style: none; }
+.coach-history__messages li { min-width: 0; padding: 10px; border-radius: 12px; background: var(--surface-soft); }
+.coach-history__messages p { white-space: pre-wrap; margin: 5px 0; }
+.coach-history__messages img, .coach-history__messages video, .coach-history__messages audio { display: block; max-width: 100%; max-height: 320px; margin-top: 8px; }
 .builder-save-mode { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
 .builder-save-mode legend { padding: 0 6px; font-weight: 700; }
 .builder-save-mode label { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 230px; cursor: pointer; }
@@ -2786,3 +2800,17 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .field-hint { color: #65566f; line-height: 1.7; }
 .coach-search { max-width: 420px; }
 #admin-students-heading { scroll-margin-top: 85px; }
+
+/* Returning to an earlier offer is deliberate and does not create a new sale. */
+.coach-programme-archive { min-width: 0; padding: 16px; overflow-wrap: anywhere; }
+.coach-programme-archive > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; color: var(--brand); }
+.coach-programme-archive > summary::-webkit-details-marker { display: none; }
+.coach-programme-archive > summary > svg { flex: none; }
+.coach-programme-archive > summary span, .coach-programme-archive__item > div { display: grid; min-width: 0; gap: 4px; }
+.coach-programme-archive > summary strong, .coach-programme-archive__item strong { color: var(--text); font-size: 13px; }
+.coach-programme-archive > summary small, .coach-programme-archive__item small { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.coach-programme-archive__body { display: grid; gap: 10px; padding-top: 12px; }
+.coach-programme-archive__body > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.9; }
+.coach-programme-archive__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.coach-programme-archive__body > .button { justify-self: start; }
+@media (max-width: 360px) { .coach-programme-archive__item > .button { width: 100%; justify-content: center; } }

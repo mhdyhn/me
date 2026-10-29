@@ -1,5 +1,6 @@
 import { decryptSecret, type SecretKey } from './secrets.ts';
 import type { Db } from './db.ts';
+import { HttpError } from './http.ts';
 
 export type Role = 'admin' | 'coach' | 'student';
 
@@ -16,6 +17,7 @@ export interface PublicUser {
   selfRegistered: boolean;
   pendingApproval: boolean;
   coachAccess: boolean;
+  personalProgramMode: boolean;
   /** Null for existing accounts created before mobile numbers were collected. */
   phoneNumber: string | null;
 }
@@ -36,6 +38,8 @@ interface UserRow {
   pending_approval?: number | null;
   coach_access?: number | null;
   coach_access_version?: string | number | null;
+  personal_program_mode?: number | null;
+  session_guard_version?: string | number | null;
   auth_version: string | number;
 }
 
@@ -45,6 +49,8 @@ export interface StoredUser extends PublicUser {
   authVersion: number;
   /** Invalidates stale profile-sharing requests when coach access is withdrawn. */
   coachAccessVersion: number;
+  /** Detects a session write racing a programme/relationship switch. */
+  sessionGuardVersion: number;
   /** The generated password, encrypted, while the user still has it. Null after they choose their own. */
   passwordEnc: string | null;
 }
@@ -61,18 +67,20 @@ function fromRow(row: UserRow): StoredUser {
     passwordHash: row.password_hash,
     authVersion: Number(row.auth_version),
     coachAccessVersion: Number(row.coach_access_version ?? 0),
+    sessionGuardVersion: Number(row.session_guard_version ?? 0),
     passwordEnc: row.password_enc ?? null,
     iban: row.iban ?? null,
     isActive: row.is_active === undefined || row.is_active === null ? true : Number(row.is_active) === 1,
     selfRegistered: Number(row.self_registered ?? 0) === 1,
     pendingApproval: Number(row.pending_approval ?? 0) === 1,
     coachAccess: Number(row.coach_access ?? 1) === 1,
+    personalProgramMode: Number(row.personal_program_mode ?? 0) === 1,
   };
 }
 
 export function toPublic(user: StoredUser): PublicUser {
   // Credentials and the session version never leave the server.
-  const { passwordHash: _hash, passwordEnc: _enc, authVersion: _version, coachAccessVersion: _coachVersion, ...publicUser } = user;
+  const { passwordHash: _hash, passwordEnc: _enc, authVersion: _version, coachAccessVersion: _coachVersion, sessionGuardVersion: _sessionVersion, ...publicUser } = user;
   return publicUser;
 }
 
@@ -110,9 +118,16 @@ export async function insertUser(
   return Number(rows[0]!.id);
 }
 
-/** Removes an account. Its sessions and any programme are removed by the foreign-key cascade. */
+/** Empty accounts may be removed; foreign keys keep financial and former-coach history intact. */
 export async function deleteUser(db: Db, id: number): Promise<void> {
-  await db.query('DELETE FROM users WHERE id = $1', [id]);
+  try {
+    await db.query('DELETE FROM users WHERE id = $1', [id]);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') {
+      throw new HttpError(409, 'این حساب به سوابق یا حساب‌های دیگری مرتبط است و حذف نمی‌شود؛ به‌جای حذف، آن را غیرفعال کنید.');
+    }
+    throw error;
+  }
 }
 
 export async function countStudents(db: Db, coachId: number): Promise<number> {

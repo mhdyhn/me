@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ApiError, TOKEN_KEY, USER_KEY, UNAUTHORIZED_EVENT, api, clearStoredUser, clearToken, getStoredUser, getToken, setStoredUser, setToken, type PublicUser } from '../lib/api';
 import { SCOPE_KEY, clearAccountScope, ensureAccountScope, isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
 import { db } from '../lib/db';
-import { loadAssignedProgram } from '../lib/assignedProgram';
+import { cancelAssignedProgramLoad, loadAssignedProgram } from '../lib/assignedProgram';
 import { loadStoredProgram } from '../lib/programPersistence';
 import { setActiveProgram, setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from '../lib/programStore';
 import { PERSONAL_DATA_APPLIED } from '../lib/personalSyncEvents';
@@ -80,19 +80,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   // Independent students use their own editable programme; coached students use the assigned one.
-  const userKey = user ? `${user.id}:${user.role}:${user.coachId ?? 'none'}` : null;
+  const userKey = user ? `${user.id}:${user.role}:${user.coachId ?? 'none'}:${user.personalProgramMode === true}` : null;
   useEffect(() => {
     if (!user) {
       if (isOfflineBuild) void loadStoredProgram();
       return;
     }
     if (ensureAccountScope(user)) return;
-    if (user.role === 'student' && user.coachId !== null) {
+    if (user.role === 'student' && user.coachId !== null && user.personalProgramMode !== true) {
       setAssignedMeta(null);
       setAssignedProgram([]);
       setAssignedProgramLoadState('loading');
       void loadAssignedProgram();
     } else {
+      cancelAssignedProgramLoad();
       setAssignedMeta(null);
       setActiveProgram([]);
       setAssignedProgramLoadState('ready');
@@ -102,7 +103,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user || (user.role === 'student' && user.coachId !== null)) return;
+    if (!user || (user.role === 'student' && user.coachId !== null && user.personalProgramMode !== true)) return;
     const refreshProgram = () => { void loadStoredProgram(); };
     window.addEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
     return () => window.removeEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
@@ -132,14 +133,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         try {
           const next = event.newValue ? JSON.parse(event.newValue) as PublicUser : null;
           switched = !next || next.id !== user.id;
-          if (next && !switched && (next.coachId !== user.coachId || next.coachAccess !== user.coachAccess)) void refresh();
+          if (next && !switched && (next.coachId !== user.coachId || next.coachAccess !== user.coachAccess || next.personalProgramMode !== user.personalProgramMode)) void refresh();
         } catch { switched = true; }
       }
       if (switched) window.location.reload();
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [user?.id, user?.coachId, user?.coachAccess, refresh]);
+  }, [user?.id, user?.coachId, user?.coachAccess, user?.personalProgramMode, refresh]);
 
   // A relationship may also change on another device, which has no shared storage event.
   useEffect(() => {

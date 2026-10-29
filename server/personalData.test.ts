@@ -80,6 +80,25 @@ describe('personal data sync', () => {
     expect((await request('GET', '/api/me/personal-data?accountId=1&cursor=bad', undefined, token)).status).toBe(400);
   });
 
+  it('syncs a bounded workout snapshot, supports legacy sessions, and rejects a mismatched or malformed snapshot', async () => {
+    const token = await login('owner', 'owner-pass-123');
+    const template = { id: 'day-1', name: 'روز اول', focus: 'تمرین', dayLabel: 'اول', durationMinutes: 45, description: '', exercises: [{ exerciseId: 'push', name: 'شنا', prescription: { sets: 3, minReps: 8, maxReps: 12, restSeconds: 60 } }] };
+    const session = { id: 'workout-1', templateId: 'day-1', name: 'تمرین', startedAt: now.toISOString(), status: 'active', notes: '', currentExerciseIndex: 0, currentSetIndex: 0, exercises: [], templateSnapshot: template };
+    const item = { kind: 'session', key: session.id, baseVersion: 0, operationId: 'snapshot-create-one', deleted: false, value: session };
+    const saved = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [item] }, token);
+    expect(saved.json.results[0]).toMatchObject({ status: 'saved', current: { value: { templateSnapshot: template } } });
+    expect((await request('GET', '/api/me/personal-data?accountId=1', undefined, token)).json.records[0].value.templateSnapshot).toEqual(template);
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...item, baseVersion: 1, operationId: 'snapshot-bad-id', value: { ...session, templateSnapshot: { ...template, id: 'other-day' } } }] }, token)).status).toBe(400);
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...item, baseVersion: 1, operationId: 'snapshot-bad-day', value: { ...session, templateSnapshot: { ...template, exercises: [{}] } } }] }, token)).status).toBe(400);
+    const { templateSnapshot: _snapshot, ...legacy } = session;
+    const old = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...item, baseVersion: 1, operationId: 'snapshot-old-session', value: legacy }] }, token);
+    expect(old.json.results[0]).toMatchObject({ status: 'saved', current: { version: 2, value: legacy } });
+    const reference = { programmeId: 'offer-1', version: 2147483648 };
+    const trial = await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...item, baseVersion: 2, operationId: 'snapshot-test-reference', value: { ...legacy, templateReference: reference } }] }, token);
+    expect(trial.json.results[0]).toMatchObject({ status: 'saved', current: { version: 3, value: { templateReference: reference } } });
+    expect((await request('POST', '/api/me/personal-data/batch', { accountId: 1, changes: [{ ...item, baseVersion: 3, operationId: 'snapshot-bad-reference', value: { ...legacy, templateReference: { ...reference, version: -1 } } }] }, token)).status).toBe(400);
+  });
+
   it('imports legacy server programs without overwriting a newer synced copy', async () => {
     await db.query('INSERT INTO user_personal_programs (user_id, body, updated_at) VALUES ($1, $2, $3)', [1, JSON.stringify([{ id: 'legacy' }]), now.toISOString()]);
     await migratePersonalData(db);

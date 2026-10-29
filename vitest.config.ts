@@ -8,5 +8,8 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     globals: true,
     clearMocks: true,
+    // Several suites start embedded PostgreSQL; bounded workers keep CI from starving its setup hooks.
+    maxWorkers: 2,
+    hookTimeout: 30000,
   },
 });

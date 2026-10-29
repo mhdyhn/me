@@ -159,7 +159,7 @@ function AdminCoaches() {
   async function deleteCoach(coach: CoachSummary) {
     const ok = await confirmModal({
       title: 'حذف مربی',
-      message: `مربی «${coach.displayName}» حذف شود؟ این کار برگشت ندارد.`,
+      message: `مربی «${coach.displayName}» حذف شود؟ این کار برگشت ندارد. حساب دارای سوابق حفظ‌شده حذف نمی‌شود؛ برای قطع دسترسی می‌توانید آن را غیرفعال کنید.`,
       confirmText: 'حذف مربی',
       cancelText: 'انصراف',
       variant: 'danger',
@@ -277,7 +277,7 @@ function AdminCoaches() {
                       type="button"
                       className="button button--ghost"
                       disabled={coach.studentCount > 0}
-                      title={coach.studentCount > 0 ? 'اول شاگردهای این مربی را حذف کنید' : undefined}
+                      title={coach.studentCount > 0 ? 'مربی دارای شاگرد را می‌توانید غیرفعال کنید' : undefined}
                       onClick={() => void deleteCoach(coach)}
                     >
                       <Trash2 size={16} /> حذف

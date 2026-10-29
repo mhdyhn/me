@@ -150,7 +150,7 @@ export function Program() {
           )}
           <button type="button" className="button button--ghost" onClick={() => void loadAssignedProgram()}>بررسی دوبارهٔ وضعیت برنامه</button>
         </div>
-        {user?.role === 'student' && user.coachId !== null && <ProgrammeArchive studentId={user.id} />}
+        {user?.role === 'student' && user.coachId !== null && <ProgrammeArchive key={`${user.id}:${user.coachId}:${user.personalProgramMode === true}`} studentId={user.id} />}
       </div>
     );
   }
@@ -158,7 +158,7 @@ export function Program() {
   return (
     <div className="page-stack">
       <SectionHeading eyebrow="تقسیم‌بندی تمرین‌ها" title="هفته‌ات را با برنامه پیش ببر." description="جلسه‌های اصلی، روزهای اختیاری و زمان استراحت، همه از برنامهٔ همین حساب." />
-      {user?.role === 'student' && user.coachId !== null && <ProgrammeArchive studentId={user.id} />}
+      {user?.role === 'student' && user.coachId !== null && <ProgrammeArchive key={`${user.id}:${user.coachId}:${user.personalProgramMode === true}`} studentId={user.id} />}
 
       {/* Manager / Admin Program Actions Toolbar */}
       {!readOnly && (
