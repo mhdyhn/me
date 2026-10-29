@@ -29,10 +29,11 @@ describe.skipIf(!url)('PostgreSQL migration from the previous account schema', (
       await db.query("INSERT INTO nutrition_plans (student_id, coach_id, body, updated_at) VALUES ($1, $2, $3, $4)", [student, coach, JSON.stringify({ targets: { kcal: 2000 }, days: [] }), now.toISOString()]);
       await db.query("INSERT INTO student_biometrics (student_id, coach_id, limitations, updated_at) VALUES ($1, $2, 'سابقهٔ قدیمی', $3)", [student, coach, now.toISOString()]);
       // Restore the old checks, tables and account fields before exercising startup migrations.
-      await db.exec("DROP TABLE nutrition_coach_plans, student_coach_biometrics; DELETE FROM app_data_migrations WHERE name = 'coach-biometrics-v1'; ALTER TABLE users DROP CONSTRAINT users_coach_role_check; ALTER TABLE users ADD CONSTRAINT legacy_coach_required CHECK ((role = 'student') = (coach_id IS NOT NULL)); ALTER TABLE users ADD CONSTRAINT unrelated_check CHECK (username <> 'forbidden'); ALTER TABLE users DROP COLUMN phone_number, DROP COLUMN self_registered, DROP COLUMN pending_approval, DROP COLUMN coach_access, DROP COLUMN coach_access_version, DROP COLUMN personal_program_mode, DROP COLUMN session_guard_version;");
+      await db.exec("DROP TABLE nutrition_coach_plans, student_coach_biometrics, coach_registration_links; DELETE FROM app_data_migrations WHERE name = 'coach-biometrics-v1'; ALTER TABLE users DROP CONSTRAINT users_coach_role_check; ALTER TABLE users ADD CONSTRAINT legacy_coach_required CHECK ((role = 'student') = (coach_id IS NOT NULL)); ALTER TABLE users ADD CONSTRAINT unrelated_check CHECK (username <> 'forbidden'); ALTER TABLE users DROP COLUMN phone_number, DROP COLUMN self_registered, DROP COLUMN pending_approval, DROP COLUMN coach_access, DROP COLUMN coach_access_version, DROP COLUMN personal_program_mode, DROP COLUMN session_guard_version;");
       await db.close(); db = undefined;
       for (let startup = 0; startup < 2; startup++) {
         db = await openDatabase(target.toString());
+        expect(await db.query("SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'coach_registration_links'")).toHaveLength(1);
         expect(await userForToken(db, token, now)).toEqual({ userId: student });
         expect(await findUserByUsername(db, 'legacy-student')).toMatchObject({ coachId: coach, phoneNumber: null, selfRegistered: false });
         expect((await db.query('SELECT programme_id FROM student_programs WHERE student_id = $1', [student]))[0]).toMatchObject({ programme_id: 'legacy-offer' });

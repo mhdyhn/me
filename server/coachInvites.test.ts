@@ -307,3 +307,47 @@ describe('consent-based coach invitations', () => {
     expect(used[0]!.n).toBe(1);
   });
 });
+
+describe('reusable coach registration link', () => {
+  it('provides a stable link, needs consent and supports multiple self-registered students without consuming it', async () => {
+    const coach = await account('coach-link', 'coach');
+    const first = await account('link-student-one', 'student', null, true);
+    const second = await account('link-student-two', 'student', null, true);
+    const manual = await account('manual-student', 'student');
+    expect((await call('POST', '/api/coach/registration-link', { accountId: coach.id + 1 }, coach)).status).toBe(409);
+    const created = await call('POST', '/api/coach/registration-link', { accountId: coach.id }, coach);
+    expect(created.status).toBe(200);
+    expect(created.headers.get('cache-control')).toBe('no-store');
+    const token = created.json.token as string;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(JSON.stringify(await db.query('SELECT * FROM coach_registration_links'))).not.toContain(token);
+    expect((await call('POST', '/api/coach/registration-link', { accountId: coach.id }, coach)).json.token).toBe(token);
+    expect((await call('POST', '/api/coach-registration-link/preview', { token })).json).toEqual({ coachId: coach.id, coachName: 'coach-link' });
+    const acceptLink = (session: Session, consent = true, accountId = session.id) => call('POST', '/api/me/coach-registration-link/accept', { token, accountId, consent }, session);
+    expect((await acceptLink(first, false)).status).toBe(400);
+    expect((await acceptLink(first, true, second.id)).status).toBe(409);
+    expect((await acceptLink(manual)).status).toBe(403);
+    expect((await acceptLink(first)).json.user).toMatchObject({ id: first.id, coachId: coach.id, coachAccess: true });
+    expect((await acceptLink(second)).json.user).toMatchObject({ id: second.id, coachId: coach.id, coachAccess: true });
+    expect((await call('GET', '/api/students', undefined, coach)).json.students.map((s: { id: number }) => s.id)).toEqual(expect.arrayContaining([first.id, second.id]));
+    expect((await acceptLink(first)).status).toBe(409);
+    expect((await call('POST', '/api/coach-registration-link/preview', { token })).status).toBe(200);
+    expect((await call('DELETE', '/api/coach/registration-link', { accountId: coach.id }, coach)).status).toBe(200);
+    expect((await call('POST', '/api/coach-registration-link/preview', { token })).status).toBe(404);
+    expect((await findUserById(db, first.id))?.coachId).toBe(coach.id);
+    const renewed = await call('POST', '/api/coach/registration-link', { accountId: coach.id }, coach);
+    expect(renewed.json.token).not.toBe(token);
+  });
+  it('does not connect already-connected accounts or grant access through an inactive coach', async () => {
+    const coach = await account('coach-link', 'coach');
+    const other = await account('coach-other-link', 'coach');
+    const student = await account('connected-link-student', 'student', other.id, true);
+    const token = (await call('POST', '/api/coach/registration-link', { accountId: coach.id }, coach)).json.token as string;
+    const attempt = () => call('POST', '/api/me/coach-registration-link/accept', { token, accountId: student.id, consent: true }, student);
+    expect((await attempt()).status).toBe(409);
+    expect((await findUserById(db, student.id))?.coachId).toBe(other.id);
+    await db.query('UPDATE users SET is_active = 0 WHERE id = $1', [coach.id]);
+    expect((await call('POST', '/api/coach-registration-link/preview', { token })).status).toBe(404);
+    expect((await attempt()).status).toBe(409);
+  });
+});

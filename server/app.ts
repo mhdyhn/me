@@ -6,7 +6,7 @@ import { countStudents, deleteUser, findUserById, findUserBySession, findUserByU
 import { limitRegistration, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
 import { requireMobile } from './phone.ts';
-import { acceptCoachInvitation, makeCoachInvitation, previewCoachInvitation, returnToPersonalProgram, revokeCoachInvitations, withdrawCoachAccess } from './coachInvites.ts';
+import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLink, makeCoachInvitation, previewCoachInvitation, previewCoachRegistrationLink, returnToPersonalProgram, revokeCoachInvitations, revokeCoachRegistrationLink, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
@@ -433,15 +433,42 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'POST', pattern: /^\/api\/coach\/registration-link$/,
+      auth: ['coach'],
+      handler: async ({ user, body }) => ({ status: 200, body: await coachRegistrationLink(db, secretKey, user!, body, now()), headers: { 'Cache-Control': 'no-store' } }),
+    },
+    {
+      method: 'DELETE', pattern: /^\/api\/coach\/registration-link$/,
+      auth: ['coach'],
+      handler: async ({ user, body }) => { await revokeCoachRegistrationLink(db, user!, body); return { status: 200, body: { ok: true }, headers: { 'Cache-Control': 'no-store' } }; },
+    },
+    {
+      method: 'POST', pattern: /^\/api\/coach-registration-link\/preview$/,
+      auth: 'public',
+      handler: async ({ body, request }) => ({ status: 200, body: await previewCoachRegistrationLink(db, secretKey, body, now(), clientAddress(request)), headers: { 'Cache-Control': 'no-store' } }),
+    },
+    {
+      method: 'POST', pattern: /^\/api\/me\/coach-registration-link\/accept$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => ({ status: 200, body: { user: toPublic(await acceptCoachRegistrationLink(db, secretKey, user!, body, now())) }, headers: { 'Cache-Control': 'no-store' } }),
+    },
+
+    {
       method: 'POST', pattern: /^\/api\/coach\/invitations$/,
       auth: ['coach'],
-      handler: async ({ user }) => ({ status: 201, body: await makeCoachInvitation(db, secretKey, user!, now()), headers: { 'Cache-Control': 'no-store' } }),
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        return { status: 201, body: await makeCoachInvitation(db, secretKey, user!, now()), headers: { 'Cache-Control': 'no-store' } };
+      },
     },
 
     {
       method: 'DELETE', pattern: /^\/api\/coach\/invitations$/,
       auth: ['coach'],
-      handler: async ({ user }) => {
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
         await revokeCoachInvitations(db, user!);
         return { status: 200, body: { ok: true } };
       },
@@ -1083,6 +1110,7 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const rawIban = requireText(input, 'iban', 10, 40, 'شماره شبا');
         const iban = normalizeIban(rawIban);
         await updateCoachIban(db, user!.id, iban);
@@ -1094,7 +1122,8 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/coach\/iban$/,
       auth: ['coach'],
-      handler: async ({ user }) => {
+      handler: async ({ user, url }) => {
+        if (url.searchParams.has('accountId') && url.searchParams.get('accountId') !== String(user!.id)) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const current = await findUserById(db, user!.id);
         return { status: 200, body: { iban: current?.iban ?? null } };
       },

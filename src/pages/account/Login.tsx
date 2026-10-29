@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Dumbbell, Eye, EyeOff, KeyRound, LogIn, Smartphone, User } from 'lucide-react';
 import { ApiError } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { homeFor } from './AccountShell';
 import { AuthIntro } from './AuthIntro';
+import { tokenFromState } from '../../lib/coachRegistrationLink';
 
 export { SAVED_CREDENTIALS_KEY } from '../../lib/savedLogin';
 import { getSavedCredentials, SAVED_CREDENTIALS_KEY, type SavedCredentials } from '../../lib/savedLogin';
@@ -14,6 +15,8 @@ import { getSavedCredentials, SAVED_CREDENTIALS_KEY, type SavedCredentials } fro
 export function Login() {
   const { status, user, signIn } = useSession();
   const navigate = useNavigate();
+  const inviteToken = tokenFromState(useLocation().state);
+  const inviteState = inviteToken ? { inviteToken } : null;
 
   const [savedCreds, setSavedCreds] = useState<SavedCredentials | null>(() => getSavedCredentials());
   const [username, setUsername] = useState(() => savedCreds?.username ?? '');
@@ -42,7 +45,7 @@ export function Login() {
   }, []);
 
   if (status === 'signed-in' && user) {
-    return <Navigate to={user.mustChangePassword ? '/account/change-password' : homeFor(user.role)} replace />;
+    return <Navigate to={user.mustChangePassword ? '/account/change-password' : inviteToken ? '/invite' : homeFor(user.role)} state={inviteState} replace />;
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -70,7 +73,7 @@ export function Login() {
         // Ignore localStorage quota errors
       }
 
-      navigate(signedIn.mustChangePassword ? '/account/change-password' : homeFor(signedIn.role), { replace: true });
+      navigate(signedIn.mustChangePassword ? '/account/change-password' : inviteToken ? '/invite' : homeFor(signedIn.role), { replace: true, state: inviteState });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'ورود انجام نشد. دوباره تلاش کنید.');
     } finally {
@@ -205,7 +208,7 @@ export function Login() {
 
         <div className="auth-signup-prompt">
           <div><strong>تازه به میتی پیوسته‌ای؟</strong><span>حساب شخصی یا مربی بساز.</span></div>
-          <Link to="/register" className="button button--secondary">ساخت حساب</Link>
+          <Link to="/register" state={inviteState} className="button button--secondary">ساخت حساب</Link>
         </div>
 
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line-soft)', textAlign: 'center' }}>

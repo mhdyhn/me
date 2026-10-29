@@ -26,7 +26,7 @@ async function throttle(db: Db, bucket: string, now: Date, maximum: number): Pro
   const rows = await db.query(`INSERT INTO registration_attempts(bucket, attempts, expires_at) VALUES($1, 1, $2)
     ON CONFLICT(bucket) DO UPDATE SET attempts = registration_attempts.attempts + 1
     WHERE registration_attempts.attempts < $3 RETURNING attempts`, [bucket, expires, maximum]);
-  if (!rows.length) throw new HttpError(429, 'تعداد درخواست‌های کد دعوت زیاد است. چند دقیقه بعد دوباره تلاش کنید.');
+  if (!rows.length) throw new HttpError(429, bucket.startsWith('coach-registration-') ? 'تعداد درخواست‌های لینک زیاد است. چند دقیقه بعد دوباره تلاش کنید.' : 'تعداد درخواست‌های کد دعوت زیاد است. چند دقیقه بعد دوباره تلاش کنید.');
 }
 
 /** One code is a secret valid for one student and at most 48 hours; only its digest is stored. */
@@ -97,6 +97,83 @@ export async function acceptCoachInvitation(db: Db, key: SecretKey, student: Sto
     const active = await db.query("SELECT 1 FROM personal_data_records WHERE user_id = $1 AND kind = 'session' AND deleted = 0 AND body::jsonb ->> 'status' = 'active' LIMIT 1", [student.id]);
     if (active.length) throw new HttpError(409, 'یک تمرین فعال همگام‌شده وجود دارد. ابتدا آن را تمام و همگام کن، سپس دوباره اتصال را تأیید کن.');
     throw new HttpError(409, 'اتصال انجام نشد؛ کد یا وضعیت حساب تغییر کرده است. دوباره بررسی کنید.');
+  }
+  return (await findUserById(db, student.id))!;
+}
+
+/** A reusable coach link is public, but its token is never stored in plaintext. */
+function registrationLinkToken(key: SecretKey, nonce: string): string {
+  return createHmac('sha256', key).update(`coach-registration-link:${nonce}`).digest('base64url');
+}
+function registrationLinkHash(key: SecretKey, token: string): string {
+  return createHmac('sha256', key).update(`coach-registration-hash:${token}`).digest('hex');
+}
+function readRegistrationLink(body: unknown): { input: Record<string, unknown>; token: string } {
+  const input = requireObject(body);
+  const token = requireText(input, 'token', 43, 43, 'لینک دعوت');
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new HttpError(400, 'لینک دعوت معتبر نیست.');
+  return { input, token };
+}
+export async function coachRegistrationLink(db: Db, key: SecretKey, coach: StoredUser, body: unknown, now: Date): Promise<{ token: string }> {
+  const input = requireObject(body);
+  if (input.accountId !== coach.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  await throttle(db, `coach-registration-create:${coach.id}`, now, 30);
+  const nonce = randomBytes(24).toString('base64url');
+  const token = registrationLinkToken(key, nonce);
+  const rows = await db.query<{ nonce: string }>(`INSERT INTO coach_registration_links(coach_id, nonce, token_hash, created_at)
+    SELECT id, $2, $3, $4 FROM users WHERE id = $1 AND role = 'coach' AND is_active = 1 AND auth_version = $5
+    ON CONFLICT(coach_id) DO UPDATE SET coach_id = coach_registration_links.coach_id RETURNING nonce`,
+  [coach.id, nonce, registrationLinkHash(key, token), now.toISOString(), coach.authVersion]);
+  if (!rows.length) throw new HttpError(409, 'ساخت لینک انجام نشد؛ وضعیت حساب را بررسی کنید.');
+  const existingNonce = rows[0]!.nonce;
+  const currentToken = registrationLinkToken(key, existingNonce);
+  // Key rotation changes the token; synchronize its lookup hash without recreating a revoked row.
+  const updated = await db.query('UPDATE coach_registration_links SET token_hash = $1 WHERE coach_id = $2 AND nonce = $3 RETURNING coach_id',
+    [registrationLinkHash(key, currentToken), coach.id, existingNonce]);
+  if (!updated.length) throw new HttpError(409, 'لینک هم‌زمان غیرفعال شد؛ دوباره تلاش کنید.');
+  return { token: currentToken };
+}
+export async function revokeCoachRegistrationLink(db: Db, coach: StoredUser, body: unknown): Promise<void> {
+  if (requireObject(body).accountId !== coach.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  await db.query('DELETE FROM coach_registration_links WHERE coach_id = $1', [coach.id]);
+}
+export async function previewCoachRegistrationLink(db: Db, key: SecretKey, body: unknown, now: Date, address: string): Promise<{ coachName: string; coachId: number }> {
+  const { token } = readRegistrationLink(body);
+  const addressHash = createHmac('sha256', key).update(`registration-link-preview:${address}`).digest('hex');
+  await throttle(db, `coach-registration-preview:${addressHash}`, now, 300);
+  const rows = await db.query<{ coach_id: number; display_name: string }>(`SELECT c.id AS coach_id, c.display_name
+    FROM coach_registration_links l JOIN users c ON c.id = l.coach_id
+    WHERE l.token_hash = $1 AND c.role = 'coach' AND c.is_active = 1`, [registrationLinkHash(key, token)]);
+  if (!rows.length) throw new HttpError(404, 'این لینک دعوت معتبر نیست یا غیرفعال شده است.');
+  return { coachId: rows[0]!.coach_id, coachName: rows[0]!.display_name };
+}
+export async function acceptCoachRegistrationLink(db: Db, key: SecretKey, student: StoredUser, body: unknown, now: Date): Promise<StoredUser> {
+  const { input, token } = readRegistrationLink(body);
+  if (input.accountId !== student.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+  if (input.consent !== true) throw new HttpError(400, 'برای اتصال، توضیح دسترسی مربی را بخوانید و تأیید کنید.');
+  if (!student.selfRegistered) throw new HttpError(403, 'این مسیر فقط برای حسابی است که شاگرد خودش ساخته است.');
+  await throttle(db, `coach-registration-accept:${student.id}`, now, 20);
+  const rows = await db.query<{ id: number }>(`
+    WITH candidate AS MATERIALIZED (
+      SELECT l.coach_id FROM coach_registration_links l JOIN users c ON c.id = l.coach_id
+      WHERE l.token_hash = $1 AND c.role = 'coach' AND c.is_active = 1 FOR UPDATE OF l, c
+    ), attached AS (
+      UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1, personal_program_mode = 0,
+        coach_access_version = s.coach_access_version + 1 FROM candidate
+      WHERE s.id = $2 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $3
+        AND s.coach_access_version = $4 AND s.session_guard_version = $5 AND (s.coach_id IS NULL OR s.coach_access = 0)
+        AND NOT EXISTS (SELECT 1 FROM personal_data_records d WHERE d.user_id = s.id AND d.kind = 'session' AND d.deleted = 0 AND d.body::jsonb ->> 'status' = 'active')
+      RETURNING s.id
+    ), preserve_offer AS (
+      INSERT INTO programme_offers (id, student_id, coach_id, body, price_tomans, created_at, updated_at)
+      SELECT sp.programme_id, sp.student_id, sp.coach_id, sp.body, COALESCE(sp.price_tomans, 0), sp.updated_at, sp.updated_at
+      FROM student_programs sp JOIN attached ON attached.id = sp.student_id WHERE sp.programme_id IS NOT NULL
+      ON CONFLICT (id) DO NOTHING
+    ) SELECT id FROM attached`, [registrationLinkHash(key, token), student.id, student.authVersion, student.coachAccessVersion, student.sessionGuardVersion]);
+  if (!rows.length) {
+    const active = await db.query("SELECT 1 FROM personal_data_records WHERE user_id = $1 AND kind = 'session' AND deleted = 0 AND body::jsonb ->> 'status' = 'active' LIMIT 1", [student.id]);
+    if (active.length) throw new HttpError(409, 'ابتدا تمرین فعال را تمام و همگام کن، سپس دوباره اتصال را تأیید کن.');
+    throw new HttpError(409, 'اتصال انجام نشد؛ لینک یا وضعیت حساب تغییر کرده است. دوباره بررسی کنید.');
   }
   return (await findUserById(db, student.id))!;
 }

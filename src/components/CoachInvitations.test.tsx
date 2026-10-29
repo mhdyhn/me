@@ -2,47 +2,66 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({ api: vi.fn(), confirm: vi.fn() }));
-vi.mock('../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
+vi.mock('../lib/api', () => ({ api: mocks.api, getToken: () => 'coach-token', getStoredUser: () => ({ id: 4 }), ApiError: class ApiError extends Error {} }));
+vi.mock('../context/SessionContext', () => ({ useSession: () => ({ user: { id: 4, role: 'coach' } }) }));
 vi.mock('./ConfirmModal', () => ({ confirmModal: mocks.confirm }));
 import { CoachInvitations } from './CoachInvitations';
 
 beforeEach(() => { mocks.api.mockReset(); mocks.confirm.mockReset(); });
 afterEach(cleanup);
 
-describe('coach invitation controls', () => {
-  it('creates and displays a one-use invitation and can revoke unused codes', async () => {
-    const code = 'X'.repeat(32);
-    mocks.api.mockResolvedValueOnce({ code, expiresAt: '2026-11-01T00:00:00Z' }).mockResolvedValueOnce({ ok: true });
+describe('coach registration link', () => {
+  it('creates a reusable link without showing a long code and revokes it only after confirmation', async () => {
+    const token = 'X'.repeat(43);
+    mocks.api.mockResolvedValueOnce({ token }).mockResolvedValueOnce({ ok: true });
     mocks.confirm.mockResolvedValue(true);
     render(<CoachInvitations />);
-    fireEvent.click(screen.getByText('دعوت شاگرد با حساب خودش'));
-    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد دعوت' }));
-    expect(await screen.findByText(code)).toBeInTheDocument();
-    expect(screen.getByText(/یک‌بارمصرف است/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'باطل‌کردن کدهای استفاده‌نشده' }));
-    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('DELETE', '/coach/invitations', {}));
-    expect(await screen.findByRole('status')).toHaveTextContent('باطل شدند');
-    expect(screen.queryByText(code)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('لینک ثبت‌نام شاگرد'));
+    fireEvent.click(screen.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }));
+    expect(await screen.findByText('لینک آمادهٔ ارسال است.')).toBeInTheDocument();
+    expect(screen.queryByText(token)).not.toBeInTheDocument();
+    expect(mocks.api).toHaveBeenCalledWith('POST', '/coach/registration-link', { accountId: 4 });
+    expect(screen.getByText(/برای چند شاگرد قابل استفاده است/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'غیرفعال‌کردن لینک' }));
+    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('DELETE', '/coach/registration-link', { accountId: 4 }));
+    expect(await screen.findByRole('status')).toHaveTextContent('غیرفعال شد');
+    expect(screen.queryByText('لینک آمادهٔ ارسال است.')).not.toBeInTheDocument();
   });
-  it('creates QR locally only on request and removes it when a new code is issued', async () => {
-    const first = 'a'.repeat(32);
-    const second = 'b'.repeat(32);
-    mocks.api.mockResolvedValueOnce({ code: first, expiresAt: '2026-11-01T00:00:00Z' })
-      .mockResolvedValueOnce({ code: second, expiresAt: '2026-11-01T01:00:00Z' });
+  it('creates a QR locally only on request and exposes a selectable link if clipboard fails', async () => {
+    const token = 'a'.repeat(43);
+    mocks.api.mockResolvedValueOnce({ token });
     render(<CoachInvitations />);
-    fireEvent.click(screen.getByText('دعوت شاگرد با حساب خودش'));
-    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد دعوت' }));
-    await screen.findByText(first);
-    expect(screen.queryByRole('img', { name: /QR دعوت/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('لینک ثبت‌نام شاگرد'));
+    fireEvent.click(screen.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }));
+    await screen.findByText('لینک آمادهٔ ارسال است.');
     fireEvent.click(screen.getByRole('button', { name: 'نمایش QR' }));
-    const image = await screen.findByRole('img', { name: /QR دعوت/ });
+    const image = await screen.findByRole('img', { name: /QR لینک ثبت‌نام/ });
     expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
-    expect(screen.getByText(/اتصال فقط پس از بررسی نام مربی و رضایت شاگرد/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد دعوت' }));
-    await screen.findByText(second);
-    expect(screen.queryByRole('img', { name: /QR دعوت/ })).not.toBeInTheDocument();
-    expect(screen.queryByText(first)).not.toBeInTheDocument();
-    expect(mocks.api).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'کپی لینک' }));
+    expect(await screen.findByText(`http://localhost:3000/invite#${token}`)).toBeInTheDocument();
+  });
+  it('does not report that a link was revoked when the response is incomplete', async () => {
+    mocks.api.mockResolvedValueOnce({ token: 'Y'.repeat(43) }).mockResolvedValueOnce({});
+    mocks.confirm.mockResolvedValue(true);
+    render(<CoachInvitations />);
+    fireEvent.click(screen.getByText('لینک ثبت‌نام شاگرد'));
+    fireEvent.click(screen.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }));
+    await screen.findByText('لینک آمادهٔ ارسال است.');
+    fireEvent.click(screen.getByRole('button', { name: 'غیرفعال‌کردن لینک' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('نتیجهٔ غیرفعال‌کردن تأیید نشد');
+    expect(screen.getByText('لینک آمادهٔ ارسال است.')).toBeInTheDocument();
+    expect(screen.queryByText('لینک غیرفعال شد.')).not.toBeInTheDocument();
+  });
+
+  it('keeps creating the older one-use codes available without exposing them by default', async () => {
+    mocks.api.mockResolvedValueOnce({ code: 'Z'.repeat(32), expiresAt: '2026-11-01T12:00:00.000Z' });
+    render(<CoachInvitations />);
+    fireEvent.click(screen.getByText('لینک ثبت‌نام شاگرد'));
+    expect(screen.queryByText('Z'.repeat(32))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('کدهای یک‌بارمصرف'));
+    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد یک‌بارمصرف' }));
+    expect(await screen.findByText('Z'.repeat(32))).toBeInTheDocument();
+    expect(mocks.api).toHaveBeenCalledWith('POST', '/coach/invitations', { accountId: 4 });
   });
 
 });

@@ -6,7 +6,7 @@ import { PNG } from 'pngjs';
 import jsQR from 'jsqr';
 import { serveStatic } from '../server/static.ts';
 
-const code = 'AbCdEfGhIjKlMnOpQrStUvWxYz123456';
+const token = 'a'.repeat(43);
 const student = { id: 5, username: 'student', displayName: 'شاگرد نمونه', role: 'student', coachId: 4, selfRegistered: true, coachAccess: true, mustChangePassword: false, isActive: true };
 const coach = { id: 4, username: 'coach', displayName: 'مربی نمونه', role: 'coach', coachId: null, mustChangePassword: false, isActive: true };
 const program = { id: 'program-1', version: 1, title: 'برنامه نمونه', priceTomans: 0, updatedAt: '2026-01-01T00:00:00Z', days: [{ name: 'روز اول', exercises: [
@@ -36,7 +36,7 @@ async function makeContext(user, options = {}) {
     else if (path === '/api/me/program') result = { program, coachName: coach.displayName, isPaid: true };
     else if (path === '/api/me/personal-data') result = { records: [], nextCursor: null };
     else if (path === '/api/students') result = { students: [] };
-    else if (path === '/api/coach/invitations') result = { code, expiresAt: '2026-11-01T00:00:00Z' };
+    else if (path === '/api/coach/registration-link') result = { token };
     await route.fulfill({ status: 200, json: result });
   });
   context.on('request', (request) => requests.push(request.url()));
@@ -64,6 +64,9 @@ try {
   const movingB = await stage.screenshot();
   if (movingA.equals(movingB)) throw new Error('3D frame did not visibly animate');
   await pause.click();
+  await expect(page.getByRole('button', { name: 'پخش حرکت' })).toBeVisible();
+  // Wait for the last scheduled draw/composite rather than assuming a loaded CPU paints within 250 ms.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.waitForTimeout(250);
   const pausedA = await stage.screenshot();
   await page.waitForTimeout(600);
@@ -127,22 +130,22 @@ try {
   const coachContext = await makeContext(coach);
   const coachPage = await coachContext.newPage();
   await coachPage.goto(base + '/coach', { waitUntil: 'domcontentloaded' });
-  await coachPage.getByText('دعوت شاگرد با حساب خودش').click();
-  await coachPage.getByRole('button', { name: 'ساخت کد دعوت' }).click();
-  await expect(coachPage.getByText(code)).toBeVisible();
+  await coachPage.getByText('لینک ثبت‌نام شاگرد').click();
+  await coachPage.getByRole('button', { name: 'دریافت لینک ثبت‌نام' }).click();
+  await expect(coachPage.getByText('لینک آمادهٔ ارسال است.')).toBeVisible();
   await coachPage.getByRole('button', { name: 'نمایش QR' }).click();
-  const qr = coachPage.getByRole('img', { name: 'کد QR دعوت محرمانهٔ شاگرد' });
+  const qr = coachPage.getByRole('img', { name: 'QR لینک ثبت‌نام شاگرد' });
   await expect(qr).toBeVisible();
   if (!(await qr.getAttribute('src'))?.startsWith('data:image/svg+xml')) throw new Error('QR is not generated locally');
   await coachPage.addStyleTag({ content: '.mobile-nav { display:none !important }' });
   const png = PNG.sync.read(await qr.screenshot());
   const decoded = jsQR(new Uint8ClampedArray(png.data), png.width, png.height);
-  if (decoded?.data !== code) throw new Error('QR did not decode to the invitation code');
+  if (decoded?.data !== `${base}/invite#${token}`) throw new Error('QR did not decode to the registration link');
   const external = requests.slice(beforeQr).filter((url) => !url.startsWith(base + '/') && !url.startsWith('data:'));
   if (external.length) throw new Error('Unexpected cross-origin request during QR generation');
-  await expect(coachPage.getByText(/اتصال فقط پس از بررسی نام مربی و رضایت شاگرد/)).toBeVisible();
+  await expect(coachPage.getByText(/اتصال فقط پس از تأیید خود او/)).toBeVisible();
   await coachContext.close();
-  console.log('PASS: 3D and QR at 320px; 3D is opt-in; animation, pause, view, reduced motion, model/chunk/WebGL fallbacks and exact movement mapping; QR decoded to the local one-use secret without cross-origin requests.');
+  console.log('PASS: 3D and QR at 320px; 3D is opt-in; animation, pause, view, reduced motion, model/chunk/WebGL fallbacks and exact movement mapping; QR decoded to the reusable registration link without cross-origin requests.');
 } finally {
   if (browser) await browser.close();
   await new Promise((done) => server.close(done));

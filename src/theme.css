@@ -396,3 +396,41 @@ body { background: radial-gradient(ellipse at 82% -12%, #183a68 0%, transparent 
 .chat-row--mine .chat-bubble { color: #f2faff; border-color: #4d789a; background: #21496a; }
 .chat-meta { color: #c4d8e9; }
 .chat-composer textarea:focus { border-color: var(--accent); }
+
+/* Shared cards need breathing room even when a page has no custom card rule. */
+:where(.panel-card) { padding: clamp(16px, 2vw, 22px); min-width: 0; }
+.persian-date { position: relative; min-width: 0; }
+.persian-date__trigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid #516a8d; border-radius: 12px; background: #0b1728; color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; }
+.persian-date__trigger:disabled { opacity: .55; cursor: not-allowed; }
+.persian-date__picker { display: grid; gap: 12px; width: min(100%, 360px); min-width: min(270px, 100%); margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #182940; }
+.persian-date__parts { display: grid; grid-template-columns: minmax(56px, .7fr) minmax(100px, 1.2fr) minmax(70px, 1fr); gap: 7px; }
+.persian-date__parts label { display: grid; min-width: 0; gap: 4px; color: var(--muted); font-size: 12px; }
+.persian-date__parts select { width: 100%; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid #516a8d; border-radius: 9px; background-color: #0b1728; color: var(--text); }
+.persian-date__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.persian-date__error { margin: 0; color: #ffd8d4; font-size: 12px; }
+.iban-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.iban-form__field { display: grid; flex: 1 1 230px; min-width: 0; gap: 6px; color: var(--text-soft); font-size: 12px; }
+.iban-form__field input { width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid #516a8d; border-radius: 12px; background: #0b1728; color: var(--text); font-family: ui-monospace, monospace; text-align: left; }
+@media (max-width: 680px) {
+  /* The floating navigation is taller than the old edge-to-edge bar. */
+  .workout-mobile-footer { bottom: calc(82px + env(safe-area-inset-bottom)); background: #102036f5; border-color: var(--line); }
+  .workout-mode { padding-bottom: 76px; }
+}
+.coach-invitations__legacy { margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.coach-invitations__legacy summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.coach-invitations__legacy p { margin: 8px 0; }
+.invite-screen { display: grid; place-items: center; padding: 24px 16px; }
+.invite-card { display: grid; justify-items: start; gap: 14px; width: min(100%, 540px); padding: clamp(20px, 5vw, 32px); }
+.invite-card h1, .invite-card p { margin: 0; line-height: 1.9; }
+.invite-card p { color: var(--text-soft); }
+.invite-card__icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--surface-raised); color: var(--accent); }
+.invite-card__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.invite-card__consent { display: flex; align-items: flex-start; gap: 10px; line-height: 1.8; }
+.invite-card__consent input { width: 18px; height: 18px; flex: none; margin-top: 4px; accent-color: var(--accent); }
+.registration-form-fields { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.registration-retry { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 420px) {
+  .week-compare { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .week-compare > div:last-child { grid-column: 1 / -1; }
+  .week-compare small { font-size: 12px; }
+}

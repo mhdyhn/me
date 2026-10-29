@@ -1,3 +1,4 @@
+import { isoToPersian } from '../../components/PersianDateInput';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -67,17 +68,25 @@ describe('meal diary conflict and recovery', () => {
       return { diary: { day: path.split('/').at(-1)!.split('?')[0], meals: [], updatedAt: null } };
     });
     const first = render(<MealDiary targets={targets} accountId={3} />);
-    const originalDay = (await screen.findByLabelText('روز') as HTMLInputElement).value;
+    const originalDay = (await screen.findByLabelText('روز')).getAttribute('data-iso-date')!;
+    const pickDay = (iso: string) => {
+      const date = isoToPersian(iso);
+      fireEvent.click(screen.getByLabelText('روز'));
+      fireEvent.change(screen.getByLabelText('سال شمسی'), { target: { value: String(date.jy) } });
+      fireEvent.change(screen.getByLabelText('ماه شمسی'), { target: { value: String(date.jm) } });
+      fireEvent.change(screen.getByLabelText('روز شمسی'), { target: { value: String(date.jd) } });
+      fireEvent.click(screen.getByRole('button', { name: 'انتخاب تاریخ' }));
+    };
     fireEvent.change(await screen.findByLabelText('نام وعده'), { target: { value: 'صبحانهٔ شخصی' } });
     fireEvent.click(screen.getByRole('button', { name: 'افزودن وعده' }));
     await screen.findByText(/نسخهٔ موقت فقط در همین زبانه است/);
     const yesterday = new Date(`${originalDay}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1);
     const previousDay = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-    fireEvent.change(screen.getByLabelText('روز'), { target: { value: previousDay } });
-    await waitFor(() => expect(screen.getByLabelText('روز')).toHaveValue(previousDay));
+    pickDay(previousDay);
+    await waitFor(() => expect(screen.getByLabelText('روز')).toHaveAttribute('data-iso-date', previousDay));
     await screen.findByText(/هنوز وعده‌ای نیست/);
     expect(screen.queryByDisplayValue('صبحانهٔ شخصی')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('روز'), { target: { value: originalDay } });
+    pickDay(originalDay);
     await userEvent.setup().click(await screen.findByRole('button', { name: 'ادامهٔ پیش‌نویس' }));
     expect(screen.getByDisplayValue('صبحانهٔ شخصی')).toBeInTheDocument();
     first.unmount();
