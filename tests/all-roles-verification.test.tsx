@@ -137,9 +137,13 @@ describe('Three Roles Verification (Student, Coach, Admin)', () => {
     expect(await screen.findByText('مربی تست')).toBeInTheDocument();
 
     const nav = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
-    expect(within(nav).getByText('مربی‌ها')).toBeInTheDocument();
-    expect(within(nav).getByText('مالی باشگاه')).toBeInTheDocument();
-    expect(within(nav).queryByText('شاگردها')).not.toBeInTheDocument();
+    const bar = nav.querySelector('.mobile-nav__bar') as HTMLElement;
+    for (const label of ['خانه', 'برنامه', 'پیشرفت']) expect(within(bar).getByText(label)).toBeInTheDocument();
+    expect(within(bar).queryByText('مالی باشگاه')).not.toBeInTheDocument();
+    await userEvent.setup().click(within(bar).getByRole('button', { name: 'سایر بخش‌ها و امکانات' }));
+    const sheet = within(nav).getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+    expect(within(sheet).getByRole('link', { name: /مدیریت مربی‌ها و شاگردها/ })).toHaveAttribute('href', '/coach');
+    expect(within(sheet).getByRole('link', { name: /مالی باشگاه/ })).toHaveAttribute('href', '/coach/admin/transactions');
     expect(document.title).toContain('مدیریت باشگاه و مربی‌ها');
   });
 });

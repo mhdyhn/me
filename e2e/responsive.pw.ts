@@ -631,3 +631,72 @@ test('admin can find independent accounts and pending coach approvals on a narro
   }
   await expectNoPageOverflow(page);
 });
+
+for (const width of [320, 390, 1280]) {
+  test(`admin opens a personal home and finds club tools in More at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, admin);
+    await page.route('**/api/coaches', (route) => route.fulfill({ json: { coaches: [] } }));
+    await page.route('**/api/admin/students*', (route) => route.fulfill({ json: { students: [], nextCursor: null } }));
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('heading', { name: 'مسیر تمرین تو' })).toBeVisible();
+    await expect(page.getByText('برنامهٔ خودت را شروع کن')).toBeVisible();
+    await expectNoPageOverflow(page);
+
+    if (width <= 680) {
+      const bar = page.getByRole('navigation', { name: 'ناوبری موبایل' }).locator('.mobile-nav__bar');
+      for (const label of ['خانه', 'برنامه', 'پیشرفت']) await expect(bar.getByText(label, { exact: true })).toBeVisible();
+      await expect(bar.getByText('مالی باشگاه')).toHaveCount(0);
+      await bar.getByRole('button', { name: 'سایر بخش‌ها و امکانات' }).click();
+      const sheet = page.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
+      const management = sheet.getByRole('region', { name: 'مدیریت باشگاه' });
+      await expect(management.getByRole('link', { name: /مالی باشگاه/ })).toBeVisible();
+      await expect(sheet.getByRole('link', { name: /تغذیه/ })).toBeVisible();
+      await expectNoPageOverflow(page);
+      await management.getByRole('link', { name: /مدیریت مربی‌ها و شاگردها/ }).click();
+    } else {
+      const sidebar = page.getByRole('navigation', { name: 'ناوبری اصلی' });
+      await sidebar.getByText('بخش‌های دیگر').click();
+      await sidebar.getByRole('link', { name: 'مدیریت مربی‌ها و شاگردها' }).click();
+    }
+    await expect(page).toHaveURL(/\/coach$/);
+    await expect(page.getByRole('heading', { name: 'مدیریت مربی‌ها و باشگاه' })).toBeVisible();
+    await expectNoPageOverflow(page);
+    await page.goto('/program', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'تعریف برنامه جدید', exact: true })).toBeVisible();
+    await expectNoPageOverflow(page);
+    await page.goto('/progress', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('main')).toBeVisible();
+    await expectNoPageOverflow(page);
+  });
+}
+
+test('admin home waits for the first personal sync before calling the programme empty', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const mock = await mockAccount(page, admin);
+  mock.records.push({
+    kind: 'program', key: 'main', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z',
+    value: [{ id: 'admin-personal-day', name: 'روز ذخیره‌شدهٔ مدیر', focus: 'سینه', dayLabel: 'روز اول', durationMinutes: 30, description: '',
+      exercises: [{ exerciseId: 'push-up', name: 'شنا', prescription: { sets: 3, minReps: 8, maxReps: 12, minimumRir: 1, targetRirLabel: '۱', restSeconds: 60, note: '' } }] }],
+  });
+  const release = mock.pauseSync();
+  try {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('در حال بررسی اطلاعات حساب…')).toBeVisible();
+    await expect(page.getByText('برنامهٔ خودت را شروع کن')).toHaveCount(0);
+    release();
+    await expect(page.getByRole('heading', { name: 'روز ذخیره‌شدهٔ مدیر' })).toBeVisible({ timeout: 15000 });
+  } finally { release(); }
+});
+
+test('failed first personal sync does not claim the server programme is empty', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const mock = await mockAccount(page, admin);
+  mock.setSyncFailure('http');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('بررسی برنامهٔ شخصی کامل نشد')).toBeVisible();
+  await expect(page.getByText('برنامهٔ خودت را شروع کن')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'برنامهٔ محلی' })).toHaveAttribute('href', '/program');
+  await expectNoPageOverflow(page);
+});

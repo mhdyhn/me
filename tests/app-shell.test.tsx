@@ -28,7 +28,8 @@ afterEach(() => {
 describe('complete application shell', () => {
   it('boots the dashboard through the production router and shared navigation', async () => {
     render(<App />);
-    expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'روز اول' })).toBeInTheDocument();
+    expect(screen.getByText('جلسهٔ بعدی')).toBeInTheDocument();
     const mobile = screen.getByRole('navigation', { name: 'ناوبری موبایل' });
     expect(mobile).toBeInTheDocument();
     // The fixed bar is reserved for the student's core tasks; the movement library remains under More.
@@ -62,8 +63,8 @@ describe('complete application shell', () => {
     });
 
     render(<App />);
-    expect(await screen.findByText('جلسهٔ بعدی')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'روز پایین‌تنه' })).toBeInTheDocument();
+    expect(screen.getByText('جلسهٔ بعدی')).toBeInTheDocument();
     expect(screen.getByText('۱ حرکت')).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: 'پیشرفت تمرین هفتگی' })).toBeInTheDocument();
     expect(screen.getByText('این هفته')).toBeInTheDocument();

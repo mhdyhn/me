@@ -26,6 +26,22 @@ try {
   const page = await context.newPage();
   await page.goto(base, { waitUntil: 'load' });
   await page.evaluate(() => navigator.serviceWorker.ready);
+  // Upgrade must not erase account-independent browser storage.
+  await page.evaluate(async () => {
+    localStorage.setItem('meety-upgrade-test-sentinel', 'preserved');
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open('meety-upgrade-test', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('sentinel');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('sentinel', 'readwrite');
+        transaction.objectStore('sentinel').put('preserved', 'key');
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+  });
   if (previous) {
     root = current;
     await page.evaluate(async () => {
@@ -46,6 +62,32 @@ try {
   }
   await page.reload({ waitUntil: 'load' });
   if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) throw new Error('Service worker does not control the page');
+  const storage = await page.evaluate(async () => ({
+    local: localStorage.getItem('meety-upgrade-test-sentinel'),
+    indexed: await new Promise((resolve, reject) => {
+      const request = indexedDB.open('meety-upgrade-test');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('sentinel', 'readonly');
+        const read = transaction.objectStore('sentinel').get('key');
+        read.onsuccess = () => { database.close(); resolve(read.result); };
+        read.onerror = () => reject(read.error);
+      };
+    }),
+  }));
+  if (storage.local !== 'preserved' || storage.indexed !== 'preserved') throw new Error('Worker update lost browser storage');
+  const currentCss = (await readdir('dist/assets')).find((name) => /^index-.*\.css$/.test(name));
+  if (!currentCss || !(await page.locator(`link[rel="stylesheet"][href$="/${currentCss}"]`).count())) throw new Error('Page is not loading the current build CSS after update');
+  const expectedAccent = (await readFile('src/theme.css', 'utf8')).match(/--accent:\s*(#[a-f0-9]{6})/i)?.[1].toLowerCase();
+  const displayedAccent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase());
+  if (!expectedAccent || displayedAccent !== expectedAccent) throw new Error(`Current theme was not applied: ${displayedAccent}`);
+  const iconHash = await page.evaluate(async () => {
+    const bytes = await (await fetch('/icons/icon-192.png')).arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  });
+  if (iconHash !== createHash('sha256').update(await readFile('public/icons/icon-192.png')).digest('hex')) throw new Error('Current web icon did not replace the previous precached icon');
   const cache = await page.evaluate(async () => {
     const names = await caches.keys();
     const urls = (await Promise.all(names.map(async (name) => (await (await caches.open(name)).keys()).map((request) => request.url)))).flat();
@@ -93,7 +135,7 @@ try {
   if (result.modelHash !== modelHash || !result.codeAvailable) throw new Error('Previously viewed 3D assets are unavailable offline');
   await page.goto(base + '/program', { waitUntil: 'domcontentloaded' });
   if (!(await page.locator('#root').count())) throw new Error('Offline navigation fallback failed');
-  console.log(`PASS: ${files.length} exact SVGs, a previously viewed photo and optional 3D assets offline; private API not cached; ${cache.entries} precache entries; ${previous ? 'previous worker upgraded' : 'no SVG requests during install'}.`);
+  console.log(`PASS: current CSS/theme/icon loaded and browser storage preserved; ${files.length} exact SVGs, a previously viewed photo and optional 3D assets offline; private API not cached; ${cache.entries} precache entries; ${previous ? 'previous worker upgraded' : 'no SVG requests during install'}.`);
 } finally {
   if (browser) await browser.close();
   await new Promise((resolve) => server.close(resolve));

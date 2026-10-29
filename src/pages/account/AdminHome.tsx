@@ -181,16 +181,20 @@ function AdminCoaches() {
   }, [coaches, coachSearch]);
 
   return (
-    <PanelPage title="مدیریت مربی‌ها و باشگاه">
-      {/* Club Overview & AI Activity Banner */}
+    <PanelPage title="مدیریت مربی‌ها و باشگاه" className="admin-management">
       <div className="admin-overview-card">
+        <div className="admin-overview-heading">
+          <span className="eyebrow">مرکز مدیریت میتی</span>
+          <h3>همهٔ باشگاه، یک‌جا</h3>
+          <p>حساب مربی‌ها و شاگردها و گزارش فروش را از این بخش مدیریت کن.</p>
+        </div>
         <div className="admin-overview-stats">
           <div className="admin-stat-item">
-            <span className="admin-stat-num">{faNumber(coaches?.filter((coach) => coach.isActive !== false).length ?? 0)}</span>
+            <span className="admin-stat-num">{coaches ? faNumber(coaches.filter((coach) => coach.isActive !== false).length) : '—'}</span>
             <span className="admin-stat-label">مربیان فعال</span>
           </div>
           <div className="admin-stat-item">
-            <span className="admin-stat-num">{faNumber(totalStudents)}</span>
+            <span className="admin-stat-num">{coaches ? faNumber(totalStudents) : '—'}</span>
             <span className="admin-stat-label">شاگردان مرتبط با مربی‌ها</span>
           </div>
           <div className="admin-stat-item admin-stat-ai">

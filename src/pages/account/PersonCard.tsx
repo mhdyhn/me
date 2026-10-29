@@ -44,20 +44,23 @@ export function PersonCard({ name, username, phoneNumber, password, mustChangePa
         </div>
       </header>
 
-      <dl className="person-card__credentials">
-        <CredentialRow label="نام کاربری" value={username} />
-        {phoneNumber ? <CredentialRow label="موبایل (تأییدنشده)" value={phoneNumber} /> : <div className="person-card__row"><dt>موبایل</dt><dd className="person-card__note">ثبت نشده</dd></div>}
-        {password ? (
-          <CredentialRow label="رمز عبور" value={password} secret />
-        ) : (
-          <div className="person-card__row">
-            <dt>رمز عبور</dt>
-            <dd className="person-card__note">
-              {mustChangePassword ? 'رمز ذخیره نشده. با «رمز تازه» یک رمز جدید بسازید.' : 'خودش رمزش را انتخاب کرده است.'}
-            </dd>
-          </div>
-        )}
-      </dl>
+      <div className="person-card__account">
+        <span className="person-card__account-label">اطلاعات حساب</span>
+        <dl className="person-card__credentials">
+          <CredentialRow label="نام کاربری" value={username} />
+          {phoneNumber ? <CredentialRow label="موبایل (تأییدنشده)" value={phoneNumber} /> : <div className="person-card__row"><dt>موبایل</dt><dd className="person-card__note">ثبت نشده</dd></div>}
+          {password ? (
+            <CredentialRow label="رمز عبور" value={password} secret />
+          ) : (
+            <div className="person-card__row">
+              <dt>رمز عبور</dt>
+              <dd className="person-card__note">
+                {mustChangePassword ? 'رمز ذخیره نشده. با «رمز تازه» یک رمز جدید بسازید.' : 'خودش رمزش را انتخاب کرده است.'}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
 
       {children}
 

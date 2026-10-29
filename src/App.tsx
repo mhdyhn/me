@@ -64,10 +64,10 @@ function ProgramEditorRoute() {
   return isProgramReadOnly() ? <Navigate to="/program" replace /> : <ProgramEditor />;
 }
 
-/** Give each role a home screen centered on its main job. */
+/** The admin uses the personal training home; coach work stays at /coach. */
 function RoleHome() {
   const { user } = useSession();
-  return user?.role === 'coach' || user?.role === 'admin' ? <Navigate to="/coach" replace /> : <Dashboard />;
+  return user?.role === 'coach' ? <Navigate to="/coach" replace /> : <Dashboard />;
 }
 
 /** A movement's guide: a student can open only movements in the coach's program. */

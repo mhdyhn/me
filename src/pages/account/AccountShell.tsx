@@ -4,15 +4,15 @@ import { Copy, Dumbbell, LogOut } from 'lucide-react';
 import { useSession } from '../../context/SessionContext';
 import type { Credentials, Role } from '../../lib/api';
 
-/** Where each role lands after signing in. Students see their program; coaches see their students; the admin sees coaches. */
+/** Coaches land on their roster; students and the admin land on their personal training home. */
 export function homeFor(role: Role): string {
-  return role === 'student' ? '/' : '/coach';
+  return role === 'coach' ? '/coach' : '/';
 }
 
 /** A screen inside the app shell (the bottom toolbar stays visible). The shell already shows the page name in the top bar. */
-export function PanelPage({ title, children }: { title: string; children: ReactNode }) {
+export function PanelPage({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className="panel-page">
+    <section className={`panel-page ${className}`.trim()}>
       <h2 className="panel-title">{title}</h2>
       {children}
     </section>

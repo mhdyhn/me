@@ -83,7 +83,7 @@ describe('Mobile Bottom Sheet Toolbar Navigation', () => {
     await user.click(moreButton);
 
     const sheet = screen.getByRole('dialog', { name: 'سایر بخش‌ها و امکانات میتی' });
-    expect(within(sheet).getByText('امکانات مربی')).toBeInTheDocument();
+    expect(within(sheet).getByText('تمرین شخصی و امکانات بیشتر')).toBeInTheDocument();
     expect(within(sheet).getByText('گفتگو با مدیر')).toBeInTheDocument();
     expect(within(sheet).getByText('برنامهٔ شخصی')).toBeInTheDocument();
   });
