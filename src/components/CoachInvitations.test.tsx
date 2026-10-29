@@ -24,4 +24,25 @@ describe('coach invitation controls', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('باطل شدند');
     expect(screen.queryByText(code)).not.toBeInTheDocument();
   });
+  it('creates QR locally only on request and removes it when a new code is issued', async () => {
+    const first = 'a'.repeat(32);
+    const second = 'b'.repeat(32);
+    mocks.api.mockResolvedValueOnce({ code: first, expiresAt: '2026-11-01T00:00:00Z' })
+      .mockResolvedValueOnce({ code: second, expiresAt: '2026-11-01T01:00:00Z' });
+    render(<CoachInvitations />);
+    fireEvent.click(screen.getByText('دعوت شاگرد با حساب خودش'));
+    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد دعوت' }));
+    await screen.findByText(first);
+    expect(screen.queryByRole('img', { name: /QR دعوت/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'نمایش QR' }));
+    const image = await screen.findByRole('img', { name: /QR دعوت/ });
+    expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+    expect(screen.getByText(/اتصال فقط پس از بررسی نام مربی و رضایت شاگرد/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'ساخت کد دعوت' }));
+    await screen.findByText(second);
+    expect(screen.queryByRole('img', { name: /QR دعوت/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(first)).not.toBeInTheDocument();
+    expect(mocks.api).toHaveBeenCalledTimes(2);
+  });
+
 });

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Columns2, Info, Pause, Pla
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { SectionHeading } from '../components/SectionHeading';
+import { ExerciseModelPanel } from '../components/ExerciseModelPanel';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
 import { exercisePhotoIds, exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
@@ -132,9 +133,11 @@ export function ExerciseDetail() {
             </section>
           )}
 
-          {/* Lyfta-style animated video/visual loop container */}
+          {exerciseId === 'push-up' && <ExerciseModelPanel />}
+
+          {/* Existing two-frame guide remains available alongside the optional model. */}
           {hasFigure && (
-            <section className="lyfta-player" aria-label="آموزش تصویری حرکت به سبک Lyfta">
+            <section className="lyfta-player" aria-label="آموزش تصویری حرکت">
               {viewMode === 'loop' ? (
                 <div className="lyfta-player__screen">
                   <div className="lyfta-player__badge">

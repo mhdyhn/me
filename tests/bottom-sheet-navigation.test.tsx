@@ -6,8 +6,8 @@ import { db } from '../src/lib/db';
 
 function stubSession(user: { id: number; username: string; role: 'student' | 'coach' | 'admin'; displayName: string; coachId: number | null; mustChangePassword: boolean }) {
   window.localStorage.setItem('meety.session-token', 'test-session-token-000000000000');
-  vi.stubGlobal('fetch', async () =>
-    new Response(JSON.stringify({ user }), {
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) =>
+    new Response(JSON.stringify(String(input).includes('/api/me/program') ? { program: null, isPaid: true } : { user }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     }),

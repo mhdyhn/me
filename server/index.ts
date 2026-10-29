@@ -1,4 +1,4 @@
-import { extname, join, normalize, sep } from 'node:path';
+import { join } from 'node:path';
 import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -7,6 +7,7 @@ import { createApp } from './app.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
+import { isFile, resolveStaticDir, serveStatic } from './static.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const port = Number(process.env.PORT ?? 8787);
@@ -84,22 +85,6 @@ function loadSecretKey(dataDir: string) {
   return keyFromSecret(readFileSync(file, 'utf8').trim());
 }
 
-const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.txt': 'text/plain; charset=utf-8',
-  '.apk': 'application/vnd.android.package-archive',
-};
-
 function handleApkDownload(staticDir: string | null, response: import('node:http').ServerResponse) {
   if (staticDir) {
     const localApk = join(staticDir, 'meety.apk');
@@ -118,67 +103,4 @@ function handleApkDownload(staticDir: string | null, response: import('node:http
 
   response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end('فایل اندروید تأییدشده برای این نسخه منتشر نشده است.');
-}
-
-/** The folder with the built app, or null when it has not been built (API-only mode). */
-function resolveStaticDir(path: string): string | null {
-  const dir = resolve(path);
-  return existsSync(join(dir, 'index.html')) ? dir : null;
-}
-
-function isFile(path: string): boolean {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-
-/** Serves a built file. Unknown paths get index.html so the client-side router can take over. */
-function serveStatic(root: string, pathname: string, response: import('node:http').ServerResponse, request?: import('node:http').IncomingMessage): boolean {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return false;
-  }
-  const candidate = normalize(join(root, decoded));
-  if (candidate !== root && !candidate.startsWith(root + sep)) return false; // path traversal
-  let file = candidate;
-  if (!isFile(file)) file = join(root, 'index.html');
-  if (!isFile(file)) return false;
-  const stat = statSync(file);
-  const immutable = file.startsWith(join(root, 'assets') + sep);
-  const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
-
-  const ifNoneMatch = request?.headers['if-none-match'];
-  if (ifNoneMatch === etag) {
-    response.writeHead(304, {
-      'ETag': etag,
-      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
-      'Access-Control-Allow-Origin': '*',
-      'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'X-XSS-Protection': '1; mode=block',
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-      'Permissions-Policy': 'geolocation=(), microphone=(self), camera=(self)',
-    });
-    response.end();
-    return true;
-  }
-
-  response.writeHead(200, {
-    'Content-Type': MIME_TYPES[extname(file)] ?? 'application/octet-stream',
-    'Content-Length': stat.size,
-    'ETag': etag,
-    'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
-    'Access-Control-Allow-Origin': '*',
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'X-XSS-Protection': '1; mode=block',
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Permissions-Policy': 'geolocation=(), microphone=(self), camera=(self)',
-  });
-  createReadStream(file).pipe(response);
-  return true;
 }

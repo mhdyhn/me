@@ -36,6 +36,9 @@ function stubChatSession() {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
+    if (url.includes('/api/me/program')) {
+      return new Response(JSON.stringify({ program: null, isPaid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.includes('/api/me')) {
       return new Response(
         JSON.stringify({

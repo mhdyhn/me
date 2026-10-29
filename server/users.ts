@@ -1,4 +1,5 @@
 import { decryptSecret, type SecretKey } from './secrets.ts';
+import { hashToken } from './auth.ts';
 import type { Db } from './db.ts';
 import { HttpError } from './http.ts';
 
@@ -82,6 +83,16 @@ export function toPublic(user: StoredUser): PublicUser {
   // Credentials and the session version never leave the server.
   const { passwordHash: _hash, passwordEnc: _enc, authVersion: _version, coachAccessVersion: _coachVersion, sessionGuardVersion: _sessionVersion, ...publicUser } = user;
   return publicUser;
+}
+
+/** Resolve the session and current account in one database snapshot. */
+export async function findUserBySession(db: Db, token: string, now: Date): Promise<StoredUser | null> {
+  const row = (await db.query<UserRow>(
+    `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.expires_at > $2 AND s.auth_version = u.auth_version`,
+    [hashToken(token), now.toISOString()],
+  ))[0];
+  return row ? fromRow(row) : null;
 }
 
 export async function findUserById(db: Db, id: number): Promise<StoredUser | null> {

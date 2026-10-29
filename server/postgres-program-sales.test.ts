@@ -2,10 +2,11 @@
 // Optional integration: use only a disposable PostgreSQL database with CREATE SCHEMA permission.
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { openDatabase, type Db } from './db.ts';
 import { createPaymentRequest, isProgramPaid, verifyPayment } from './payments.ts';
-import { listPurchasedProgrammes, loadProgramme, saveProgramme, type ProgrammeInput } from './programs.ts';
+import { listPurchasedProgrammes, loadProgramme, saveProgramme, studentProgrammeView, type ProgrammeInput } from './programs.ts';
+import { findUserById } from './users.ts';
 
 const url = process.env.TEST_POSTGRES_URL;
 const schema = `meety_sales_${randomBytes(10).toString('hex')}`;
@@ -66,6 +67,29 @@ describe.skipIf(!url)('PostgreSQL programme sales and concurrency', () => {
     }, now);
     const archive = await listPurchasedProgrammes(db!, 2, null);
     expect(archive.programs.map((program) => program.id)).toContain(current.id);
+  }, 30000);
+
+  it('keeps production entitlements and relationship guards in the single-query view', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
+    vi.stubEnv('STUDENT_TEST_PURCHASES', 'on');
+    try {
+      const student = (await findUserById(db!, 2))!;
+      const current = (await loadProgramme(db!, 2))!;
+      expect(await studentProgrammeView(db!, student, now)).toMatchObject({ isPaid: false, program: { id: current.id, days: [] } });
+      await db!.query(`INSERT INTO payment_transactions
+        (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, gateway_mode, programme_id)
+        VALUES (2, 1, 100000, 90000, 10000, 'production-check', 'paid', '123456', $1, 'sandbox', $2)`, [now.toISOString(), current.id]);
+      expect((await studentProgrammeView(db!, student, now)).isPaid).toBe(false);
+      await db!.query("UPDATE payment_transactions SET gateway_mode='live' WHERE authority='production-check'");
+      expect(await studentProgrammeView(db!, student, now)).toMatchObject({ isPaid: true, program: { id: current.id, days: input.days } });
+      await db!.query('UPDATE users SET coach_access_version = coach_access_version + 1 WHERE id = 2');
+      await expect(studentProgrammeView(db!, student, now)).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await db!.query('UPDATE users SET coach_access_version = 0 WHERE id = 2');
+      await db!.query("DELETE FROM payment_transactions WHERE authority='production-check'");
+      vi.unstubAllEnvs();
+    }
   }, 30000);
 
   it('rolls back the active row if archiving fails', async () => {

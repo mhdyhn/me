@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node tools/compress-static.mjs",
+    "benchmark:api": "node tools/benchmark-api.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -16,7 +17,10 @@
     "verify:offline": "node tools/verify-offline-bundle.mjs",
     "server": "node server/index.ts",
     "test:responsive": "playwright test --config=playwright.responsive.config.ts",
-    "test:transfer-integration": "node tools/test-transfer-integration.mjs"
+    "test:pwa-offline": "node tools/test-pwa-offline.mjs",
+    "test:offline-file": "node tools/test-offline-file.mjs",
+    "test:transfer-integration": "node tools/test-transfer-integration.mjs",
+    "test:3d-qr": "node tools/test-3d-and-qr.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -28,9 +32,11 @@
     "lucide-react": "^0.468.0",
     "pg": "^8.23.1",
     "proxy-addr": "^2.0.8",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
@@ -41,11 +47,15 @@
     "@types/node": "^26.6.4",
     "@types/pg": "^8.23.1",
     "@types/proxy-addr": "^2.0.3",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.4.0",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.3",
     "vite-plugin-pwa": "^2.0.0",

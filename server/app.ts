@@ -1,13 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
-import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, userForToken, verifyPassword } from './auth.ts';
+import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
 import { requireMobile } from './phone.ts';
 import { acceptCoachInvitation, makeCoachInvitation, previewCoachInvitation, returnToPersonalProgram, revokeCoachInvitations, withdrawCoachAccess } from './coachInvites.ts';
-import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, validateProgramme, validateProgrammeSave } from './programs.ts';
+import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
@@ -171,11 +171,13 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/health$/,
       auth: 'public',
-      // Also touches the database, so the free database stays awake between visits (the monitor pings this every few minutes).
+      // A simple DB check; its timing is not an end-to-end or authenticated benchmark.
       handler: async () => {
         try {
+          const started = performance.now();
           await db.query('SELECT 1');
-          return { status: 200, body: { ok: true, database: true } };
+          const databaseMs = Math.round(performance.now() - started);
+          return { status: 200, body: { ok: true, database: true, databaseMs } };
         } catch {
           return { status: 503, body: { ok: false, database: false } };
         }
@@ -813,49 +815,11 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/program$/,
       auth: ['student'],
-      handler: async ({ user }) => {
-        if (user!.coachId === null || user!.personalProgramMode) return { status: 200, body: { program: null, coachName: null, isPaid: true }, headers: { 'Cache-Control': 'no-store' } };
-        const coach = await findUserById(db, user!.coachId);
-        const prog = await loadProgramme(db, user!.id, user!.coachId);
-        if (!prog) {
-          return { status: 200, body: { program: null, coachName: coach?.displayName ?? null, isPaid: true } };
-        }
-        const isPaid = (prog.priceTomans ?? 0) === 0 || (await isProgramPaid(db, user!.id, prog.id));
-        const test = isPaid ? null : await testPurchaseState(db, user!.id, prog.id, now());
-        const mode = !isPaid && !test ? await getTestMode(db, now()) : null;
-        const isTestPurchase = test?.status === 'paid';
-        if (!isPaid && !isTestPurchase) {
-          return {
-            status: 200,
-            body: {
-              program: {
-                id: prog.id,
-                version: prog.version,
-                title: prog.title,
-                days: [],
-                priceTomans: prog.priceTomans,
-                updatedAt: prog.updatedAt,
-              },
-              coachName: coach?.displayName ?? null,
-              isPaid: false,
-              testPurchaseAvailable: !!test || !!mode?.enabled,
-              testPurchaseExpiresAt: test?.expires_at ?? mode?.expiresAt ?? null,
-            },
-            headers: { 'Cache-Control': 'no-store' },
-          };
-        }
-        return {
-          status: 200,
-          body: {
-            program: prog,
-            coachName: coach?.displayName ?? null,
-            isPaid,
-            isTestPurchase,
-            testPurchaseExpiresAt: isTestPurchase ? test!.expires_at : null,
-          },
-          headers: { 'Cache-Control': 'no-store' },
-        };
-      },
+      handler: async ({ user }) => ({
+        status: 200,
+        body: await studentProgrammeView(db, user!, now()),
+        headers: { 'Cache-Control': 'no-store' },
+      }),
     },
 
     // Per-account personal data. Each item has a server version and is updated conditionally.
@@ -1239,10 +1203,10 @@ export function createApp(options: AppOptions) {
     const fromCookie = cookie && /^[A-Za-z0-9_-]{20,200}$/.test(cookie) ? cookie : null;
     const candidate = bearer ? bearer[1] : header ?? fromCookie;
     if (!candidate) return { user: null, token: null, viaCookie: false };
-    const session = await userForToken(db, candidate, now());
-    if (!session) return { user: null, token: null, viaCookie: false };
+    const user = await findUserBySession(db, candidate, now());
+    if (!user) return { user: null, token: null, viaCookie: false };
     // Only a cookie-only session is subject to the JSON-only rule for writes (CSRF protection).
-    return { user: await findUserById(db, session.userId), token: candidate, viaCookie: !bearer && !header };
+    return { user, token: candidate, viaCookie: !bearer && !header };
   }
 
   async function dispatch(request: IncomingMessage, body: unknown): Promise<RouteResult> {

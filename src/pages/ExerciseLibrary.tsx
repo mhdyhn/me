@@ -43,7 +43,7 @@ export function ExerciseLibrary() {
 
   return (
     <div className="page-stack">
-      <SectionHeading eyebrow="آموزش حرکت‌ها" title="حرکت را درست یاد بگیر." description="راهنمای آماده‌سازی، مراحل روشن و نکته‌های اجرای صحیح برای همهٔ حرکت‌های برنامه به سبک Lyfta." />
+      <SectionHeading eyebrow="آموزش حرکت‌ها" title="حرکت را درست یاد بگیر." description="راهنمای آماده‌سازی، مراحل و نکته‌های اجرایی حرکت‌های برنامه در یک جا." />
       <div className="library-toolbar">
         <label className="search-field">
           <Search size={18} />

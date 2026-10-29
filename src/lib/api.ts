@@ -146,27 +146,47 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
   }
 
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutMessage = 'پاسخ سرور بیش از حد طول کشید. لطفاً اتصال اینترنت را بررسی و دوباره تلاش کنید.';
+  let timer = 0;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = window.setTimeout(() => {
+      controller.abort();
+      reject(new ApiError(0, timeoutMessage));
+    }, timeoutMs);
+  });
 
   let response: Response;
+  let json: { error?: string } & T;
   try {
-    response = await fetch(`${API_BASE}/api${path}`, {
-      method,
-      headers,
-      // A different tab can replace the cookie; an explicitly bound request must never use it.
-      credentials: fixedSessionToken ? 'omit' : 'same-origin',
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal,
-    });
+    // The deadline includes the response body, not just the arrival of headers.
+    const fetchBody = async () => {
+      const received = await fetch(`${API_BASE}/api${path}`, {
+        method,
+        headers,
+        // A different tab can replace the cookie; an explicitly bound request must never use it.
+        credentials: fixedSessionToken ? 'omit' : 'same-origin',
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      let data: { error?: string } & T;
+      try {
+        data = await received.json() as { error?: string } & T;
+        if (data === null || typeof data !== 'object') throw new Error('Invalid JSON response');
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        if (received.ok) throw new ApiError(received.status, 'پاسخ سرور نامعتبر است. دوباره تلاش کنید.');
+        data = {} as { error?: string } & T;
+      }
+      return { response: received, json: data };
+    };
+    ({ response, json } = await Promise.race([fetchBody(), timeout]));
   } catch (err: unknown) {
-    if ((err as Error)?.name === 'AbortError') {
-      throw new ApiError(0, 'پاسخ سرور بیش از حد طول کشید. لطفاً اتصال اینترنت را بررسی و دوباره تلاش کنید.');
-    }
+    if (err instanceof ApiError) throw err;
+    if (controller.signal.aborted || (err as Error)?.name === 'AbortError') throw new ApiError(0, timeoutMessage);
     throw new ApiError(0, 'اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.');
   } finally {
     window.clearTimeout(timer);
   }
-  const json = (await response.json().catch(() => ({}))) as { error?: string } & T;
   // A rejected session anywhere in the app sends the user back to sign-in, instead of a dead screen.
   if (response.status === 401 && path !== '/auth/login' && getToken() === token) {
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));

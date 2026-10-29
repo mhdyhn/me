@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { existsSync, unlinkSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+/** One precached asset replaces hundreds of separate illustration downloads. */
+function exerciseFigurePack() {
+  return {
+    name: 'exercise-figure-pack',
+    apply: 'build' as const,
+    generateBundle(this: { emitFile: (file: { type: 'asset'; fileName: string; source: string }) => void }) {
+      const directory = resolve('public/exercise-images');
+      const files = readdirSync(directory).filter((name) => name.endsWith('.svg')).sort();
+      const figures = Object.fromEntries(files.map((name) => [name, readFileSync(join(directory, name), 'utf8')]));
+      this.emitFile({ type: 'asset', fileName: 'exercise-figures.json', source: JSON.stringify(figures) });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const offlineSingleFile = mode === 'offline';
@@ -23,6 +37,7 @@ export default defineConfig(({ mode }) => {
       },
       ...(!offlineSingleFile
         ? [
+            exerciseFigurePack(),
             VitePWA({
               registerType: 'autoUpdate',
               includeAssets: ['brand-mark.svg', 'apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png'],
@@ -45,10 +60,23 @@ export default defineConfig(({ mode }) => {
               },
               workbox: {
                 navigateFallback: '/index.html',
-                globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+                globPatterns: ['**/*.{js,css,html,svg,woff,woff2}', 'assets/*.webp', 'exercise-figures.json'],
+                globIgnores: ['exercise-images/**', 'assets/ExerciseModel3D-*.js', 'assets/vendor-three-*.js'],
+                importScripts: ['exercise-figures-sw.js'],
                 runtimeCaching: [
                   {
-                    urlPattern: /\/exercise-(?:photos|images)\/.*\.(?:jpg|jpeg|png|webp|svg)$/,
+                    // Public, versioned assets only; never cache private API responses.
+                    urlPattern: /\/assets\/(?:ExerciseModel3D|vendor-three)-[^/]+\.js$/,
+                    handler: 'CacheFirst',
+                    options: { cacheName: 'exercise-3d-code', expiration: { maxEntries: 8, maxAgeSeconds: 90 * 24 * 60 * 60 } },
+                  },
+                  {
+                    urlPattern: /\/models\/push-up-[a-f0-9]+\.glb$/,
+                    handler: 'CacheFirst',
+                    options: { cacheName: 'exercise-3d-models', expiration: { maxEntries: 2, maxAgeSeconds: 90 * 24 * 60 * 60 } },
+                  },
+                  {
+                    urlPattern: /\/exercise-photos\/.*\.(?:jpg|jpeg|png|webp)$/,
                     handler: 'StaleWhileRevalidate',
                     options: {
                       cacheName: 'exercise-media-cache',
@@ -96,6 +124,7 @@ export default defineConfig(({ mode }) => {
           ? { inlineDynamicImports: true }
           : {
               manualChunks(id: string) {
+                if (id.includes('node_modules/three/')) return 'vendor-three';
                 if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
                   return 'vendor-react';
                 }

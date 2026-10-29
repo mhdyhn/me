@@ -11,7 +11,7 @@ const info = await stat(path);
 const links = html.match(/<link\b[^>]*>/gi) ?? [];
 const styles = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => match[1]);
 const checks = [
-  ['no 3D model embedded (the app has no model asset)', !html.includes('data:model/gltf-binary')],
+  ['optional 3D model is not embedded in the offline file', !html.includes('data:model/gltf-binary')],
   ['no external module JS entrypoint', !/<script[^>]+src=["'](?:https?:\/\/|\/assets\/)/i.test(html)],
   ['no external stylesheet entrypoint', !links.some((link) => /\brel=["']stylesheet["']/i.test(link))],
   ['CSS build assets are inlined', styles.length > 0 && !styles.some((style) => /url\(["']?\/assets\//i.test(style))],
