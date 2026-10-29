@@ -90,4 +90,14 @@ describe('precompressed public static assets', () => {
     expect(result.body.toString()).toBe('<html>fallback</html>');
     expect(result.headers['cache-control']).toBe('no-cache');
   });
+
+  it('returns a non-cacheable 404, not the app shell, for missing static assets', async () => {
+    for (const path of ['/assets/old-hash.js', '/assets/missing', '/icons/missing.png', '/models/no.glb', '/sw.js']) {
+      const result = await request(path);
+      expect(result.status, path).toBe(404);
+      expect(result.headers['cache-control']).toBe('no-store');
+      expect(result.headers['content-type']).toMatch(/^text\/plain/);
+      expect(result.body.toString()).not.toContain('<html>');
+    }
+  });
 });

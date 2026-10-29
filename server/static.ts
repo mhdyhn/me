@@ -63,7 +63,16 @@ export function serveStatic(root: string, pathname: string, response: ServerResp
   const candidate = normalize(join(root, decoded));
   if (candidate !== root && !candidate.startsWith(root + sep)) return false;
   let file = candidate;
-  if (!isFile(file)) file = join(root, 'index.html');
+  if (!isFile(file)) {
+    // A stale hashed bundle must not receive the SPA HTML with a misleading 200 response.
+    const staticPath = /^\/(?:assets|icons|models|exercise-images|exercise-photos)\//.test(decoded) || /\.[a-z0-9]{1,8}$/i.test(decoded);
+    if (staticPath) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      response.end('Not found');
+      return true;
+    }
+    file = join(root, 'index.html');
+  }
   if (!isFile(file)) return false;
   const immutable = file.startsWith(join(root, 'assets') + sep);
   const compressed = acceptsGzip(request?.headers['accept-encoding']) && isFile(`${file}.gz`);

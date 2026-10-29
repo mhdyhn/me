@@ -169,6 +169,7 @@ export function Settings() {
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>
+      <p className="muted small-text">شناسهٔ نسخهٔ رابط در این دستگاه: <code dir="ltr">{typeof __MEETY_WEB_REVISION__ === 'string' ? __MEETY_WEB_REVISION__ : 'نامشخص'}</code></p>
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );

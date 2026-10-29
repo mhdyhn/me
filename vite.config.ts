@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { existsSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /** One precached asset replaces hundreds of separate illustration downloads. */
@@ -18,11 +18,45 @@ function exerciseFigurePack() {
   };
 }
 
+/** Avoid extra worker-script downloads that can leave a legacy client stuck after a transient failure. */
+function inlinePwaHelpers() {
+  return {
+    name: 'inline-pwa-helpers',
+    apply: 'build' as const,
+    enforce: 'post' as const,
+    closeBundle: {
+      order: 'post' as const,
+      sequential: true,
+      handler() {
+        const workerFile = resolve('dist/sw.js');
+        const worker = readFileSync(workerFile, 'utf8');
+        const imports = 'importScripts("app-shell-sw.js","exercise-figures-sw.js")';
+        if (!worker.includes(imports) || worker.indexOf(imports) !== worker.lastIndexOf(imports)) {
+          throw new Error('Could not safely inline service worker helpers');
+        }
+        const helpers = ['app-shell-sw.js', 'exercise-figures-sw.js']
+          .map((file) => readFileSync(resolve('public', file), 'utf8')).join('\n');
+        writeFileSync(workerFile, worker.replace(imports, () => `(()=>{\n${helpers}\n})()`));
+      },
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const offlineSingleFile = mode === 'offline';
+  const revision = process.env.RENDER_GIT_COMMIT?.trim() ?? process.env.GITHUB_SHA?.trim() ?? '';
+  const webRevision = /^[a-f0-9]{7,40}$/i.test(revision) ? revision.slice(0, 8).toLowerCase() : 'نامشخص';
   return {
+    define: { __MEETY_WEB_REVISION__: JSON.stringify(webRevision) },
     plugins: [
       react(),
+      {
+        name: 'meety-update-loader',
+        apply: 'build' as const,
+        transformIndexHtml(html: string) {
+          return offlineSingleFile ? html : html.replace('</head>', '<script defer src="/app-update.js"></script></head>');
+        },
+      },
       {
         name: 'exclude-apk-from-dist',
         closeBundle() {
@@ -39,7 +73,9 @@ export default defineConfig(({ mode }) => {
         ? [
             exerciseFigurePack(),
             VitePWA({
+              // The worker activates, but open pages refresh only after the user saves and agrees.
               registerType: 'autoUpdate',
+              injectRegister: false,
               includeAssets: ['brand-mark.svg', 'apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png'],
               manifest: {
                 name: 'میتی — مربی تمرین باشگاه',
@@ -59,10 +95,14 @@ export default defineConfig(({ mode }) => {
                 ],
               },
               workbox: {
-                navigateFallback: '/index.html',
+                // Older clients have no update-prompt listener, so the worker must activate by itself.
+                skipWaiting: true,
+                clientsClaim: true,
+                inlineWorkboxRuntime: true,
+                navigateFallback: null,
                 globPatterns: ['**/*.{js,css,html,svg,woff,woff2}', 'assets/*.webp', 'exercise-figures.json'],
-                globIgnores: ['exercise-images/**', 'assets/ExerciseModel3D-*.js', 'assets/vendor-three-*.js'],
-                importScripts: ['exercise-figures-sw.js'],
+                globIgnores: ['app-shell-sw.js', 'exercise-figures-sw.js', 'exercise-images/**', 'assets/ExerciseModel3D-*.js', 'assets/vendor-three-*.js'],
+                importScripts: ['app-shell-sw.js', 'exercise-figures-sw.js'],
                 runtimeCaching: [
                   {
                     // Public, versioned assets only; never cache private API responses.
@@ -101,6 +141,7 @@ export default defineConfig(({ mode }) => {
               },
               devOptions: { enabled: false },
             }),
+            inlinePwaHelpers(),
           ]
         : []),
     ],
