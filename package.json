@@ -18,6 +18,7 @@
     "server": "node server/index.ts",
     "test:responsive": "playwright test --config=playwright.responsive.config.ts",
     "test:pwa-offline": "node tools/test-pwa-offline.mjs",
+    "test:pwa-upgrade": "node tools/test-pwa-upgrade.mjs",
     "test:offline-file": "node tools/test-offline-file.mjs",
     "test:transfer-integration": "node tools/test-transfer-integration.mjs",
     "test:3d-qr": "node tools/test-3d-and-qr.mjs"

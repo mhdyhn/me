@@ -26,6 +26,13 @@ describe('settings profile sharing status', () => {
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+  it('shows the device interface version, or an honest unknown value outside a build', async () => {
+    mocks.api.mockResolvedValue({ stored: null });
+    render(<Settings />);
+    expect(screen.getByText('شناسهٔ نسخهٔ رابط در این دستگاه:', { exact: false })).toHaveTextContent('نامشخص');
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+  });
+
   it('keeps sharing controls disabled after a load error and retries successfully', async () => {
     mocks.api.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
       stored: { profile: {}, shareWithCoach: true },

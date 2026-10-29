@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="fatal-fallback__icon"><AlertTriangle size={22} /></div>
         <p className="eyebrow">میتی · خطای قابل بازیابی</p>
         <h1>مشکلی در نمایش این بخش پیش آمد.</h1>
-        <p>اطلاعات تمرین شما به‌صورت محلی ذخیره شده است. برنامه را دوباره بارگذاری کنید.</p>
+        <p>اطلاعاتی که ذخیره کرده‌ای معمولاً روی دستگاه می‌مانند؛ تغییرات ذخیره‌نشده ممکن است از دست بروند. سپس برنامه را دوباره بارگذاری کن.</p>
         <button className="button button--primary" onClick={() => window.location.reload()}>
           <RefreshCw size={16} /> بارگذاری دوباره
         </button>
