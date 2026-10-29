@@ -65,24 +65,31 @@ export async function loadAssignedProgram(): Promise<void> {
       isTestPurchase?: boolean; testPurchaseAvailable?: boolean; testPurchaseExpiresAt?: string | null;
     }>('GET', '/me/program');
     if (!stillCurrent()) return;
-    if (result.program) {
+    if (!result || typeof result !== 'object' || !('program' in result) || typeof result.isPaid !== 'boolean') {
+      throw new Error('وضعیت برنامه از سرور معتبر نیست.');
+    }
+    if (result.program !== null) {
+      const program = result.program;
+      if (!program || typeof program.id !== 'string' || !program.id || !Number.isSafeInteger(program.version) || program.version < 0 ||
+          typeof program.title !== 'string' || !Array.isArray(program.days)) throw new Error('برنامهٔ دریافتی معتبر نیست.');
       const isTestPurchase = result.isTestPurchase === true;
+      if (isTestPurchase && (typeof result.testPurchaseExpiresAt !== 'string' || !Number.isFinite(Date.parse(result.testPurchaseExpiresAt)))) {
+        throw new Error('اعتبار دسترسی آزمایشی معتبر نیست.');
+      }
+      // Validate the entire open programme before changing any visible metadata.
+      const templates = result.isPaid || isTestPurchase ? assignedToTemplates(program) : [];
       setAssignedMeta({
         id: result.program.id,
         version: result.program.version,
         title: result.program.title,
         priceTomans: result.program.priceTomans ?? 0,
         coachName: result.coachName ?? null,
-        isPaid: result.isPaid !== false,
+        isPaid: result.isPaid,
         isTestPurchase,
         testPurchaseAvailable: result.testPurchaseAvailable === true,
         testPurchaseExpiresAt: result.testPurchaseExpiresAt ?? null,
       });
-      if (result.isPaid !== false || isTestPurchase) {
-        setAssignedProgram(assignedToTemplates(result.program));
-      } else {
-        setAssignedProgram([]);
-      }
+      setAssignedProgram(templates);
     } else {
       setAssignedMeta(null);
       setAssignedProgram([]);

@@ -22,6 +22,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('relationship changes in SessionProvider', () => {
+  it('waits until a temporary password is changed before loading a coached programme', async () => {
+    setStoredUser({ ...connected, mustChangePassword: true });
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+    render(<SessionProvider><Probe /></SessionProvider>);
+    expect(mocks.loadAssigned).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'connect' }));
+    await waitFor(() => expect(mocks.loadAssigned).toHaveBeenCalledOnce());
+  });
+
   it('ignores an older account response after a successful connection and immediately switches programme mode', async () => {
     let resolve!: (response: Response) => void;
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((done) => { resolve = done; })));

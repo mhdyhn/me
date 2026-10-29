@@ -4,6 +4,42 @@ import { api, setToken, UNAUTHORIZED_EVENT } from './api';
 afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('API deadlines', () => {
+  it('times out and aborts if the server never sends headers', async () => {
+    vi.useFakeTimers();
+    const captured: { signal?: AbortSignal } = {};
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      captured.signal = init?.signal as AbortSignal;
+      return new Promise<Response>(() => {});
+    }));
+    const request = api('GET', '/me/program', undefined, 5000);
+    const rejected = expect(request).rejects.toThrow('پاسخ سرور بیش از حد طول کشید');
+    await vi.advanceTimersByTimeAsync(5000);
+    await rejected;
+    expect(captured.signal?.aborted).toBe(true);
+  });
+
+  it('enforces the same deadline after headers if the response body stalls', async () => {
+    vi.useFakeTimers();
+    const captured: { signal?: AbortSignal } = {};
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured.signal = init?.signal as AbortSignal;
+      return { status: 200, ok: true, json: () => new Promise(() => {}) } as Response;
+    }));
+    const request = api('GET', '/me/program', undefined, 5000);
+    const rejected = expect(request).rejects.toThrow('پاسخ سرور بیش از حد طول کشید');
+    await vi.advanceTimersByTimeAsync(5000);
+    await rejected;
+    expect(captured.signal?.aborted).toBe(true);
+  });
+
+  it('does not treat an invalid successful response as empty data', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>در حال آماده‌سازی سرور</html>', { status: 200 })));
+    await expect(api('GET', '/me/program')).rejects.toThrow('پاسخ سرور نامعتبر است');
+  });
 });
 
 describe('session-bound API requests', () => {

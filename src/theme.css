@@ -1,0 +1,202 @@
+/* Meety's shared dark, sport-focused palette; semantic colours are kept distinct. */
+:root {
+  color-scheme: dark;
+  --bg: #0b100e;
+  --surface: #151d19;
+  --surface-soft: #1b2720;
+  --surface-raised: #243329;
+  --line: #3b5142;
+  --line-soft: rgba(174, 201, 181, .2);
+  --text: #f1f6f1;
+  --text-soft: #d4e0d6;
+  --muted: #b8c8bb;
+  --subtle: #a6b8aa;
+  --accent: #c9f56d;
+  --accent-ink: #11190d;
+  --brand: #c9f56d;
+  --purple-soft: #c9f56d;
+  --gold: #ffd18a;
+  --success: #c9f56d;
+  --blue: #a0e0cb;
+  --red: #ffb0a4;
+  --radius: 18px;
+  --shadow: 0 10px 32px rgba(0, 0, 0, .18);
+  color: var(--text);
+  background: var(--bg);
+}
+body { color: var(--text); background: radial-gradient(ellipse at 70% -20%, #203a27 0, transparent 42%), var(--bg); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { color: var(--accent-ink); background: var(--accent); }
+.eyebrow { color: var(--subtle); letter-spacing: 0; }
+.muted, .account-muted, .section-description, .field-hint { color: var(--muted); }
+.icon-accent, .accent-dot { color: var(--accent); }
+.small-text, .section-description { font-size: 13px; line-height: 1.8; }
+h1, h2, h3, h4 { letter-spacing: 0; }
+.panel-card { border-color: var(--line-soft); background: var(--surface); box-shadow: var(--shadow); }
+.button { min-height: 44px; font-size: 13px; letter-spacing: 0; }
+.button--small { min-height: 40px; }
+.button--primary, .login-submit { color: var(--accent-ink); background: var(--accent); }
+.button--primary:hover:not(:disabled), .login-submit:not(:disabled):hover { color: var(--accent-ink); background: #dcff9c; }
+.button--secondary, .button--ghost { border-color: #526c59; color: var(--text); background: var(--surface-raised); }
+.button--secondary:hover:not(:disabled), .button--ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--text); background: #304637; }
+.button--quiet { border-color: var(--line); color: var(--text-soft); background: transparent; }
+.button--quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-soft); }
+.text-link, .inline-link, .text-button, .back-link:hover { color: var(--accent); }
+.text-link:hover, .inline-link:hover { color: #e2ffb2; }
+.confirm-modal__btn--warning { color: #201305 !important; }
+.confirm-modal__btn--danger { background: #a92730 !important; }
+
+/* Navigation and surfaces shared by students, coaches, and management. */
+.sidebar { border-color: var(--line-soft); background: rgba(13, 20, 16, .97); }
+.brand-mark { color: var(--accent-ink); background: var(--accent); }
+.brand-lockup small, .sidebar-label, .sidebar-footer { color: var(--muted); }
+.nav-link, .side-nav-more > summary, .profile-button, .back-link { color: var(--muted); }
+.account-entry { background: transparent; cursor: pointer; }
+.nav-link:hover, .side-nav-more > summary:hover { color: var(--text); background: var(--surface-soft); }
+.nav-link.is-active { border-color: rgba(201, 245, 109, .25); color: var(--accent); background: rgba(201, 245, 109, .1); }
+.sidebar-coach-note, .note-mark, .profile-avatar, .resume-pill { border-color: rgba(201, 245, 109, .23); color: var(--accent); background: rgba(201, 245, 109, .08); }
+.sidebar-coach-note strong, .topbar-title h1, .brand-lockup strong { color: var(--text); }
+.topbar { border-color: var(--line-soft); background: rgba(11, 16, 14, .93); }
+.status-dot, .resume-dot, .live-dot { background: var(--accent); }
+.page-content { padding-top: 28px; }
+.section-heading h2, .empty-state h3, .panel-title { color: var(--text); }
+.empty-state p { font-size: 13px; }
+
+/* Student home: an optional small local image, never instructional content. */
+.welcome-row h2 { line-height: 1.5; letter-spacing: 0; }
+.welcome-row > div > p:last-child { font-size: 13px; }
+.next-workout-card, .dashboard-no-program {
+  border: 1px solid rgba(201, 245, 109, .2);
+  background: linear-gradient(270deg, #101a14 4%, rgba(16, 26, 20, .95) 45%, rgba(16, 26, 20, .45) 100%), url('./assets/meety-training-hero.webp') left center / cover no-repeat;
+  box-shadow: var(--shadow);
+}
+.next-workout-card__copy { max-width: 68%; }
+.next-workout-card h3 { color: #f7fbf6; font-size: clamp(24px, 3.2vw, 40px); line-height: 1.45; letter-spacing: 0; overflow-wrap: anywhere; }
+.next-workout-description, .quiet-note, .workout-meta-row { color: #d2ded3; font-size: 13px; }
+.workout-focus, .workout-meta-row svg { color: var(--accent); }
+.workout-outline { visibility: hidden; }
+.day-chip, .week-streak { color: var(--accent); border-color: rgba(201, 245, 109, .27); background: rgba(18, 28, 20, .86); }
+.week-streak svg { color: var(--gold); }
+.weekly-card { gap: 20px; }
+.week-progress, .progress-track, .timer-track { background: #304235; }
+.week-progress__fill, .progress-track > span, .timer-track > span { background: linear-gradient(90deg, #78dba7, var(--accent)); }
+.weekly-card__footer p, .weekly-card__footer .inline-link { font-size: 12px; }
+.dashboard-no-program .empty-state, .dashboard-program-message { max-width: 75%; }
+
+/* Inputs, exercise cards, program controls and account cards. */
+.field, .login-field > span, .registration-roles legend { color: var(--text-soft); }
+.field input, .mini-field input, .day-editor__head input, .picker__search,
+.field-control input, .field-control select, .field-control textarea,
+.login-input, .workout-notes-disclosure textarea, .summary-notes textarea,
+.chat-composer textarea, .nutrition-search input, .nutrition-item__grams input,
+.meal-diary__day input[type='date'], .search-field, select:not([multiple]) {
+  border-color: #526c59; color: var(--text); background-color: #101813;
+}
+input::placeholder, textarea::placeholder { color: #a6b8aa; opacity: 1; }
+select:not([multiple]):hover:not(:disabled) { border-color: var(--accent); background-color: #1b2720; }
+select:not([multiple]):focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 245, 109, .18); }
+select:not([multiple]) option, .picker__muscle-filter select option { color: var(--text); background: var(--surface); }
+select:not([multiple]) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c9f56d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+.select-with-icon select { background-image: none; }
+.field-control input, .field-control select, .field-control textarea, .search-field input { font-size: 14px; }
+.search-field input { background: transparent; }
+.filter-tab { color: var(--muted); border-color: var(--line); }
+.filter-tab.is-active { color: var(--accent); border-color: var(--accent); background: var(--surface-soft); }
+.exercise-card { border-color: var(--line-soft); background: var(--surface); }
+.exercise-card__body h3 { color: var(--text); font-size: 14px; line-height: 1.6; }
+.exercise-card__body > p, .exercise-card__footer, .program-day__heading p,
+.program-day__description, .program-day__meta, .program-day__eyebrow { color: var(--muted); }
+.program-day__index, .program-overview__stat > span { color: var(--subtle); }
+.program-day__index > span:first-child, .program-rest-note { border-color: var(--line); background: var(--surface-soft); }
+.program-day--optional { border-color: var(--line); background: var(--surface); }
+.form-error, .storage-warning, .account-load-error, .student-nutrition-load-error,
+.coach-student-load-error, .student-ai-load-error, .student-profile-load-error { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
+.form-success, .badge--success { color: var(--accent); border-color: #516748; background: #253522; }
+.badge--danger { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
+.account-form--inline, .person-card, .person-card__more-actions-menu { border-color: var(--line-soft); background: var(--surface); box-shadow: var(--shadow); }
+.person-card__avatar { color: var(--accent); background: var(--surface-raised); }
+.person-card__role, .person-card__row dt, .person-card__note { color: var(--muted); }
+.person-card__credentials, .person-card__students-box { background: var(--surface-soft); }
+.admin-overview-card, .coach-welcome { border-color: var(--line-soft); background: linear-gradient(125deg, #1e3023, #151d19 75%); }
+.admin-overview-stats, .coach-welcome__count { border-color: var(--line); background: var(--surface); }
+.admin-stat-num, .admin-stat-label, .coach-welcome h3, .admin-students-heading h3,
+.independent-accounts summary { color: var(--text); }
+.coach-welcome__label, .coach-welcome__count strong { color: var(--accent); }
+.coach-welcome p, .coach-welcome__count span, .admin-students-heading > span,
+.independent-accounts summary span { color: var(--muted); }
+.coach-connection__icon, .coach-invitations summary { color: var(--accent); background: var(--surface-soft); }
+.coach-connection p, .coach-invitations p, .coach-invitations summary small { color: var(--muted); }
+.coach-connection__confirm, .coach-invitations__code { border-color: var(--line); color: var(--text-soft); background: var(--surface-soft); }
+.coach-connection__confirm strong, .coach-invitations__code code { color: var(--text); }
+.coach-invitations summary { background: transparent; }
+.coach-invitations__qr { display: grid; justify-items: start; width: 100%; gap: 10px; padding-top: 8px; }
+.coach-invitations__qr img { width: min(224px, 100%); height: auto; border-radius: 12px; background: #fff; }
+.coach-invitations__qr p { max-width: 500px; }
+
+/* Login and registration have the same visual language as the app. */
+.login-screen { background: radial-gradient(circle at 70% 0%, #213b28, transparent 45%), var(--bg); }
+.login-glow { inset: 0 0 auto auto; width: min(420px, 100%); height: min(420px, 100vw); background: radial-gradient(circle, rgba(201, 245, 109, .08), transparent 68%); }
+.login-form { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.login-field, .registration-role { min-width: 0; }
+.registration-role strong, .registration-role small { overflow-wrap: anywhere; }
+.auth-layout { border-color: var(--line-soft); background: var(--surface); box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
+.auth-layout .login-card, .login-card { color: var(--text); background: var(--surface); }
+.auth-intro { color: var(--text); background: linear-gradient(270deg, #101a14 3%, rgba(16, 26, 20, .94) 44%, rgba(16, 26, 20, .55)), url('./assets/meety-training-hero.webp') left center / cover no-repeat; }
+.auth-intro__brand .brand-mark { color: var(--accent-ink); border: 0; background: var(--accent); }
+.auth-intro__brand small, .auth-intro__copy p, .auth-intro__points { color: #e0e9e1; }
+.auth-intro__eyebrow, .auth-intro__points svg, .auth-card-kicker { color: var(--accent); }
+.auth-intro__copy h2, .login-card h1, .login-brand strong, .auth-signup-prompt strong { color: var(--text); }
+.auth-intro__orbit { border-color: rgba(201, 245, 109, .22); }
+.auth-intro__dumbbell { color: var(--accent); background: rgba(201, 245, 109, .12); border-color: rgba(201, 245, 109, .28); }
+.auth-intro__art-label { color: var(--text-soft); background: var(--surface-raised); }
+.login-brand small, .auth-layout .login-sub, .auth-layout .login-help, .registration-note,
+.auth-signup-prompt span, .registration-role small, .auth-back, .registration-complete p { color: var(--muted); }
+.auth-layout .login-field > span, .registration-consent { color: var(--text-soft); }
+.auth-layout .login-input { border-color: #526c59; color: var(--muted); background: #101813; }
+.login-input input { color: var(--text); }
+.login-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201, 245, 109, .15); }
+.login-error { color: #ffd3cb; border-color: #8d4d47; background: #3a2220; }
+.auth-signup-prompt, .registration-note { border-color: var(--line); background: var(--surface-soft); }
+.registration-role { border-color: var(--line); color: var(--muted); background: var(--surface-soft); }
+.registration-role strong { color: var(--text); }
+.registration-role.is-selected { border-color: var(--accent); color: var(--accent); background: #273727; box-shadow: inset 0 0 0 1px var(--accent); }
+.registration-role:focus-within { outline-color: var(--accent); }
+.registration-consent input { accent-color: var(--accent); }
+.auth-back a, .registration-complete > svg { color: var(--accent); }
+
+/* Optional on-demand model. Existing two-frame illustrations stay below it. */
+.exercise-3d { display: grid; gap: 12px; padding: clamp(16px, 3vw, 22px); }
+.exercise-3d__heading { display: flex; align-items: center; gap: 11px; }
+.exercise-3d__heading h3 { margin: 3px 0 0; color: var(--text); font-size: 16px; }
+.exercise-3d__icon { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 13px; color: var(--accent); background: var(--surface-soft); }
+.exercise-3d > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.exercise-3d > .button { justify-self: start; }
+.exercise-3d__player { display: grid; gap: 10px; min-width: 0; }
+.exercise-3d__stage { position: relative; min-height: 240px; height: min(320px, 70vw); overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: radial-gradient(circle at 50% 45%, #304b37, #101813 72%); }
+.exercise-3d__stage canvas { display: block; width: 100%; height: 100%; }
+.exercise-3d__message { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 18px; color: var(--text); text-align: center; line-height: 1.8; }
+.exercise-3d__controls { display: flex; flex-wrap: wrap; gap: 7px; }
+
+@media (max-width: 680px) {
+  .mobile-nav__bar { border-color: var(--line-soft); background: rgba(15, 23, 18, .98); box-shadow: 0 -8px 24px rgba(0, 0, 0, .25); }
+  .mobile-nav__item { color: var(--muted); }
+  .mobile-nav__item.is-active { color: var(--accent); background: #263a29; }
+  .mobile-sheet { border-color: var(--line); background: var(--surface); box-shadow: 0 -12px 48px rgba(0, 0, 0, .35); }
+  .mobile-sheet__handle { background: #778e7c; }
+  .mobile-sheet__head, .mobile-sheet__card { border-color: var(--line); }
+  .mobile-sheet__title, .mobile-sheet__card-title { color: var(--text); }
+  .mobile-sheet__close, .mobile-sheet__card-icon { color: var(--accent); border-color: var(--line); background: var(--surface-raised); }
+  .mobile-sheet__card { background: var(--surface-soft); }
+  .mobile-sheet__card:hover, .mobile-sheet__card:active, .mobile-sheet__card.is-active { border-color: var(--accent); background: var(--surface-raised); }
+  .mobile-sheet__card.is-active .mobile-sheet__card-icon { color: var(--accent-ink); background: var(--accent); }
+  .mobile-sheet__card-desc { color: var(--muted); }
+  .next-workout-card__copy { max-width: 80%; }
+  .next-workout-card h3 { font-size: clamp(24px, 8vw, 32px); }
+  .next-workout-card__body { min-height: 130px; }
+  .workout-outline { display: none; }
+  .dashboard-no-program .empty-state, .dashboard-program-message { max-width: 100%; }
+  .program-day__heading .button { min-height: 40px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

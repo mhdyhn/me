@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { getSavedCredentials } from './lib/savedLogin';
 import './styles.css';
+import './theme.css';
 
 // Remove plain-text passwords stored by older versions before rendering any route.
 getSavedCredentials();

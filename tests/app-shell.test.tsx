@@ -9,7 +9,7 @@ beforeEach(async () => {
   window.localStorage.setItem('meety.session-token', 'test-session-token-000000000000');
   vi.stubGlobal('fetch', async (input: string) => {
     const body = input.includes('/api/me/program')
-      ? { program: { title: 'برنامهٔ تست', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز اول', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] }, coachName: 'مربی' }
+      ? { isPaid: true, program: { id: 'test-offer', version: 1, title: 'برنامهٔ تست', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز اول', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] }, coachName: 'مربی' }
       : { user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } };
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
@@ -43,13 +43,13 @@ describe('complete application shell', () => {
   it('shows the coach-assigned workout without requesting profile synchronization', async () => {
     let profileRequestMade = false;
     const program = {
-      title: 'برنامهٔ تمرینی شاگرد',
+      id: 'test-offer', version: 1, title: 'برنامهٔ تمرینی شاگرد',
       updatedAt: '2026-10-01T00:00:00Z',
       days: [{ name: 'روز پایین‌تنه', exercises: [{ exerciseId: 'barbell-squat', name: 'اسکوات با هالتر', muscle: 'پا', sets: 3, reps: '8-12', restSeconds: 90 }] }],
     };
     vi.stubGlobal('fetch', async (input: string) => {
       if (input.includes('/api/me/program')) {
-        return new Response(JSON.stringify({ program, coachName: 'مربی' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ program, coachName: 'مربی', isPaid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (input.includes('/api/me/profile')) {
         profileRequestMade = true;
@@ -74,8 +74,8 @@ describe('complete application shell', () => {
   it('supports a direct exercise-detail URL without a prior dashboard visit', async () => {
     // A student may open a movement only when it is in the coach's program.
     vi.stubGlobal('fetch', async (input: string) => {
-      const program = { title: 'برنامه', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز ۱', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه با هالتر', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] };
-      const body = String(input).includes('/me/program') ? { program, coachName: 'مربی' } : { user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } };
+      const program = { id: 'test-offer', version: 1, title: 'برنامه', updatedAt: '2026-10-01T00:00:00Z', days: [{ name: 'روز ۱', exercises: [{ exerciseId: 'barbell-bench-press', name: 'پرس سینه با هالتر', muscle: 'سینه', sets: 3, reps: '8-12', restSeconds: 90 }] }] };
+      const body = String(input).includes('/me/program') ? { program, coachName: 'مربی', isPaid: true } : { user: { id: 9, username: 's000009', role: 'student', displayName: 'تست', coachId: 1, mustChangePassword: false } };
       return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     window.history.replaceState({}, '', '/exercise/barbell-bench-press');

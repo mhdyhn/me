@@ -8,7 +8,7 @@ import { loadAssignedProgram } from '../lib/assignedProgram';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide } from '../lib/exerciseGuide';
 import { getCompletedThisWeek } from '../lib/analytics';
-import { isProgramReadOnly, useAssignedMeta, useProgram } from '../lib/programStore';
+import { isProgramReadOnly, useAssignedMeta, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
 import { clearProgram, resetProgram, saveProgram, syncCloudProgram } from '../lib/programPersistence';
 import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
@@ -24,6 +24,7 @@ export function Program() {
   const workoutTemplates = useProgram();
   const readOnly = isProgramReadOnly();
   const assignedMeta = useAssignedMeta();
+  const assignedLoadState = useAssignedProgramLoadState();
 
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -106,6 +107,26 @@ export function Program() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // A slow or failed request is not proof that the coach has no programme.
+  if (user?.role === 'student' && user.coachId !== null && user.personalProgramMode !== true && !assignedMeta && assignedLoadState !== 'ready') {
+    return (
+      <div className="page-stack">
+        <SectionHeading eyebrow="برنامهٔ تمرینی" title="برنامهٔ مربی" description="وضعیت برنامهٔ این حساب" />
+        <section className="panel-card program-empty-card" role={assignedLoadState === 'error' ? 'alert' : 'status'}>
+          {assignedLoadState === 'error' ? <>
+            <h3>دریافت برنامه انجام نشد</h3>
+            <p className="account-muted">ارتباط با سرور برقرار نشد؛ وضعیت برنامه را دوباره بررسی کن.</p>
+            <button type="button" className="button button--primary" onClick={() => void loadAssignedProgram()}>تلاش دوباره</button>
+          </> : <>
+            <h3>در حال دریافت برنامه از مربی…</h3>
+            <p className="account-muted">پس از دریافت، برنامه اینجا نمایش داده می‌شود.</p>
+          </>}
+        </section>
+        {assignedLoadState === 'error' && <ProgrammeArchive key={`${user.id}:${user.coachId}:coach`} studentId={user.id} />}
+      </div>
+    );
   }
 
   // If the coach set a price on the program and the student has not paid yet, show the payment locked view.

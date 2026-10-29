@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CalendarCheck2, Clock3, Dumbbell, Flame, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
@@ -18,6 +18,13 @@ export function Dashboard() {
   const { user } = useSession();
   const program = useProgram();
   const assignedProgramLoadState = useAssignedProgramLoadState();
+  const [slowProgram, setSlowProgram] = useState(false);
+  useEffect(() => {
+    setSlowProgram(false);
+    if (assignedProgramLoadState !== 'loading') return;
+    const timer = window.setTimeout(() => setSlowProgram(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [assignedProgramLoadState]);
   const independent = user?.role === 'student' && (user.coachId === null || user.personalProgramMode === true);
   const navigate = useNavigate();
 
@@ -96,7 +103,7 @@ export function Dashboard() {
             <div className="dashboard-program-message">
               <span className="eyebrow">برنامهٔ تمرینی</span>
               <h3>در حال دریافت برنامه از مربی…</h3>
-              <p className="muted">کمی صبر کن؛ برنامه به‌زودی نمایش داده می‌شود.</p>
+              <p className="muted">{slowProgram ? 'ارتباط بیشتر از معمول طول کشیده است. اگر پاسخ نرسد، امکان تلاش دوباره نمایش داده می‌شود.' : 'کمی صبر کن؛ برنامه پس از دریافت نمایش داده می‌شود.'}</p>
             </div>
           </section>
         ) : assignedProgramLoadState === 'error' && user?.role === 'student' && !independent ? (

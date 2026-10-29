@@ -4,6 +4,7 @@ import { paidTransactionCondition } from './payments.ts';
 import { studentTestPurchasesAvailable } from './testPurchases.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
 import { isValidReps, normalizeReps } from '../shared/repetitions.ts';
+import type { StoredUser } from './users.ts';
 export { normalizeReps } from '../shared/repetitions.ts';
 
 export interface ProgramItem {
@@ -152,6 +153,65 @@ export async function loadProgramme(db: Db, studentId: number, coachId?: number)
   if (!row) return null;
   const parsed = JSON.parse(row.body) as ProgrammeInput;
   return { ...parsed, id: row.programme_id, version: Number(row.version), priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at };
+}
+
+/** Read the active offer and its entitlements in one consistent database snapshot. */
+export async function studentProgrammeView(db: Db, user: StoredUser, now: Date): Promise<{
+  program: Programme | null;
+  coachName: string | null;
+  isPaid: boolean;
+  isTestPurchase?: boolean;
+  testPurchaseAvailable?: boolean;
+  testPurchaseExpiresAt?: string | null;
+}> {
+  if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true };
+  const row = (await db.query<{
+    coach_name: string | null;
+    body: string | null;
+    price_tomans: number | null;
+    updated_at: string | null;
+    programme_id: string | null;
+    version: string | number | null;
+    has_paid: boolean;
+    test_status: 'allowed' | 'pending' | 'paid' | 'canceled' | null;
+    test_expires_at: string | null;
+    mode_expires_at: string | null;
+  }>(`
+    SELECT c.display_name AS coach_name, sp.body, sp.price_tomans, sp.updated_at, sp.programme_id, sp.version,
+      EXISTS (SELECT 1 FROM payment_transactions t
+        WHERE t.student_id = s.id AND t.programme_id = sp.programme_id AND ${paidTransactionCondition('t', '$3')}) AS has_paid,
+      p.status AS test_status, p.expires_at AS test_expires_at,
+      CASE WHEN m.token IS NOT NULL AND m.expires_at > $4 THEN m.expires_at ELSE NULL END AS mode_expires_at
+    FROM users s
+    LEFT JOIN users c ON c.id = s.coach_id
+    LEFT JOIN student_programs sp ON sp.student_id = s.id AND sp.coach_id = s.coach_id
+    LEFT JOIN payment_test_mode m ON m.id = 1 AND $5::boolean
+    LEFT JOIN payment_test_purchases p ON m.id = 1 AND p.student_id = s.id
+      AND p.programme_id = sp.programme_id AND p.expires_at > $4
+      AND (p.mode_token IS NULL OR (p.mode_token = m.token AND m.expires_at > $4))
+    WHERE s.id = $1 AND s.role = 'student' AND s.is_active = 1 AND s.coach_id = $2
+      AND s.personal_program_mode = 0 AND s.auth_version = $6 AND s.coach_access_version = $7
+  `, [user.id, user.coachId, process.env.NODE_ENV === 'production' ? 1 : 0, now.toISOString(), studentTestPurchasesAvailable(), user.authVersion, user.coachAccessVersion]))[0];
+  if (!row) throw new HttpError(409, 'حساب یا ارتباط با مربی تغییر کرده است؛ دوباره تلاش کنید.');
+  if (row.body === null) return { program: null, coachName: row.coach_name, isPaid: true };
+  const parsed = JSON.parse(row.body) as ProgrammeInput;
+  const program: Programme = {
+    ...parsed, id: row.programme_id!, version: Number(row.version), priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at!,
+  };
+  const isPaid = (program.priceTomans ?? 0) === 0 || row.has_paid;
+  const isTestPurchase = !isPaid && row.test_status === 'paid';
+  if (!isPaid && !isTestPurchase) {
+    return {
+      program: { id: program.id, version: program.version, title: program.title, days: [], priceTomans: program.priceTomans, updatedAt: program.updatedAt },
+      coachName: row.coach_name, isPaid: false,
+      testPurchaseAvailable: row.test_status !== null || row.mode_expires_at !== null,
+      testPurchaseExpiresAt: row.test_expires_at ?? row.mode_expires_at,
+    };
+  }
+  return {
+    program, coachName: row.coach_name, isPaid, isTestPurchase,
+    testPurchaseExpiresAt: isTestPurchase ? row.test_expires_at : null,
+  };
 }
 
 /** Archive is read-only: never expose exercises from another student or an unpaid offer. */

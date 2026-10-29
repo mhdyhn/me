@@ -80,13 +80,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   // Independent students use their own editable programme; coached students use the assigned one.
-  const userKey = user ? `${user.id}:${user.role}:${user.coachId ?? 'none'}:${user.personalProgramMode === true}` : null;
+  const userKey = user ? `${user.id}:${user.role}:${user.coachId ?? 'none'}:${user.personalProgramMode === true}:${user.mustChangePassword}` : null;
   useEffect(() => {
     if (!user) {
       if (isOfflineBuild) void loadStoredProgram();
       return;
     }
     if (ensureAccountScope(user)) return;
+    if (user.mustChangePassword) {
+      cancelAssignedProgramLoad();
+      setAssignedMeta(null);
+      setActiveProgram([]);
+      setAssignedProgramLoadState('idle');
+      return;
+    }
     if (user.role === 'student' && user.coachId !== null && user.personalProgramMode !== true) {
       setAssignedMeta(null);
       setAssignedProgram([]);
@@ -99,11 +106,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setAssignedProgramLoadState('ready');
       void loadStoredProgram();
     }
-    // Only the account identity and relationship matter, not the object's identity.
+    // Identity, relationship and password-change state matter, not the object's identity.
   }, [userKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user || (user.role === 'student' && user.coachId !== null && user.personalProgramMode !== true)) return;
+    if (!user || user.mustChangePassword || (user.role === 'student' && user.coachId !== null && user.personalProgramMode !== true)) return;
     const refreshProgram = () => { void loadStoredProgram(); };
     window.addEventListener(PERSONAL_DATA_APPLIED, refreshProgram);
     return () => window.removeEventListener(PERSONAL_DATA_APPLIED, refreshProgram);

@@ -21,7 +21,7 @@ function stubSessionForRole(role: 'student' | 'coach' | 'admin') {
     if (url.includes('/api/me/program')) {
       return new Response(
         JSON.stringify({
-          programme: { title: 'برنامه هفتگی', days: [], updatedAt: new Date().toISOString() },
+          program: null, isPaid: true,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
