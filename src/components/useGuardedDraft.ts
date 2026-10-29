@@ -19,5 +19,6 @@ export function useGuardedDraft<T>(source: T, initialDraft?: () => T) {
     conflict: dirty && changed && !sameAsSource,
     discard: () => { setBase(source); setDraft(source); },
     acceptCurrent: () => setBase(source),
+    restore: (savedBase: T, savedDraft: T) => { setBase(savedBase); setDraft(savedDraft); },
   };
 }

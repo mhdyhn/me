@@ -108,6 +108,79 @@ async function runScenario(base) {
     await call('GET', '/admin/transactions', undefined, a.token, 403);
     const invitation = await call('POST', '/coach/invitations', {}, a.token, 201);
     await connect(studentPage, invitation.code, 'مربی الف');
+
+    // Explicit consent is confirmed by the server before the UI reports success.
+    await studentPage.goto(base + '/settings', { waitUntil: 'domcontentloaded' });
+    const profileForm = studentPage.locator('.settings-form');
+    const consent = profileForm.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
+    await expect(consent).toBeEnabled();
+    await profileForm.getByLabel('سن', { exact: true }).fill('28');
+    await profileForm.getByLabel('قد سانتی‌متر').fill('170');
+    await profileForm.getByLabel('وزن پروفایل کیلوگرم').fill('70');
+    await profileForm.getByLabel('هدف اصلی').fill('آمادگی');
+    await profileForm.getByLabel('روزهای تمرین در هفته').fill('3');
+    await profileForm.getByLabel('حداکثر زمان جلسه دقیقه').fill('45');
+    await profileForm.getByLabel('سطح استرس ۱ تا ۱۰').fill('3');
+    await consent.check();
+    await profileForm.getByRole('button', { name: 'ذخیرهٔ پروفایل' }).click();
+    await expect(profileForm.getByRole('button', { name: 'ذخیره شد' })).toBeVisible();
+    if (!(await call('GET', `/students/${s.user.id}/profile`, undefined, a.token)).shared) throw new Error('Profile sharing was not enabled');
+    await consent.uncheck();
+    await profileForm.getByRole('button', { name: 'ذخیرهٔ پروفایل' }).click();
+    await expect(profileForm.getByRole('button', { name: 'ذخیره شد' })).toBeVisible();
+    if ((await call('GET', `/students/${s.user.id}/profile`, undefined, a.token)).shared) throw new Error('Profile sharing was not revoked');
+
+    // Two isolated browser contexts deliberately edit the same server-backed day from the same base.
+    for (const page of [studentPage, secondDevice]) {
+      await page.goto(base + '/nutrition', { waitUntil: 'domcontentloaded' });
+      const diary = page.getByRole('region', { name: 'ثبت وعده‌های روزانه' });
+      await expect(diary.getByRole('button', { name: 'افزودن وعده' })).toBeVisible();
+    }
+    const firstDiary = studentPage.getByRole('region', { name: 'ثبت وعده‌های روزانه' });
+    const staleDiary = secondDevice.getByRole('region', { name: 'ثبت وعده‌های روزانه' });
+    const day = await firstDiary.getByLabel('روز', { exact: true }).inputValue();
+    for (const [diary, name] of [[firstDiary, 'صبحانه دستگاه اول'], [staleDiary, 'ناهار دستگاه دوم']]) {
+      await diary.getByRole('region', { name: 'افزودن وعده' }).getByLabel('نام وعده').fill(name);
+      await diary.getByRole('button', { name: 'افزودن وعده' }).click();
+    }
+    await firstDiary.getByRole('button', { name: 'ذخیرهٔ این روز' }).click();
+    await expect(firstDiary).toContainText('ثبت این روز ذخیره شد.');
+    await staleDiary.getByRole('button', { name: 'ذخیرهٔ این روز' }).click();
+    const diaryConflict = staleDiary.locator('.draft-conflict');
+    await expect(diaryConflict).toBeVisible();
+    await diaryConflict.getByText('بررسی نسخهٔ تازه').click();
+    await expect(diaryConflict).toContainText('صبحانه دستگاه اول');
+    await expect(staleDiary.getByLabel('نام وعده').first()).toHaveValue('ناهار دستگاه دوم');
+    await diaryConflict.getByRole('button', { name: 'نگه‌داشتن پیش‌نویس من' }).click();
+    await secondDevice.getByRole('dialog', { name: 'نگه‌داشتن پیش‌نویس' }).getByRole('button', { name: 'تأیید پیش‌نویس من' }).click();
+    await staleDiary.getByRole('button', { name: 'ذخیرهٔ این روز' }).click();
+    await expect(staleDiary).toContainText('ثبت این روز ذخیره شد.');
+    const persistedDiary = await call('GET', `/me/diary/${day}?accountId=${s.user.id}`, undefined, s.token);
+    if (persistedDiary.diary.meals[0]?.name !== 'ناهار دستگاه دوم') throw new Error('Diary resolution was not persisted');
+
+    // The weekly coach editor uses the same conflict workflow across two independent contexts.
+    const coachSecondDevice = await newPage();
+    await uiLogin(coachSecondDevice, 'testcoacha');
+    for (const page of [coachPage, coachSecondDevice]) {
+      await page.goto(base + `/coach/students/${s.user.id}/nutrition`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('کالری کیلوکالری')).toBeVisible();
+    }
+    await coachPage.getByLabel('کالری کیلوکالری').fill('2300');
+    await coachSecondDevice.getByLabel('کالری کیلوکالری').fill('2400');
+    await coachPage.getByRole('button', { name: 'ذخیرهٔ برنامهٔ هفته' }).click();
+    await expect(coachPage.getByText('برنامه ذخیره شد.', { exact: true })).toBeVisible();
+    await coachSecondDevice.getByRole('button', { name: 'ذخیرهٔ برنامهٔ هفته' }).click();
+    const planConflict = coachSecondDevice.locator('.draft-conflict');
+    await expect(planConflict).toBeVisible();
+    await planConflict.getByText('بررسی نسخهٔ تازه').click();
+    await expect(planConflict).toContainText('۲٬۳۰۰');
+    await expect(coachSecondDevice.getByLabel('کالری کیلوکالری')).toHaveValue('2400');
+    await planConflict.getByRole('button', { name: 'نگه‌داشتن پیش‌نویس من' }).click();
+    await coachSecondDevice.getByRole('dialog', { name: 'نگه‌داشتن پیش‌نویس' }).getByRole('button', { name: 'تأیید پیش‌نویس من' }).click();
+    await coachSecondDevice.getByRole('button', { name: 'ذخیرهٔ برنامهٔ هفته' }).click();
+    await expect(coachSecondDevice.getByText('برنامه ذخیره شد.', { exact: true })).toBeVisible();
+    const persistedPlan = await call('GET', `/students/${s.user.id}/nutrition?accountId=${a.user.id}`, undefined, a.token);
+    if (persistedPlan.plan.targets.kcal !== 2400) throw new Error('Weekly nutrition resolution was not persisted');
     const input = { title: 'برنامه اول مربی الف', priceTomans: 100000, days: [{ name: 'روز تمرین الف', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
     const first = (await call('PUT', `/students/${s.user.id}/program`, input, a.token)).program;
     const checkout = await call('POST', '/pay/start', { expectedId: first.id, expectedVersion: first.version }, s.token, 201);
@@ -177,7 +250,7 @@ async function runScenario(base) {
     const restored = await call('GET', '/me/program', undefined, s.token);
     if (!restored.isPaid || restored.program.id !== first.id || restored.program.version !== 2147483648) throw new Error('Restored purchase was not preserved');
     if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
-    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme on 2 devices; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
+    console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme and concurrent diary/weekly nutrition conflict resolution on 2 devices; profile sharing and revocation; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
   } finally {
     await browser.close();
   }

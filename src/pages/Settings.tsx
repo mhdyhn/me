@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Download, Info, LockKeyhole, Save, ShieldCheck, Smartphone, UserRound } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { RouteLoading } from '../components/RouteLoading';
@@ -27,6 +27,8 @@ export function Settings() {
   const [sharingLoadError, setSharingLoadError] = useState('');
   const [sharingReload, setSharingReload] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState('');
   const [backupError, setBackupError] = useState('');
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -38,9 +40,12 @@ export function Settings() {
     setSharingLoaded(false);
     setSharingLoadError('');
     api<{ stored: { profile: UserProfile; shareWithCoach: boolean } | null }>('GET', `/me/profile?accountId=${user.id}`)
-      .then(({ stored }) => {
+      .then((result) => {
         if (!active) return;
-        const shared = stored?.shareWithCoach ?? false;
+        if (!result || !('stored' in result) || (result.stored !== null && typeof result.stored?.shareWithCoach !== 'boolean')) {
+          throw new Error('Invalid sharing status');
+        }
+        const shared = result.stored?.shareWithCoach ?? false;
         setServerSharing(shared);
         setShareWithCoach(shared);
       })
@@ -51,34 +56,44 @@ export function Settings() {
     return () => { active = false; };
   }, [user?.id, hasCoach, sharingReload]);
 
-  const update = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  const update = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => {
+    setSaved(false); setError('');
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (savingRef.current) return;
     if (profileDraft.conflict) { setError('ابتدا نسخهٔ تازه و پیش‌نویس را بررسی کن.'); return; }
     if (!Number.isFinite(draft.age) || draft.age < 13 || draft.age > 100) { setError('سن را بین ۱۳ تا ۱۰۰ وارد کن.'); return; }
     if (!Number.isFinite(draft.heightCm) || draft.heightCm < 100 || draft.heightCm > 250) { setError('قد باید بین ۱۰۰ تا ۲۵۰ سانتی‌متر باشد.'); return; }
     if (!Number.isFinite(draft.weightKg) || draft.weightKg < 30 || draft.weightKg > 300) { setError('وزن پروفایل باید بین ۳۰ تا ۳۰۰ کیلوگرم باشد.'); return; }
+    savingRef.current = true; setSaving(true);
     try {
       const storedLocally = await saveProfile(draft, profileDraft.base);
       if (storedLocally === false) { setError('پروفایل در حافظهٔ دستگاه ذخیره نشد و ممکن است پس از بازکردن دوباره از دست برود.'); return; }
       // Sharing consent is separate from private sync and must never be guessed while offline.
       if (hasCoach && user && sharingLoaded && !sharingLoadError && serverSharing !== null && serverSharing !== shareWithCoach) {
         try {
-          if (shareWithCoach) await api('PUT', '/me/profile', { accountId: user.id, profile: draft, shareWithCoach: true });
-          else await api('POST', '/me/profile/sharing', { accountId: user.id, shareWithCoach: false });
+          if (shareWithCoach) {
+            const result = await api<{ stored: { shareWithCoach: boolean } }>('PUT', '/me/profile', { accountId: user.id, profile: draft, shareWithCoach: true });
+            if (result.stored?.shareWithCoach !== true) throw new Error('Sharing was not confirmed');
+          } else {
+            const result = await api<{ shareWithCoach: boolean }>('POST', '/me/profile/sharing', { accountId: user.id, shareWithCoach: false });
+            if (result.shareWithCoach !== false) throw new Error('Revocation was not confirmed');
+          }
           setServerSharing(shareWithCoach);
         } catch {
           setError(shareWithCoach
-            ? 'پروفایل روی دستگاه ذخیره شد، اما اشتراک با مربی فعال نشد؛ برای تغییر اشتراک دوباره تلاش کن.'
-            : 'پروفایل روی دستگاه ذخیره شد، اما قطع اشتراک در سرور انجام نشد؛ تا اتصال و تأیید سرور، مربی ممکن است همچنان دسترسی داشته باشد.');
+            ? 'پروفایل روی دستگاه ذخیره شد، اما فعال‌شدن اشتراک با مربی تأیید نشد؛ برای بررسی دوباره تلاش کن.'
+            : 'پروفایل روی دستگاه ذخیره شد، اما قطع اشتراک در سرور تأیید نشد؛ تا اتصال و تأیید سرور، مربی ممکن است همچنان دسترسی داشته باشد.');
           return;
         }
       }
       setError(''); setSaved(true); window.setTimeout(() => setSaved(false), 1800);
     } catch (caught) {
       setError(caught instanceof DraftChangedError ? caught.message : caught instanceof ApiError ? caught.message : 'ذخیرهٔ پروفایل انجام نشد.');
-    }
+    } finally { savingRef.current = false; setSaving(false); }
   };
 
   const exportBackup = async () => {
@@ -107,7 +122,8 @@ export function Settings() {
       <PersonalDataPanel />
       {user?.role === 'student' && user.coachId !== null && <FormerCoachRecords key={`${user.id}:${user.coachId}`} />}
       <div className="settings-layout">
-        <form className="settings-form panel-card" onSubmit={(event) => void submit(event)}>
+        <form className="settings-form panel-card" aria-busy={saving} onSubmit={(event) => void submit(event)}>
+          <fieldset className="editor-fieldset" disabled={saving} aria-label="ویرایش پروفایل">
           <div className="card-topline"><div><span className="eyebrow">پروفایل تمرینی</span><h2>دربارهٔ تو.</h2></div><UserRound size={18} className="icon-accent" /></div>
           <div className="settings-fields-grid">
             <label className="field-control"><span>سن</span><input type="number" min="13" max="100" value={draft.age} onChange={(event) => update('age', Number(event.target.value))} required /></label>
@@ -126,7 +142,7 @@ export function Settings() {
           </div>
           {hasCoach && (
             <label className="student-onboarding__consent settings-profile-consent">
-              <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded || Boolean(sharingLoadError)} onChange={(event) => setShareWithCoach(event.target.checked)} />
+              <input type="checkbox" checked={shareWithCoach} disabled={!sharingLoaded || Boolean(sharingLoadError)} onChange={(event) => { setSaved(false); setError(''); setShareWithCoach(event.target.checked); }} />
               <span><strong>نمایش پروفایل به مربی</strong><small>{sharingLoadError ? 'تا دریافت وضعیت معتبر، تغییر اشتراک غیرفعال است؛ ذخیرهٔ محلی ممکن است. اگر پیش‌تر اشتراک فعال بوده، مربی پس از همگام‌سازی ممکن است نسخهٔ تازه را ببیند.' : sharingLoaded ? 'با روشن‌کردن و ذخیره، پروفایل به حساب فرستاده و با مربی فعلی به اشتراک گذاشته می‌شود؛ خاموش‌کردن و ذخیره، دسترسی را قطع می‌کند.' : 'در حال بارگذاری وضعیت اشتراک…'}</small></span>
             </label>
           )}
@@ -140,7 +156,8 @@ export function Settings() {
           )}
           {profileDraft.conflict && <DraftConflictNotice latest={profile} discard={profileDraft.discard} acceptCurrent={profileDraft.acceptCurrent} />}
           {error && <p className="form-error" role="alert">{error}</p>}
-          <div className="settings-save-row"><span className="field-hint">تغییرات، ست‌های ثبت‌شدهٔ قبلی را عوض نمی‌کنند.</span><button className="button button--primary" type="submit">{saved ? <><Check size={16} /> ذخیره شد</> : <><Save size={16} /> ذخیرهٔ پروفایل</>}</button></div>
+          <div className="settings-save-row"><span className="field-hint">تغییرات، ست‌های ثبت‌شدهٔ قبلی را عوض نمی‌کنند.</span><button className="button button--primary" type="submit">{saving ? 'در حال ذخیره…' : saved ? <><Check size={16} /> ذخیره شد</> : <><Save size={16} /> ذخیرهٔ پروفایل</>}</button></div>
+          </fieldset>
         </form>
 
         <aside className="settings-aside page-stack page-stack--tight">

@@ -306,6 +306,36 @@ try {
   await slowPage.getByRole('heading', { name: 'روز آزمایشی شاگرد' }).waitFor();
   await slowContext.close();
   console.log('PASS: stalled programme response body shows a slow warning, then an error; retry loads the assigned programme');
+
+  // The deployed predecessor already has update prompts. A still-open old draft must
+  // remain untouched while a separate tab picks up the new build normally.
+  if (process.env.PWA_COMPAT_DIST) {
+    root = resolve(process.env.PWA_COMPAT_DIST); workerVariant = 1;
+    const installed = await contextFor(users[5]);
+    const existingEditor = await installed.newPage();
+    await existingEditor.goto(base + '/program/edit?mode=blank', { waitUntil: 'load' });
+    await existingEditor.evaluate(() => navigator.serviceWorker.ready);
+    await existingEditor.reload({ waitUntil: 'load' });
+    await existingEditor.waitForFunction(() => !!navigator.serviceWorker.controller);
+    assert.equal(await existingEditor.locator('script[src="/app-update.js"]').count(), 1, 'predecessor must have safe update prompts');
+    const oldInput = existingEditor.getByLabel('نام روز').first();
+    await oldInput.fill('پیش‌نویس نسخهٔ نصب‌شده');
+    await putSentinels(existingEditor);
+    root = current;
+    const freshTab = await installed.newPage();
+    await freshTab.goto(base + '/program/edit?mode=blank', { waitUntil: 'load' });
+    const freshInput = freshTab.getByLabel('نام روز').first();
+    await freshInput.fill('پیش‌نویس نسخهٔ تازه');
+    await freshTab.getByText(/نسخهٔ موقت فقط در همین زبانه/).waitFor();
+    await existingEditor.locator('.meety-update').waitFor({ state: 'visible', timeout: 30000 });
+    assert.equal(await oldInput.inputValue(), 'پیش‌نویس نسخهٔ نصب‌شده');
+    existingEditor.once('dialog', (dialog) => dialog.dismiss());
+    await existingEditor.getByRole('button', { name: 'به‌روزرسانی', exact: true }).click();
+    assert.equal(await oldInput.inputValue(), 'پیش‌نویس نسخهٔ نصب‌شده', 'cancelling must preserve the predecessor draft');
+    await checkSentinels(existingEditor);
+    await installed.close();
+    console.log('PASS: direct upgrade from the installed update-aware release; old unsaved draft survives cancellation, new tab uses recovery, storage preserved');
+  }
 } finally {
   serverUnavailable = false;
   failInstall = false;

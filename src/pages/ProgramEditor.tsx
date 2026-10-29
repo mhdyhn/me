@@ -1,10 +1,15 @@
 import { ArrowDown, ArrowLeft, ArrowUp, Plus, RotateCcw, Save, Trash2, Undo2, Sparkles, X, ChevronLeft, Dumbbell, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
 import { SectionHeading } from '../components/SectionHeading';
+import { PersonalProgramConflictPreview } from '../components/ProgramConflictPreview';
 import { DraftConflictNotice } from '../components/DraftConflictNotice';
 import { useGuardedDraft } from '../components/useGuardedDraft';
+import { useSessionDraft } from '../components/useSessionDraft';
+import { SessionDraftRecovery, SessionDraftStatus } from '../components/SessionDraftNotice';
+import { useSession } from '../context/SessionContext';
+import { isOfflineBuild } from '../lib/accountScope';
 import { exercises } from '../data/exercises';
 import { hasExerciseFigure, exerciseFigureSrc } from '../data/exerciseFigures';
 import {
@@ -33,8 +38,27 @@ const moveItem = <T,>(list: T[], from: number, to: number): T[] => {
 
 const numberValue = (raw: string) => (raw.trim() === '' ? NaN : Number(raw));
 
+// A recovered draft may be incomplete or invalid, but it must be safe for the editor to render.
+function isWorkoutDraft(value: unknown): value is WorkoutTemplate[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((day) => {
+    if (!day || typeof day !== 'object' || typeof day.id !== 'string' || typeof day.name !== 'string'
+      || typeof day.dayLabel !== 'string' || typeof day.focus !== 'string' || typeof day.description !== 'string'
+      || typeof day.durationMinutes !== 'number' || !Array.isArray(day.exercises)) return false;
+    return day.exercises.every((item: unknown) => {
+      if (!item || typeof item !== 'object') return false;
+      const exercise = item as WorkoutExercise;
+      const p = exercise.prescription;
+      return typeof exercise.exerciseId === 'string' && typeof exercise.name === 'string' && !!p
+        && typeof p.sets === 'number' && typeof p.minReps === 'number' && typeof p.maxReps === 'number'
+        && typeof p.restSeconds === 'number' && typeof p.minimumRir === 'number' && typeof p.targetRirLabel === 'string';
+    });
+  });
+}
+
 export function ProgramEditor() {
   const saved = useProgram();
+  const { user } = useSession();
   const [searchParams] = useSearchParams();
   const isBlankMode = searchParams.get('mode') === 'blank';
 
@@ -55,6 +79,9 @@ export function ProgramEditor() {
     return structuredClone(saved);
   });
   const { draft, setDraft, dirty } = programDraft;
+  const draftKey = user ? `meety:session-draft:personal-program:${user.id}`
+    : isOfflineBuild ? 'meety:session-draft:personal-program:offline' : null;
+  const recovery = useSessionDraft(draftKey, programDraft.base, draft, dirty, true, isWorkoutDraft);
 
   const [errors, setErrors] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(() =>
@@ -63,6 +90,7 @@ export function ProgramEditor() {
       : null,
   );
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   useEffect(() => {
@@ -162,6 +190,7 @@ export function ProgramEditor() {
   };
 
   const save = async () => {
+    if (busyRef.current) return;
     if (programDraft.conflict) { setErrors(['ابتدا نسخهٔ تازه و پیش‌نویس را بررسی کن.']); return; }
     const finalized = finalizeProgram(draft);
     const problems = validateProgram(finalized);
@@ -170,7 +199,7 @@ export function ProgramEditor() {
       setStatus(null);
       return;
     }
-    setBusy(true);
+    busyRef.current = true; setBusy(true);
     try {
       await saveProgram(finalized, programDraft.base);
       setDraft(structuredClone(finalized));
@@ -179,17 +208,19 @@ export function ProgramEditor() {
     } catch (error) {
       setErrors([`ذخیرهٔ برنامه انجام نشد: ${error instanceof Error ? error.message : 'خطای ناشناخته'}`]);
     } finally {
-      setBusy(false);
+      busyRef.current = false; setBusy(false);
     }
   };
 
-  const discard = () => {
+  const discard = async () => {
+    if (!await confirmModal({ title: 'کنار گذاشتن تغییرات', message: 'تغییرات ذخیره‌نشدهٔ این برنامه کنار گذاشته شوند؟', confirmText: 'کنار گذاشتن تغییرات', cancelText: 'انصراف', variant: 'warning' })) return;
     programDraft.discard();
     setErrors([]);
     setStatus('تغییرات ذخیره‌نشده کنار گذاشته شد.');
   };
 
   const restoreOriginal = async () => {
+    if (busyRef.current) return;
     const ok = await confirmModal({
       title: 'بازگردانی برنامه پیش‌فرض',
       message: 'برنامهٔ فعلی با برنامهٔ اصلی RAGE جایگزین شود؟ نسخهٔ فعلی به‌عنوان پشتیبان نگه داشته می‌شود.',
@@ -197,8 +228,8 @@ export function ProgramEditor() {
       cancelText: 'انصراف',
       variant: 'warning',
     });
-    if (!ok) return;
-    setBusy(true);
+    if (!ok || busyRef.current) return;
+    busyRef.current = true; setBusy(true);
     try {
       await resetProgram(saved);
       setDraft(originalProgramCopy());
@@ -207,28 +238,41 @@ export function ProgramEditor() {
     } catch (error) {
       setErrors([`بازگردانی انجام نشد: ${error instanceof Error ? error.message : 'خطای ناشناخته'}`]);
     } finally {
-      setBusy(false);
+      busyRef.current = false; setBusy(false);
     }
   };
+
+  if (recovery.pending) return (
+    <div className="page-stack program-editor">
+      <Link to="/program" className="text-link"><ArrowLeft size={14} /> بازگشت به برنامه</Link>
+      {recovery.recovery.kind === 'empty' ? <p className="muted">در حال بررسی پیش‌نویس…</p> :
+        <SessionDraftRecovery invalid={recovery.recovery.kind === 'invalid'} onRestore={() => {
+          const record = recovery.restore();
+          if (record) { programDraft.restore(record.base, record.draft); setStatus('پیش‌نویس بازیابی شد؛ هنوز باید آن را ذخیره کنی.'); }
+        }} onDiscard={recovery.discard} />}
+    </div>
+  );
 
   return (
     <div className="page-stack program-editor">
       <Link to="/program" className="text-link"><ArrowLeft size={14} /> بازگشت به برنامه</Link>
       <SectionHeading eyebrow="ویرایشگر برنامه" title="برنامهٔ خودت را بساز." description="روزها، حرکت‌ها، ست، تکرار و استراحت را تغییر بده. تغییرات فقط بعد از «ذخیره» اعمال می‌شوند." />
 
+      <SessionDraftStatus dirty={dirty} storage={recovery.storage} />
+      <fieldset className="editor-fieldset" disabled={busy} aria-busy={busy} aria-label="ویرایش برنامهٔ شخصی"><div className="editor-fieldset__content">
       <div className="program-editor__toolbar panel-card">
         <button type="button" className="button button--secondary button--small" onClick={() => update([...draft, newDay()])} disabled={busy}><Plus size={14} /> افزودن روز</button>
         <button type="button" className="button button--secondary button--small" onClick={() => setShowTemplateModal(true)} disabled={busy}><Sparkles size={14} /> الگوها و برنامه جدید</button>
         {draft.length > 0 && (
           <button type="button" className="button button--ghost button--small button--danger-text" onClick={deleteAllDays} disabled={busy}><Trash2 size={14} /> حذف کل روزها</button>
         )}
-        <button type="button" className="button button--secondary button--small" onClick={discard} disabled={busy || !dirty}><Undo2 size={14} /> کنار گذاشتن تغییرات</button>
+        <button type="button" className="button button--secondary button--small" onClick={() => void discard()} disabled={busy || !dirty}><Undo2 size={14} /> کنار گذاشتن تغییرات</button>
         <button type="button" className="button button--secondary button--small" onClick={() => void restoreOriginal()} disabled={busy || programDraft.conflict}><RotateCcw size={14} /> بازگردانی برنامهٔ RAGE</button>
         <button type="button" className="button button--primary button--small" onClick={() => void save()} disabled={busy || !dirty || programDraft.conflict}><Save size={14} /> {busy ? 'در حال ذخیره…' : 'ذخیرهٔ برنامه'}</button>
         {dirty && <span className="field-hint">تغییرات ذخیره‌نشده داری.</span>}
       </div>
 
-      {programDraft.conflict && <DraftConflictNotice latest={saved} discard={programDraft.discard} acceptCurrent={programDraft.acceptCurrent} />}
+      {programDraft.conflict && <DraftConflictNotice latest={saved} preview={<PersonalProgramConflictPreview program={saved} />} discard={programDraft.discard} acceptCurrent={programDraft.acceptCurrent} />}
       {errors.length > 0 && (
         <div className="program-editor__errors panel-card" role="alert">
           <strong>برنامه ذخیره نشد:</strong>
@@ -354,6 +398,7 @@ export function ProgramEditor() {
           </div>
         </div>
       )}
+      </div></fieldset>
     </div>
   );
 }

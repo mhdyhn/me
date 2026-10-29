@@ -115,4 +115,26 @@ describe('settings profile sharing status', () => {
     expect(mocks.api).toHaveBeenLastCalledWith('POST', '/me/profile/sharing', { accountId: 12, shareWithCoach: false });
   });
 
+  it('does not assume consent is off when the profile response is malformed', async () => {
+    mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true } });
+    render(<Settings />);
+    expect(await screen.findByText('وضعیت همگام‌سازی با سرور بارگذاری نشد.')).toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
+    expect(checkbox).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری' }));
+    await waitFor(() => expect(checkbox).toBeChecked());
+  });
+
+  it('warns instead of claiming privacy when the revocation response is malformed', async () => {
+    mocks.api.mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true } }).mockResolvedValueOnce({});
+    mocks.saveProfile.mockResolvedValue(true);
+    render(<Settings />);
+    const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
+    await waitFor(() => expect(checkbox).toBeChecked());
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    expect(await screen.findByText(/مربی ممکن است همچنان دسترسی داشته باشد/)).toBeInTheDocument();
+    expect(screen.queryByText('ذخیره شد')).not.toBeInTheDocument();
+  });
+
 });

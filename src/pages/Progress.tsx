@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, Plus, Trash2, TrendingDown, TrendingUp, Trophy, Weight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { confirmModal } from '../components/ConfirmModal';
@@ -55,6 +55,8 @@ export function Progress() {
   const [weightInput, setWeightInput] = useState('');
   const [weightDate, setWeightDate] = useState(dateInputValue());
   const [weightNote, setWeightNote] = useState('');
+  const [savingWeight, setSavingWeight] = useState(false);
+  const savingWeightRef = useRef(false);
   const [formError, setFormError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [visibleSets, setVisibleSets] = useState(30);
@@ -105,12 +107,18 @@ export function Progress() {
 
   const submitWeight = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (savingWeightRef.current) return;
     const value = Number(weightInput);
     if (!Number.isFinite(value) || value < 30 || value > 300) { setFormError('وزن بدن را بین ۳۰ تا ۳۰۰ کیلوگرم وارد کن.'); return; }
     if (!weightDate) { setFormError('برای این ثبت، تاریخ را انتخاب کن.'); return; }
-    const stored = await addBodyweight({ date: weightDate, weightKg: value, notes: weightNote.trim() || undefined });
-    if (stored !== false) { setWeightInput(''); setWeightNote(''); }
-    setFormError(stored === false ? 'وزن در حافظهٔ دستگاه ذخیره نشد و فقط در این زبانه دیده می‌شود.' : '');
+    savingWeightRef.current = true; setSavingWeight(true); setFormError('');
+    try {
+      const stored = await addBodyweight({ date: weightDate, weightKg: value, notes: weightNote.trim() || undefined });
+      if (stored) { setWeightInput(''); setWeightNote(''); }
+      else setFormError('وزن ذخیره نشد و در نمودار ثبت نشده است. ورودی حفظ شد؛ دوباره تلاش کن.');
+    } catch {
+      setFormError('وزن ذخیره نشد. ورودی حفظ شد؛ دوباره تلاش کن.');
+    } finally { savingWeightRef.current = false; setSavingWeight(false); }
   };
 
   const handleDeleteWeight = async (id: string, weightKg: number) => {
@@ -239,11 +247,11 @@ export function Progress() {
         <div className="panel-card bodyweight-form-card">
           <span className="eyebrow">ثبت وزن</span><h3>وزن بدن را وارد کن</h3><p className="muted">در شرایط مشابه وزن‌کشی کن و روند را در طول زمان بررسی کن.</p>
           <form onSubmit={(event) => void submitWeight(event)} className="form-stack">
-            <label className="field-control"><span>وزن <small>کیلوگرم</small></span><input type="number" min="30" max="300" step="0.1" inputMode="decimal" placeholder="۷۷٫۰" value={weightInput} onChange={(event) => setWeightInput(event.target.value)} required /></label>
-            <label className="field-control"><span>تاریخ</span><input type="date" value={weightDate} onChange={(event) => setWeightDate(event.target.value)} required /></label>
-            <label className="field-control"><span>یادداشت <small>اختیاری</small></span><input value={weightNote} onChange={(event) => setWeightNote(event.target.value)} placeholder="صبح، پیش از صبحانه…" /></label>
+            <label className="field-control"><span>وزن <small>کیلوگرم</small></span><input type="number" min="30" max="300" step="0.1" inputMode="decimal" placeholder="۷۷٫۰" disabled={savingWeight} value={weightInput} onChange={(event) => setWeightInput(event.target.value)} required /></label>
+            <label className="field-control"><span>تاریخ</span><input type="date" disabled={savingWeight} value={weightDate} onChange={(event) => setWeightDate(event.target.value)} required /></label>
+            <label className="field-control"><span>یادداشت <small>اختیاری</small></span><input disabled={savingWeight} value={weightNote} onChange={(event) => setWeightNote(event.target.value)} placeholder="صبح، پیش از صبحانه…" /></label>
             {formError && <p role="alert" className="form-error">{formError}</p>}
-            <button className="button button--primary button--full" type="submit"><Plus size={16} /> ذخیرهٔ وزن</button>
+            <button className="button button--primary button--full" type="submit" disabled={savingWeight}><Plus size={16} /> {savingWeight ? 'در حال ذخیره…' : 'ذخیرهٔ وزن'}</button>
           </form>
           <div className="weight-guidance"><Activity size={15} /><span>روند تدریجی اطلاعات مفیدتری از تغییر سریع عدد ترازو می‌دهد.</span></div>
         </div>

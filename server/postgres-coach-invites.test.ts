@@ -5,7 +5,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { acceptCoachInvitation, makeCoachInvitation, returnToPersonalProgram, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listCoachProgrammes, restoreCoachProgramme, saveProgramme } from './programs.ts';
-import { emptyPlan, savePlan } from './nutrition.ts';
+import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan } from './nutrition.ts';
 import { loadBiometrics, migrateBiometrics, saveBiometrics } from './biometrics.ts';
 import { addMessage } from './chat.ts';
 import { allowTestPurchase, confirmTestPurchase, listTestTransactions, startTestPurchase } from './testPurchases.ts';
@@ -63,6 +63,37 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     if (root) { try { if (created) await root.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); } finally { await root.end(); } }
   }, 30000);
 
+  it('atomically accepts only one concurrent edit of the same diary base', async () => {
+    const student = await user('student');
+    const day = '2026-10-29';
+    const results = await Promise.allSettled([
+      saveDiary(db!, student.id, day, [{ name: 'الف', items: [] }], now.toISOString(), []),
+      saveDiary(db!, student.id, day, [{ name: 'ب', items: [] }], now.toISOString(), []),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ status: 409 });
+    expect(['الف', 'ب']).toContain((await loadDiary(db!, student.id, day)).meals[0]?.name);
+  }, 30000);
+
+  it('atomically accepts only one concurrent edit of the same weekly plan base', async () => {
+    const coach = await user('coach'); const student = await user('student', true);
+    const connected = await attach(student, (await issue(coach)).code);
+    const { updatedAt: _updatedAt, ...base } = emptyPlan();
+    const one = { ...base, targets: { ...base.targets, kcal: 2100 } };
+    const two = { ...base, targets: { ...base.targets, kcal: 1800 } };
+    const results = await Promise.allSettled([
+      savePlan(db!, student.id, coach.id, one, now.toISOString(), connected.coachAccessVersion, base),
+      savePlan(db!, student.id, coach.id, two, now.toISOString(), connected.coachAccessVersion, base),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ status: 409 });
+    expect([1800, 2100]).toContain((await loadPlan(db!, student.id, coach.id))?.targets.kcal);
+  }, 30000);
+
   it('upgrades old cascading history constraints in PostgreSQL without losing rows', async () => {
     const coach = await user('coach'); const student = await user('student');
     const refs = [
@@ -116,7 +147,7 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
     expect((await db!.query('SELECT id FROM users WHERE coach_id = $1', [coach.id]))).toHaveLength(1);
-    expect((await db!.query('SELECT token_hash FROM coach_invitations WHERE consumed_by IS NOT NULL'))).toHaveLength(1);
+    expect((await db!.query('SELECT token_hash FROM coach_invitations WHERE coach_id = $1 AND consumed_by IS NOT NULL', [coach.id]))).toHaveLength(1);
   }, 30000);
 
   it('two coaches cannot both attach one student or consume both invitation codes', async () => {

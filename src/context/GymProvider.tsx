@@ -24,7 +24,7 @@ interface GymContextValue {
   addBodyweight: (entry: Omit<BodyweightEntry, 'id'>) => Promise<boolean>;
   deleteBodyweight: (id: string, expected?: BodyweightEntry) => Promise<boolean>;
   saveNutritionDay: (day: Omit<NutritionDay, 'id'>, expected?: NutritionDay | null) => Promise<boolean>;
-  deleteNutritionDay: (id: string) => Promise<void>;
+  deleteNutritionDay: (id: string) => Promise<boolean>;
   deleteSession: (id: string, expected?: WorkoutSession) => Promise<boolean>;
   completeActiveSession: (id: string) => Promise<boolean>;
 }
@@ -177,8 +177,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   const addBodyweight = useCallback(async (entry: Omit<BodyweightEntry, 'id'>) => {
     const fullEntry: BodyweightEntry = { ...entry, id: newId() };
-    setBodyweights((current) => [fullEntry, ...current].sort((a, b) => b.date.localeCompare(a.date)));
-    return persist(() => db.transaction('rw', db.bodyweights, db.syncDeleted, async () => { await db.bodyweights.put(fullEntry); await db.syncDeleted.delete(`bodyweight:${fullEntry.id}`); }));
+    const stored = await persist(() => db.transaction('rw', db.bodyweights, db.syncDeleted, async () => { await db.bodyweights.put(fullEntry); await db.syncDeleted.delete(`bodyweight:${fullEntry.id}`); }));
+    if (stored) setBodyweights((current) => [fullEntry, ...current].sort((a, b) => b.date.localeCompare(a.date)));
+    return stored;
   }, [persist]);
 
   const deleteBodyweight = useCallback(async (id: string, expected?: BodyweightEntry) => {
@@ -225,8 +226,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
   }, [persist]);
 
   const deleteNutritionDay = useCallback(async (id: string) => {
-    setNutritionDays((current) => current.filter((day) => day.id !== id));
-    await persist(() => db.transaction('rw', db.nutritionDays, db.syncDeleted, async () => { await db.nutritionDays.delete(id); await db.syncDeleted.put({ id: `nutritionDay:${id}`, kind: 'nutritionDay', key: id }); }));
+    const stored = await persist(() => db.transaction('rw', db.nutritionDays, db.syncDeleted, async () => { await db.nutritionDays.delete(id); await db.syncDeleted.put({ id: `nutritionDay:${id}`, kind: 'nutritionDay', key: id }); }));
+    if (stored) setNutritionDays((current) => current.filter((day) => day.id !== id));
+    return stored;
   }, [persist]);
 
   const activeSession = sessions.find((session) => session.status === 'active') ?? null;

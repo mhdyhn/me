@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
-import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
+import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
@@ -12,7 +12,7 @@ import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, 
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
-import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validatePlan } from './nutrition.ts';
+import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 import { listFormerCoachBiometrics, loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
 import { loadStudentProfile, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
@@ -507,9 +507,11 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
-      handler: async ({ user, params }) => {
+      handler: async ({ user, params, url }) => {
+        const accountId = url.searchParams.get('accountId');
+        if (accountId !== null && accountId !== String(user!.id)) throw new HttpError(409, 'حساب برنامه‌ساز تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
-        return { status: 200, body: { student: toPublic(student), program: student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId) } };
+        return { status: 200, body: { student: toPublic(student), program: student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId) }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -517,6 +519,8 @@ export function createApp(options: AppOptions) {
       method: 'GET', pattern: /^\/api\/students\/(\d+)\/programs\/archive$/,
       auth: ['coach', 'admin'],
       handler: async ({ user, params, url }) => {
+        const accountId = url.searchParams.get('accountId');
+        if (accountId !== null && accountId !== String(user!.id)) throw new HttpError(409, 'حساب برنامه‌ساز تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         const cursor = url.searchParams.get('cursor');
         if (cursor !== null && (!cursor || cursor.length > 80)) throw new HttpError(400, 'نشانگر بایگانی نامعتبر است.');
@@ -528,8 +532,9 @@ export function createApp(options: AppOptions) {
       method: 'POST', pattern: /^\/api\/students\/(\d+)\/programs\/restore$/,
       auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
-        const student = await ownStudent(user!, Number(params[0]));
         const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب برنامه‌ساز تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        const student = await ownStudent(user!, Number(params[0]));
         const offerId = requireText(input, 'offerId', 1, 80, 'شناسهٔ برنامه');
         if (!Number.isSafeInteger(input.offerVersion) || (input.offerVersion as number) < 1 || (input.offerVersion as number) >= Number.MAX_SAFE_INTEGER) throw new HttpError(409, 'نسخهٔ بایگانی نامعتبر است؛ صفحه را دوباره بارگذاری کنید.');
         const current = validateProgrammeSave(input);
@@ -589,6 +594,8 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب برنامه‌ساز تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         const programme = validateProgramme(body);
         const options = validateProgrammeSave(body);
@@ -603,6 +610,8 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/students\/(\d+)\/program$/,
       auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب برنامه‌ساز تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         const options = validateProgrammeSave(body);
         if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
@@ -638,9 +647,11 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/me\/diary\/([^/]+)$/,
       auth: 'signed-in',
-      handler: async ({ user, params }) => {
+      handler: async ({ user, params, url }) => {
+        const expected = url.searchParams.get('accountId');
+        if (expected !== null && expected !== String(user!.id)) throw new HttpError(409, 'حساب دفتر خوراک تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const day = validateDay(decodeURIComponent(params[0]!));
-        return { status: 200, body: { diary: await loadDiary(db, user!.id, day) } };
+        return { status: 200, body: { diary: await loadDiary(db, user!.id, day) }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -649,8 +660,11 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/me\/diary$/,
       auth: 'signed-in',
       handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب دفتر خوراک تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const diary = validateDiary(body);
-        return { status: 200, body: { diary: await saveDiary(db, user!.id, diary.day, diary.meals, now().toISOString()) } };
+        const expected = input.expectedMeals === undefined ? undefined : validateMealList(input.expectedMeals, 'نسخهٔ قبلی دفتر خوراک نامعتبر است.');
+        return { status: 200, body: { diary: await saveDiary(db, user!.id, diary.day, diary.meals, now().toISOString(), expected) } };
       },
     },
 
@@ -658,7 +672,9 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
       auth: ['coach'],
-      handler: async ({ user, params }) => {
+      handler: async ({ user, params, url }) => {
+        const accountId = url.searchParams.get('accountId');
+        if (accountId !== null && accountId !== String(user!.id)) throw new HttpError(409, 'حساب مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         return { status: 200, body: { plan: student.coachId === null ? emptyPlan() : await loadPlan(db, student.id, student.coachId) ?? emptyPlan() }, headers: { 'Cache-Control': 'no-store' } };
       },
@@ -668,10 +684,12 @@ export function createApp(options: AppOptions) {
       method: 'GET',
       pattern: /^\/api\/students\/(\d+)\/diary\/([^/]+)$/,
       auth: ['coach'],
-      handler: async ({ user, params }) => {
+      handler: async ({ user, params, url }) => {
+        const accountId = url.searchParams.get('accountId');
+        if (accountId !== null && accountId !== String(user!.id)) throw new HttpError(409, 'حساب مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         const day = validateDay(decodeURIComponent(params[1]!));
-        return { status: 200, body: { studentName: student.displayName, diary: await loadDiary(db, student.id, day) } };
+        return { status: 200, body: { studentName: student.displayName, diary: await loadDiary(db, student.id, day) }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -680,9 +698,12 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/students\/(\d+)\/nutrition$/,
       auth: ['coach'],
       handler: async ({ user, params, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب مربی تغییر کرده است؛ صفحه را دوباره باز کنید.');
         const student = await ownStudent(user!, Number(params[0]));
         const plan = validatePlan(body);
-        return { status: 200, body: { plan: await savePlan(db, student.id, user!.id, plan, now().toISOString(), student.coachAccessVersion) } };
+        const expected = input.expectedPlan === undefined ? undefined : validatePlan(input.expectedPlan);
+        return { status: 200, body: { plan: await savePlan(db, student.id, user!.id, plan, now().toISOString(), student.coachAccessVersion, expected) } };
       },
     },
 
@@ -1263,7 +1284,8 @@ export function createApp(options: AppOptions) {
     }
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' ? SESSIONS_BODY_BYTES : undefined;
+      const nutritionWrite = request.method === 'PUT' && (path === '/api/me/diary' || /^\/api\/students\/\d+\/nutrition$/.test(path));
+      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' ? SESSIONS_BODY_BYTES : nutritionWrite ? NUTRITION_BODY_BYTES : undefined;
       const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);

@@ -2275,7 +2275,7 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .personal-sync-conflict { display: grid; min-width: 0; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .personal-sync-conflict pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 
-.draft-conflict { border: 1px solid var(--line); border-inline-start: 3px solid #f5b959; border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.draft-conflict { border: 1px solid var(--line); border-inline-start: 3px solid #f5b959; border-radius: 12px; padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; overflow-wrap: anywhere; }
 .draft-conflict p { margin: 0; line-height: 1.8; }
 .draft-conflict pre { overflow: auto; max-height: 16rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -2464,3 +2464,17 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .coach-programme-archive__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
 .coach-programme-archive__body > .button { justify-self: start; }
 @media (max-width: 360px) { .coach-programme-archive__item > .button { width: 100%; justify-content: center; } }
+
+/* Tab-local draft recovery uses the existing sport-focused palette. */
+.session-draft-recovery { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--line); }
+.session-draft-recovery p, .session-draft-status { margin: 0; line-height: 1.8; font-size: .84rem; color: var(--muted); }
+.session-draft-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.session-draft-status { padding: 10px 12px; border-radius: 12px; background: var(--surface); }
+.session-draft-status--warning { color: var(--red, #ffb8ad); }
+.editor-fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.editor-fieldset__content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; min-width: 0; }
+.meal-diary__content { gap: 14px; }
+.nutrition-editor__content { gap: 14px; }
+.conflict-preview-plan, .conflict-preview-list { max-height: 16rem; overflow: auto; padding-inline-start: 20px; line-height: 1.9; }
+.conflict-preview-plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 8px 0; min-width: 0; overflow-wrap: anywhere; }
+.conflict-preview-plan p, .conflict-preview-plan .conflict-preview-list { margin: 0; }

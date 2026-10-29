@@ -700,3 +700,52 @@ test('failed first personal sync does not claim the server programme is empty', 
   await expect(page.getByRole('link', { name: 'برنامهٔ محلی' })).toHaveAttribute('href', '/program');
   await expectNoPageOverflow(page);
 });
+
+for (const width of [320, 390]) {
+  test(`coach can recover a draft and compare a newer version without overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const mock = await mockAccount(page, coach);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('dialog', (dialog) => void dialog.accept());
+    await page.goto('/coach/students/5/program');
+    await page.getByLabel('عنوان برنامه').fill('پیش‌نویس بازیابی‌شده');
+    await expect(page.getByText(/نسخهٔ موقت فقط در همین زبانه/)).toBeVisible();
+    mock.setProgramme({ ...programme, version: 2, title: `تازه ${long}` });
+    await page.reload();
+    await expect(page.getByText('پیش‌نویس ذخیره‌نشده پیدا شد.')).toBeVisible();
+    await expectNoPageOverflow(page);
+    await page.getByRole('button', { name: 'ادامهٔ پیش‌نویس' }).click();
+    await expect(page.getByLabel('عنوان برنامه')).toHaveValue('پیش‌نویس بازیابی‌شده');
+    const conflict = page.locator('.draft-conflict');
+    await expect(conflict).toBeVisible();
+    await conflict.getByText('بررسی نسخهٔ تازه').click();
+    await expect(conflict).toContainText(`تازه ${long}`);
+    await expectNoPageOverflow(page);
+    await expectWithinViewport(page, '.draft-conflict');
+    await conflict.getByRole('button', { name: 'نگه‌داشتن پیش‌نویس من' }).click();
+    const confirm = page.getByRole('dialog', { name: 'نگه‌داشتن پیش‌نویس' });
+    await expectWithinViewport(page, '[role="dialog"]');
+    await confirm.getByRole('button', { name: 'تأیید پیش‌نویس من' }).click();
+    await expect(conflict).toHaveCount(0);
+    await expect(page.getByLabel('عنوان برنامه')).toHaveValue('پیش‌نویس بازیابی‌شده');
+    expect(errors).toEqual([]);
+  });
+
+  for (const [name, account] of [['independent student', independent], ['admin', admin]] as const) {
+    test(`${name} can recover a personal programme on a ${width}px screen`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockAccount(page, account);
+      page.on('dialog', (dialog) => void dialog.accept());
+      await page.goto('/program/edit?mode=blank');
+      await page.getByLabel('نام روز').first().fill('روز شخصی نیمه‌تمام');
+      await expect(page.getByText(/نسخهٔ موقت فقط در همین زبانه/)).toBeVisible();
+      await page.reload();
+      await expect(page.getByText('پیش‌نویس ذخیره‌نشده پیدا شد.')).toBeVisible();
+      await expectNoPageOverflow(page);
+      await page.getByRole('button', { name: 'ادامهٔ پیش‌نویس' }).click();
+      await expect(page.getByLabel('نام روز').first()).toHaveValue('روز شخصی نیمه‌تمام');
+      await expectNoPageOverflow(page);
+    });
+  }
+}
