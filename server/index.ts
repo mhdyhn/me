@@ -27,14 +27,6 @@ mkdirSync(dataDir, { recursive: true });
 const db = await openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
 const adminState = await ensureAdmin(db, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
 if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
-// The owner's personal profile may never stay inside another account; a leftover copy is removed.
-// A failure here must never keep the site offline: the admin panel can still clean the copies.
-try {
-  const ownerCopies = await quarantineOwnerProfileCopies(db, new Date().toISOString());
-  if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
-} catch (error) {
-  console.error('Owner profile cleanup did not finish:', (error as Error).message);
-}
 
 const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 // One process serves the built app (dist/) and the API, so the deployed site has a single address.
@@ -52,6 +44,14 @@ const server = createServer((request, response) => {
 });
 server.listen(port, host, () => {
   console.log(`Meety API listening on http://${host}:${port}`);
+  // The owner's personal profile may never stay inside another account; a leftover copy is removed.
+  // This runs after the server is up on purpose: a slow or failing cleanup must never keep the site offline,
+  // and the admin panel can still scan and remove the copies on demand.
+  void quarantineOwnerProfileCopies(db, new Date().toISOString())
+    .then((ownerCopies) => {
+      if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
+    })
+    .catch((error: Error) => console.error('Owner profile cleanup did not finish:', error.message));
 });
 
 /** The hosted database may take a few seconds to wake up, so the first connection is retried before giving up. */
