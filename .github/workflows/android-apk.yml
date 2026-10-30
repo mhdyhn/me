@@ -18,22 +18,44 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Check out the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+
+      - name: Configure the Android API and expected signer
+        env:
+          ANDROID_API_BASE: ${{ vars.ANDROID_API_BASE }}
+          ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: node tools/android-release-config.mjs
+
+      - name: Check release signing secrets
+        id: signing_secrets
+        continue-on-error: true
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Android release signing::Missing or unavailable signing secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build the web app and copy it into the Android project
-        env:
-          VITE_API_BASE: ${{ vars.ANDROID_API_BASE }}
         run: |
-          node -e 'const value = process.env.VITE_API_BASE; if (!value) { console.error("::error title=Android API configuration::Repository variable ANDROID_API_BASE is missing or unavailable."); process.exit(1); } try { const u = new URL(value); if (u.protocol !== "https:" || u.username || u.password || u.pathname !== "/" || u.search || u.hash) throw 0; } catch { console.error("::error title=Android API configuration::ANDROID_API_BASE must be a public HTTPS origin without a path."); process.exit(1); }'
           npm run build || { echo "::error title=Android web build::The web build failed before Capacitor synchronization."; exit 1; }
           npx cap sync android || { echo "::error title=Android synchronization::Capacitor could not copy the web assets."; exit 1; }
 
@@ -50,6 +72,20 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
+      # Diagnose compilation without publishing a debug APK if release secrets are unavailable.
+      - name: Compile debug APK for diagnostics only
+        if: steps.signing_secrets.outcome == 'failure'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Stop when release signing is unavailable
+        if: steps.signing_secrets.outcome == 'failure'
+        run: |
+          echo "::error title=Android release signing::The debug compile is diagnostic only; no release APK was created or published."
+          exit 1
+
       - name: Prepare release signing keystore
         env:
           ENCODED_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -64,8 +100,16 @@ jobs:
               exit 1
             fi
           done
+          umask 077
           printf '%s' "$ENCODED_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/meety-release.keystore"
           test -s "$RUNNER_TEMP/meety-release.keystore"
+          keytool -exportcert -keystore "$RUNNER_TEMP/meety-release.keystore" -alias "$KEY_ALIAS" \
+            -storepass:env KEYSTORE_PASSWORD -file "$RUNNER_TEMP/meety-signing-cert.der" > /dev/null
+          actual="$(sha256sum "$RUNNER_TEMP/meety-signing-cert.der" | cut -d ' ' -f 1)"
+          if [ "$actual" != "$ANDROID_EXPECTED_CERT_SHA256" ]; then
+            echo "::error title=Android release signing::The keystore certificate does not match the expected signing certificate; release blocked."
+            exit 1
+          fi
 
       - name: Build and verify the signed release APK
         working-directory: android
@@ -78,10 +122,11 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/meety-apk-signature.txt"
+          node ../tools/verify-android-signer.mjs "$RUNNER_TEMP/meety-apk-signature.txt"
 
       - name: Upload the APK as an artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: meety-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
@@ -102,6 +147,6 @@ jobs:
             gh release create "$RELEASE_TAG" "$RUNNER_TEMP/meety.apk" --verify-tag --title "میتی $RELEASE_TAG" --notes "نسخهٔ امضاشدهٔ اندروید میتی"
           fi
 
-      - name: Remove temporary signing key
+      - name: Remove temporary signing material
         if: always()
-        run: rm -f "$RUNNER_TEMP/meety-release.keystore"
+        run: rm -f "$RUNNER_TEMP/meety-release.keystore" "$RUNNER_TEMP/meety-signing-cert.der" "$RUNNER_TEMP/meety-apk-signature.txt"

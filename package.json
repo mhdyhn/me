@@ -21,6 +21,7 @@
     "test:pwa-upgrade": "node tools/test-pwa-upgrade.mjs",
     "test:offline-file": "node tools/test-offline-file.mjs",
     "test:transfer-integration": "node tools/test-transfer-integration.mjs",
+    "test:android-origin": "node tools/test-android-origin.mjs",
     "test:3d-qr": "node tools/test-3d-and-qr.mjs"
   },
   "dependencies": {
