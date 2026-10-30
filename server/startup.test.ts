@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
-import { lazyDatabase, openDatabase, type Db } from './db.ts';
+import { connectDatabase, lazyDatabase, openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
 
 const key = keyFromSecret('startup-health-test-secret');
@@ -53,6 +53,19 @@ describe('the server answers while the database is still waking up', () => {
     expect(reported).toMatchObject({ code: 'ECONNREFUSED', message: 'پایگاه داده اتصال را نپذیرفت.' });
     expect(JSON.stringify(reported)).not.toContain('10.0.0.1');
   });
+
+  it('keeps the reason of a failed connection attempt while it retries', async () => {
+    // Port 1 refuses the connection, so the attempt fails at once.
+    const db = connectDatabase('postgres://postgres:postgres@127.0.0.1:1/postgres', 500);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const reported = db.startupFailure!();
+      expect(reported?.code).toBe('ECONNREFUSED');
+      expect(db.isReady!()).toBe(false);
+    } finally {
+      await db.close();
+    }
+  }, 30000);
 
   it('uses the database as soon as it is ready', async () => {
     const real = await openDatabase('memory');
