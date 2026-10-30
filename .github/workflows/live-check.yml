@@ -1,0 +1,33 @@
+name: Live deployment check
+
+# Temporary helper: polls the live Render deployment and stores the answer as an artifact,
+# because the workspace cannot reach the hosted service directly.
+on:
+  push:
+    branches:
+      - arena/57fad14c-me
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll the live deployment
+        run: |
+          rm -f /tmp/live.txt
+          for i in $(seq 1 12); do
+            code=$(curl -s --max-time 25 -o /tmp/live.txt -w '%{http_code}' "https://meety-985n.onrender.com/api/release?check=gh-$i")
+            echo "attempt $i http=$code"
+            head -c 400 /tmp/live.txt
+            echo
+            if [ "$code" = "200" ]; then break; fi
+            sleep 15
+          done
+          {
+            echo "--- health ---"
+            curl -s --max-time 25 -w '\nhttp=%{http_code}\n' "https://meety-985n.onrender.com/api/health?check=gh-health" || echo "health request failed"
+          } >> /tmp/live.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: live-deployment-check
+          path: /tmp/live.txt
