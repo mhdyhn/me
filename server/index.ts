@@ -28,8 +28,13 @@ const db = await openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
 const adminState = await ensureAdmin(db, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
 if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
 // The owner's personal profile may never stay inside another account; a leftover copy is removed.
-const ownerCopies = await quarantineOwnerProfileCopies(db, new Date().toISOString());
-if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
+// A failure here must never keep the site offline: the admin panel can still clean the copies.
+try {
+  const ownerCopies = await quarantineOwnerProfileCopies(db, new Date().toISOString());
+  if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
+} catch (error) {
+  console.error('Owner profile cleanup did not finish:', (error as Error).message);
+}
 
 const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 // One process serves the built app (dist/) and the API, so the deployed site has a single address.
