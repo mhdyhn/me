@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { createApp } from './app.ts';
 import { ensureAdmin } from './bootstrap.ts';
-import { lazyDatabase, openDatabase } from './db.ts';
+import { connectDatabase, type Db } from './db.ts';
 import { quarantineOwnerProfileCopies } from './personalData.ts';
 import { keyFromSecret } from './secrets.ts';
 import { isFile, resolveStaticDir, serveStatic } from './static.ts';
@@ -26,8 +26,7 @@ mkdirSync(dataDir, { recursive: true });
 
 // The database can take a while to wake up (the hosted one scales down when it is idle).
 // The web server starts anyway and answers the health check while the connection is made.
-const dbOpen = openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
-const db = lazyDatabase(dbOpen);
+const db = connectDatabase(databaseUrl || resolve(dataDir, 'pgdata'));
 
 const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 // One process serves the built app (dist/) and the API, so the deployed site has a single address.
@@ -47,7 +46,7 @@ server.listen(port, host, () => {
   console.log(`Meety API listening on http://${host}:${port}`);
   // Everything that needs the database runs in the background: the site stays reachable
   // while the hosted database wakes up.
-  void dbOpen.then(async (database) => {
+  void waitForDatabase(db).then(async (database) => {
     const adminState = await ensureAdmin(database, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
     if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
     // The owner's personal profile may never stay inside another account; a leftover copy is removed.
@@ -58,17 +57,14 @@ server.listen(port, host, () => {
   }).catch((error: Error) => console.error('Database preparation did not finish:', error.message));
 });
 
-/** The hosted database may take a while to wake up, so the connection is retried in the background. */
-async function openWithRetry(target: string) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await openDatabase(target);
-    } catch (error) {
-      if (attempt === 1 || attempt % 12 === 0) {
-        console.error(`Database not ready (attempt ${attempt}); retrying in 5 seconds.`, (error as Error).message);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+/** Waits until the database is really open, so the background work runs on the real connection. */
+async function waitForDatabase(db: Db): Promise<Db> {
+  for (;;) {
+    if (db.isReady?.()) {
+      const rows = await db.query<{ value: number }>('SELECT 1 AS value');
+      if (rows.length) return db;
     }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 

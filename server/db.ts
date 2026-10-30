@@ -39,12 +39,46 @@ export async function openDatabase(target: string): Promise<Db> {
 }
 
 /**
- * A handle that works before the database finished connecting. The hosted database can take a
- * while to wake up; the web server must answer the health check in the meantime, otherwise the
- * host restarts the instance and the site never comes up. Queries wait for the database and
+ * Connects to the database and keeps trying. The hosted database scales down when it is idle and
+ * the connection attempt can fail or hang; the web server must answer the health check in the
+ * meantime, otherwise the host restarts the instance and the site never comes up. The returned
+ * handle works before the database is ready: queries wait for it and give up with a clear error
+ * when it stays unreachable.
+ */
+export function connectDatabase(target: string, waitMs = 20000): Db {
+  let failure: DatabaseFailure | null = null;
+  let closed = false;
+  const opening = (async () => {
+    for (let attempt = 1; ; attempt += 1) {
+      if (closed) throw new Error('The database connection was closed.');
+      try {
+        const database = await openDatabase(target);
+        failure = null;
+        return database;
+      } catch (error) {
+        failure = describeFailure(error);
+        if (attempt === 1 || attempt % 12 === 0) {
+          console.error(`Database not ready (attempt ${attempt}); retrying in 5 seconds. ${failure.code}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+  })();
+  const handle = lazyDatabase(opening, waitMs, () => failure);
+  return {
+    ...handle,
+    async close(): Promise<void> {
+      closed = true;
+      await handle.close();
+    },
+  };
+}
+
+/**
+ * A handle that works before the database finished connecting. Queries wait for the database and
  * give up with a clear error when it stays unreachable.
  */
-export function lazyDatabase(open: Promise<Db>, waitMs = 20000): Db {
+export function lazyDatabase(open: Promise<Db>, waitMs = 20000, reportFailure?: () => DatabaseFailure | null): Db {
   let ready = false;
   let failure: DatabaseFailure | null = null;
   void open.then(() => { ready = true; }, (error: unknown) => { failure = describeFailure(error); });
@@ -76,7 +110,7 @@ export function lazyDatabase(open: Promise<Db>, waitMs = 20000): Db {
       if (database) await database.close();
     },
     isReady: () => ready,
-    startupFailure: () => failure,
+    startupFailure: () => failure ?? reportFailure?.() ?? null,
   };
 }
 
