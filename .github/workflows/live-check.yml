@@ -1,0 +1,33 @@
+name: Live deployment check
+
+# Temporary helper: polls the live Render deployment and reports the answer as an annotation,
+# because the workspace cannot reach the hosted service directly.
+on:
+  push:
+    branches:
+      - arena/57fad14c-me
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll the live deployment
+        run: |
+          set +e
+          out="$GITHUB_WORKSPACE/live-check.txt"
+          : > "$out"
+          {
+            for i in $(seq 1 20); do
+              echo "=== attempt $i ($(date -u +%H:%M:%S)) ==="
+              curl -sS --max-time 25 -D headers.txt -o body.txt -w 'http=%{http_code} connect=%{time_connect} start=%{time_starttransfer} total=%{time_total}\n' \
+                "https://meety-985n.onrender.com/api/release?check=gh-$i"
+              echo "curl exit=$?"
+              head -20 headers.txt
+              head -c 600 body.txt
+              echo
+              if grep -q '"revision"' body.txt; then break; fi
+              sleep 15
+            done
+          } >> "$out" 2>&1
+          echo "::error title=Live deployment::$(tail -c 900 "$out" | tr '\n' ' ')"
