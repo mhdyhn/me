@@ -27,6 +27,8 @@ export interface Db {
   close(): Promise<void>;
   /** False while the database is still connecting. Only the lazy handle reports it. */
   isReady?(): boolean;
+  /** Why the database is not reachable yet. Only the lazy handle reports it. */
+  startupFailure?(): DatabaseFailure | null;
 }
 
 /** Opens the database. `target` is a postgres:// URL, 'memory', or a folder path for local use. */
@@ -44,7 +46,8 @@ export async function openDatabase(target: string): Promise<Db> {
  */
 export function lazyDatabase(open: Promise<Db>, waitMs = 20000): Db {
   let ready = false;
-  void open.then(() => { ready = true; }, () => undefined);
+  let failure: DatabaseFailure | null = null;
+  void open.then(() => { ready = true; }, (error: unknown) => { failure = describeFailure(error); });
   const wait = async (): Promise<Db> => {
     if (ready) return open;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,7 +76,24 @@ export function lazyDatabase(open: Promise<Db>, waitMs = 20000): Db {
       if (database) await database.close();
     },
     isReady: () => ready,
+    startupFailure: () => failure,
   };
+}
+
+/** A short, safe description of why the database is not reachable. No address or secret is included. */
+export interface DatabaseFailure { code: string; message: string }
+
+function describeFailure(error: unknown): DatabaseFailure {
+  const raw = error as { code?: string; message?: string };
+  const message = String(raw?.message ?? '');
+  const code = String(raw?.code ?? '').trim();
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { code: code || 'ENOTFOUND', message: 'نشانی پایگاه داده پیدا نشد.' };
+  if (code === 'ECONNREFUSED') return { code, message: 'پایگاه داده اتصال را نپذیرفت.' };
+  if (code === 'ETIMEDOUT' || message.includes('timeout')) return { code: code || 'ETIMEDOUT', message: 'اتصال به پایگاه داده به وقت گذشت.' };
+  if (code === '28P01') return { code, message: 'اطلاعات دسترسی پایگاه داده درست نیست.' };
+  if (code === '57P03') return { code, message: 'پایگاه داده در دسترس نیست.' };
+  if (code === '53300') return { code, message: 'ظرفیت پایگاه داده پر است.' };
+  return { code: code || 'unknown', message: 'اتصال به پایگاه داده برقرار نشد.' };
 }
 
 function fromPool(url: string): Db {
