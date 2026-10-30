@@ -60,7 +60,7 @@ async function mockAccount(page: Page, user: typeof student | typeof independent
     const path = new URL(request.url()).pathname;
     let json: unknown = {};
     if (path === '/api/me') json = { user };
-    else if (path === '/api/me/profile') json = { stored: null };
+    else if (path === '/api/me/profile') json = { stored: null, sharingVersion: 0 };
     else if (path === '/api/me/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [] };
     else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...activeProgramme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, isTestPurchase: testPurchased, testPurchaseAvailable: testAvailable && !paid && !testPurchased, testPurchaseExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), coachName: coach.displayName };
     else if (path === '/api/students/5/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [], nextCursor: null };

@@ -4,9 +4,10 @@ import pg from 'pg';
 import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 async function runScenario(base) {
   const pass = 'dummy-pass-for-local';
@@ -69,6 +70,44 @@ async function runScenario(base) {
     await page.getByRole('dialog', { name: 'قطع دسترسی مربی' }).getByRole('button', { name: 'قطع دسترسی', exact: true }).click();
     await expect(section).toContainText('دسترسی مربی قطع است');
   };
+  const checkProgramFile = async (page, account, initialName) => {
+    await page.goto(base + '/program', { waitUntil: 'domcontentloaded' });
+    const panel = page.locator('.program-file-panel');
+    await panel.locator('summary').click();
+    const input = panel.getByLabel('انتخاب فایل برنامه');
+    await expect(input).toBeEnabled({ timeout: 15000 });
+    let previousFile = null;
+    if (initialName) {
+      await expect(page.getByText(initialName).first()).toBeVisible();
+      const promise = page.waitForEvent('download');
+      await panel.getByRole('button', { name: 'دریافت فایل برنامهٔ این دستگاه' }).click();
+      previousFile = await (await promise).path();
+    }
+    await input.setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
+    await expect(panel.getByRole('status')).toContainText('فایل JSON معتبر نیست');
+    await input.setInputFiles({ name: 'large.json', mimeType: 'application/json', buffer: Buffer.alloc(512 * 1024 + 1) });
+    await expect(panel.getByRole('status')).toContainText('۵۱۲ کیلوبایت');
+    const records = () => call('GET', `/me/personal-data?accountId=${account.user.id}`, undefined, account.token);
+    const beforeProfile = (await records()).records.find(item => item.kind === 'profile')?.value;
+    const imported = [{ ...personal[0], id: `fixture-${account.user.id}`, name: `روز واردشدهٔ ${account.user.id}` }];
+    const fixture = { name: 'example.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ programme: imported, profile: { primaryGoal: 'نباید وارد شود' }, sessions: ['not imported'] })) };
+    await input.setInputFiles(fixture);
+    await expect(panel).toContainText('۱ روز در فایل پیدا شد');
+    await panel.getByRole('button', { name: 'انصراف' }).click();
+    if (initialName) await expect(page.getByText(initialName).first()).toBeVisible();
+    await input.setInputFiles(fixture);
+    await panel.getByRole('button', { name: 'تأیید و جایگزینی برنامه' }).click();
+    await expect(page.getByText(imported[0].name).first()).toBeVisible();
+    await expect.poll(async () => (await records()).records.find(item => item.kind === 'program' && !item.deleted)?.value?.[0]?.name, { timeout: 15000 }).toBe(imported[0].name);
+    const after = (await records()).records;
+    if (after.some(item => item.kind === 'session') || JSON.stringify(after.find(item => item.kind === 'profile')?.value) !== JSON.stringify(beforeProfile)) throw new Error('Programme file changed unrelated profile/session data');
+    if (previousFile) {
+      await input.setInputFiles(previousFile);
+      await panel.getByRole('button', { name: 'تأیید و جایگزینی برنامه' }).click();
+      await expect(page.getByText(initialName).first()).toBeVisible();
+      await expect.poll(async () => (await records()).records.find(item => item.kind === 'program' && !item.deleted)?.value?.[0]?.name, { timeout: 15000 }).toBe(initialName);
+    }
+  };
   try {
     const studentPage = await newPage(); const secondDevice = await newPage(); const coachPage = await newPage(); const adminPage = await newPage(); const adminSecondDevice = await newPage();
     await uiLogin(studentPage, 'teststudent'); await uiLogin(secondDevice, 'teststudent');
@@ -104,6 +143,36 @@ async function runScenario(base) {
     await adminSecondDevice.goto(base + '/progress', { waitUntil: 'domcontentloaded' });
     await adminSecondDevice.reload({ waitUntil: 'domcontentloaded' });
     await expect(adminSecondDevice.getByRole('button', { name: 'حذف ثبت وزن 78.5 کیلوگرم' })).toBeVisible({ timeout: 15000 });
+    // Three genuinely separate accounts start with empty profiles and retain their own references.
+    for (const [page, account, age, label] of [[adminPage, admin, '39', 'حرکت مدیر'], [coachPage, a, '32', 'حرکت مربی'], [studentPage, s, '28', 'حرکت شاگرد']]) {
+      await page.goto(base + '/settings', { waitUntil: 'domcontentloaded' });
+      const form = page.locator('.settings-form');
+      await expect(form.getByLabel('سن', { exact: true })).toHaveValue('');
+      await expect(form).toContainText('هنوز وزنه‌ای ثبت نکرده‌ای');
+      await expect(page.getByText('انتقال داده‌های قدیمی', { exact: false })).toHaveCount(0);
+      await form.getByLabel('سن', { exact: true }).fill(age);
+      await form.getByRole('button', { name: 'افزودن وزنهٔ کاری' }).click();
+      await form.getByLabel('نام حرکت وزنهٔ ۱').fill(label);
+      await form.getByLabel('مقدار وزنهٔ ۱ به کیلوگرم').fill(age);
+      await form.getByRole('button', { name: 'ذخیرهٔ پروفایل' }).click();
+      await expect(form.getByRole('button', { name: 'ذخیره شد' })).toBeVisible();
+      await expect.poll(async () => (await call('GET', `/me/personal-data?accountId=${account.user.id}`, undefined, account.token)).records.find(item => item.kind === 'profile')?.value?.workingWeightReferences?.[0]?.label, { timeout: 15000 }).toBe(label);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(form.getByLabel('نام حرکت وزنهٔ ۱')).toHaveValue(label);
+    }
+    await checkProgramFile(studentPage, s, 'روز شخصی نمونه');
+    await checkProgramFile(coachPage, a, null);
+    await checkProgramFile(adminPage, admin, 'روز ۱: تمام بدن (اسکوات و سینه)');
+    await studentPage.goto(base + '/workout/personal-day', { waitUntil: 'domcontentloaded' });
+    await expect(studentPage.getByLabel('وزنه به کیلوگرم')).toBeVisible();
+    await studentPage.goto(base + '/program', { waitUntil: 'domcontentloaded' });
+    await studentPage.locator('.program-file-panel summary').click();
+    await expect(studentPage.getByLabel('انتخاب فایل برنامه')).toBeDisabled();
+    await studentPage.goto(base + '/workout/personal-day', { waitUntil: 'domcontentloaded' });
+    await studentPage.locator('.workout-mobile-footer').getByRole('button', { name: 'خروج', exact: true }).click();
+    await studentPage.getByRole('dialog', { name: 'لغو جلسه تمرین' }).getByRole('button', { name: 'لغو و حذف جلسه' }).click();
+    await expect(studentPage).toHaveURL(`${base}/`);
+    await expect.poll(async () => (await call('GET', `/me/personal-data?accountId=${s.user.id}`, undefined, s.token)).records.some(item => item.kind === 'session' && !item.deleted), { timeout: 15000 }).toBe(false);
     await call('GET', '/coaches', undefined, s.token, 403);
     await call('GET', '/admin/transactions', undefined, a.token, 403);
     // A coach's single reusable link opens registration or login and never attaches without consent.
@@ -168,7 +237,13 @@ async function runScenario(base) {
     await consent.check();
     await profileForm.getByRole('button', { name: 'ذخیرهٔ پروفایل' }).click();
     await expect(profileForm.getByRole('button', { name: 'ذخیره شد' })).toBeVisible();
-    if (!(await call('GET', `/students/${s.user.id}/profile`, undefined, a.token)).shared) throw new Error('Profile sharing was not enabled');
+    const sharedProfile = await call('GET', `/students/${s.user.id}/profile`, undefined, a.token);
+    if (!sharedProfile.shared || sharedProfile.profile?.workingWeightReferences?.[0]?.label !== 'حرکت شاگرد') throw new Error('Profile sharing did not use the student’s own approved references');
+    if (JSON.stringify(sharedProfile).includes('حرکت مدیر') || JSON.stringify(sharedProfile).includes('حرکت مربی')) throw new Error('Profile sharing crossed account boundaries');
+    await studentPage.goto(base + '/program', { waitUntil: 'domcontentloaded' });
+    await expect(studentPage.locator('.program-file-panel')).toHaveCount(0);
+    await studentPage.goto(base + '/settings', { waitUntil: 'domcontentloaded' });
+    await expect(consent).toBeChecked();
     await consent.uncheck();
     await profileForm.getByRole('button', { name: 'ذخیرهٔ پروفایل' }).click();
     await expect(profileForm.getByRole('button', { name: 'ذخیره شد' })).toBeVisible();
@@ -293,6 +368,22 @@ async function runScenario(base) {
     await expect(coachPage.getByLabel('عنوان برنامه')).toHaveValue('برنامه اول مربی الف');
     const restored = await call('GET', '/me/program', undefined, s.token);
     if (!restored.isPaid || restored.program.id !== first.id || restored.program.version !== 2147483648) throw new Error('Restored purchase was not preserved');
+    // Optional owner-supplied private fixture: test only inside the disposable admin account.
+    if (process.env.MEETY_PRIVATE_PROGRAM_FILE) {
+      const filePath = process.env.MEETY_PRIVATE_PROGRAM_FILE;
+      const fixture = JSON.parse(await readFile(filePath, 'utf8'));
+      if (!Array.isArray(fixture.programme)) throw new Error('Private fixture does not contain a programme');
+      await adminPage.goto(base + '/program', { waitUntil: 'domcontentloaded' });
+      const panel = adminPage.locator('.program-file-panel');
+      await panel.locator('summary').click();
+      const input = panel.getByLabel('انتخاب فایل برنامه');
+      await expect(input).toBeEnabled({ timeout: 15000 });
+      await input.setInputFiles(filePath);
+      await expect(panel.getByRole('button', { name: 'تأیید و جایگزینی برنامه' })).toBeVisible();
+      await panel.getByRole('button', { name: 'تأیید و جایگزینی برنامه' }).click();
+      await expect.poll(async () => isDeepStrictEqual((await adminRecords()).records.find(item => item.kind === 'program' && !item.deleted)?.value, fixture.programme), { timeout: 20000 }).toBe(true);
+      console.log('PASS: supplied private programme imported through Chromium into the disposable account; no private content printed.');
+    }
     if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
     console.log('PASS: real Node API + disposable PostgreSQL + Chromium: admin personal home, programme and weight synced to a second device, club access via More and role restrictions; independent programme and concurrent diary/weekly nutrition conflict resolution on 2 devices; reusable coach-link signup and login with explicit consent; profile sharing and revocation; consent A → personal → B → A; previous coach privacy/archives; sandbox purchase, isolated UI test purchase and coach/admin ledgers; offer restore and paid entitlement. No real payment.');
   } finally {

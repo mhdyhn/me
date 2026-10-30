@@ -1,5 +1,4 @@
 import type { ExerciseDefinition } from '../types';
-import { adminPersonalProgram } from './adminProgram';
 
 type GuideOverlay = Partial<Pick<ExerciseDefinition,
   'category' | 'primaryMuscles' | 'secondaryMuscles' | 'equipment' | 'setup' | 'startPosition' | 'execution' |
@@ -166,12 +165,11 @@ export function getAdminExerciseGuide(
   if (!config) return undefined;
   const source = lookup(config.sourceId);
   if (!source) return undefined;
-  const programEntry = adminPersonalProgram.flatMap((day) => day.exercises).find((item) => item.exerciseId === exerciseId);
   const merged: ExerciseDefinition = {
     ...source,
     ...config.overlay,
     id: exerciseId,
-    name: programEntry?.name ?? source.name,
+    name: source.name,
     englishName: source.englishName ?? source.name,
   };
   merged.movementPhases = [
@@ -183,6 +181,8 @@ export function getAdminExerciseGuide(
   ];
   return merged;
 }
+
+export const adminExerciseIds = (): string[] => Object.keys(ADMIN_GUIDES);
 
 export const adminExerciseCatalogId = (exerciseId: string): string | undefined => ADMIN_GUIDES[exerciseId]?.sourceId;
 

@@ -28,5 +28,10 @@ export const localizeKnownProfileCopy = (profile: UserProfile): UserProfile => {
     Female: 'زن',
     'Prefer not to say': 'ترجیح می‌دهم نگویم',
   };
-  return { ...profile, sex: sexLabels[profile.sex] ?? profile.sex };
+  // Fill only absent legacy fields for display; stored data is not changed until the user saves.
+  const result = { ...profile } as UserProfile;
+  for (const key of Object.keys(blankProfile) as (keyof UserProfile)[]) {
+    if (result[key] === undefined) Object.assign(result, { [key]: structuredClone(blankProfile[key]) });
+  }
+  return { ...result, sex: sexLabels[result.sex] ?? result.sex };
 };

@@ -246,7 +246,7 @@ function CoachStudents() {
                             <Link className="button button--ghost" to={`/coach/students/${student.id}/ai`}>
                               <Sparkles size={16} /> هوش و پایش
                             </Link>
-                            {!student.selfRegistered && <>
+                            {!student.selfRegistered && student.mustChangePassword && student.password !== null && <>
                               <button
                                 type="button"
                                 className={`button ${student.isActive === false ? 'button--primary' : 'button--ghost'}`}

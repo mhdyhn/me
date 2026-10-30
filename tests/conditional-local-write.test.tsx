@@ -53,6 +53,23 @@ describe('atomic local draft checks', () => {
     if (kind === 'session') expect((await db.sessions.get(session.id))?.notes).toBe('جدید');
   });
 
+  it('does not restore a file over an active session, changed account, or newer local programme', async () => {
+    const first = originalProgramCopy();
+    await db.preferences.put({ key: 'programTemplates', value: first });
+    const replacement = structuredClone(first); replacement[0]!.name = 'بازگردانی نمونه';
+    await expect(saveProgram(replacement, first, { requireNoActiveSession: true })).rejects.toThrow(/تمرین فعال/);
+    expect((await db.preferences.get('programTemplates'))?.value).toEqual(first);
+    await db.sessions.put({ ...session, status: 'completed' });
+    await expect(saveProgram(replacement, first, { requireNoActiveSession: true, stillCurrent: () => false })).rejects.toThrow(/حساب/);
+    const newer = structuredClone(first); newer[0]!.name = 'نسخه تازه';
+    await db.preferences.put({ key: 'programTemplates', value: newer });
+    await expect(saveProgram(replacement, first, { requireNoActiveSession: true })).rejects.toThrow(/هنگام ویرایش/);
+    expect((await db.preferences.get('programTemplates'))?.value).toEqual(newer);
+    await saveProgram(replacement, newer, { requireNoActiveSession: true, stillCurrent: () => true });
+    expect((await db.preferences.get('programTemplates'))?.value).toEqual(replacement);
+    expect((await db.preferences.get('programBackup'))?.value).toEqual(newer);
+  });
+
   it('prevents a stale programme editor from replacing or deleting a newer programme', async () => {
     const first = originalProgramCopy();
     const newer = structuredClone(first); newer[0]!.name = 'جدید';

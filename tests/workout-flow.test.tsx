@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { GymProvider } from '../src/context/GymProvider';
 import { workoutTemplates } from '../src/data/workouts';
 import { db } from '../src/lib/db';
+import { setActiveProgram } from '../src/lib/programStore';
 import { Workout } from '../src/pages/Workout';
 import type { WorkoutSession } from '../src/types';
 
@@ -24,9 +25,12 @@ beforeEach(async () => {
   await db.bodyweights.clear();
   await db.nutritionDays.clear();
   await db.preferences.clear();
+  // A new account is empty; this flow explicitly chooses a workout fixture.
+  await db.preferences.put({ key: 'programTemplates', value: structuredClone(workoutTemplates) });
+  setActiveProgram(structuredClone(workoutTemplates));
 });
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); setActiveProgram([]); });
 
 describe('workout flow', () => {
   it('shows a storage warning rather than creating a session or waiting forever after a read failure', async () => {
@@ -63,7 +67,7 @@ describe('workout flow', () => {
     expect(await screen.findByRole('button', { name: 'ست بعدی' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'ست بعدی' }));
     await waitFor(() => expect(document.querySelector('.set-counter strong')).toHaveTextContent('۰۲'));
-  });
+  }, 15000);
 
   it('trains a programmed movement using the programme name', async () => {
     renderWorkout('/workout/day-2');

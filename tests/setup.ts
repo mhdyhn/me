@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 import { afterEach } from 'vitest';
 
-// Tests exercise the developer's own data (original programme, legacy database) unless they say otherwise.
+// Tests may exercise legacy-scoped storage; personal programme fixtures must be chosen explicitly.
 if (typeof window !== 'undefined') window.localStorage.setItem('meety.account-scope', 'owner');
 
 

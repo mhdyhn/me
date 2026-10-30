@@ -1,15 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { workoutTemplates as originalProgram } from '../data/workouts';
-import { adminPersonalProgram } from '../data/adminProgram';
-import { usesOwnerData } from './accountScope';
 import type { WorkoutTemplate } from '../types';
 
-/**
- * The programme the app is currently using. It starts as the original RAGE programme and is
- * replaced when the user saves changes in the programme editor (persistence lives in
- * `programPersistence.ts`, so this module stays free of storage code and easy to test).
- */
-/** The developer's account starts with the original programme; every other account starts empty. */
+/** The active programme belongs to the current account; new accounts start empty. */
 export interface AssignedMeta {
   id: string;
   version: number;
@@ -22,8 +15,7 @@ export interface AssignedMeta {
   testPurchaseExpiresAt?: string | null;
 }
 
-const ownerDefaultProgram = import.meta.env.MODE === 'test' ? originalProgram : adminPersonalProgram;
-export const defaultPersonalProgram = (): WorkoutTemplate[] => usesOwnerData() ? ownerDefaultProgram : [];
+export const defaultPersonalProgram = (): WorkoutTemplate[] => [];
 let activeProgram: WorkoutTemplate[] = defaultPersonalProgram();
 let readOnly = false;
 let assignedMeta: AssignedMeta | null = null;

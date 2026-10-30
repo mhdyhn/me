@@ -62,11 +62,11 @@ function StudentProfileScreen() {
           {data.shared && data.profile ? (
             <>
               <div className="student-profile-grid">
-                <ProfileItem label="سن" value={`${faNumber(data.profile.age)} سال`} />
+                <ProfileItem label="سن" value={data.profile.age ? `${faNumber(data.profile.age)} سال` : 'ثبت نشده'} />
                 <ProfileItem label="جنسیت" value={data.profile.sex || 'ثبت نشده'} />
-                <ProfileItem label="قد" value={`${faNumber(data.profile.heightCm)} سانتی‌متر`} />
-                <ProfileItem label="وزن پروفایل" value={`${faNumber(data.profile.weightKg)} کیلوگرم`} />
-                <ProfileItem label="هدف اصلی" value={data.profile.primaryGoal} />
+                <ProfileItem label="قد" value={data.profile.heightCm ? `${faNumber(data.profile.heightCm)} سانتی‌متر` : 'ثبت نشده'} />
+                <ProfileItem label="وزن پروفایل" value={data.profile.weightKg ? `${faNumber(data.profile.weightKg)} کیلوگرم` : 'ثبت نشده'} />
+                <ProfileItem label="هدف اصلی" value={data.profile.primaryGoal || 'ثبت نشده'} />
                 <ProfileItem label="هدف تکمیلی" value={data.profile.secondaryGoal || 'ثبت نشده'} />
                 <ProfileItem label="سابقهٔ تمرین" value={data.profile.trainingExperience || 'ثبت نشده'} />
                 <ProfileItem label="روزهای تمرین در هفته" value={data.profile.trainingDays ? faNumber(data.profile.trainingDays) : 'ثبت نشده'} />
@@ -76,7 +76,14 @@ function StudentProfileScreen() {
                 <ProfileItem label="تجهیزات" value={data.profile.equipment || 'ثبت نشده'} />
                 <ProfileItem label="آسیب‌دیدگی یا محدودیت" value={data.profile.injuries || 'ثبت نشده'} wide />
               </div>
-              <p className="student-profile-note"><LinkIcon size={14} /> اطلاعات با حساب مربی شاگرد همگام شده است؛ برای دیدن تغییرات تازه، «تازه‌سازی» را بزنید. این پروفایل جایگزین تشخیص یا توصیهٔ پزشکی نیست.</p>
+              <section className="student-profile-weights" aria-labelledby="student-profile-weights-title">
+                <h2 id="student-profile-weights-title">وزنه‌های کاری ثبت‌شده</h2>
+                <p className="account-muted">این اعداد را شاگرد برای معرفی نقطهٔ شروع وارد کرده است؛ رکورد قطعی یا ست ثبت‌شده نیستند.</p>
+                {Array.isArray(data.profile.workingWeightReferences) && data.profile.workingWeightReferences.length > 0 ? (
+                  <div className="reference-list">{data.profile.workingWeightReferences.map((reference, index) => <div key={index}><strong>{reference.label}</strong><span>{faNumber(reference.weightKg)} کیلوگرم</span>{reference.note && <small>{reference.note}</small>}</div>)}</div>
+                ) : <p className="account-muted">شاگرد هنوز وزنه‌ای ثبت نکرده است.</p>}
+              </section>
+              <p className="student-profile-note"><LinkIcon size={14} /> این آخرین نسخه‌ای است که شاگرد با اشتراک روشن ذخیره کرده است؛ برای بررسی تغییرات تأییدشده، «تازه‌سازی» را بزنید. این پروفایل جایگزین تشخیص یا توصیهٔ پزشکی نیست.</p>
             </>
           ) : !data.shared ? (
             <div className="student-profile-private">

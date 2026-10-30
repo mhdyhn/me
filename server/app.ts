@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
 import { requireMobile } from './phone.ts';
@@ -15,7 +15,7 @@ import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 import { listFormerCoachBiometrics, loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
-import { loadStudentProfile, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
+import { loadStudentProfile, loadStudentProfileForCoach, revokeStudentProfileSharing, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
 import { applyPersonalChange, getPersonalRecord, listPersonalRecords, validateChange } from './personalData.ts';
 
 export interface AppOptions {
@@ -286,8 +286,8 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, url }) => {
         const expected = url.searchParams.get('accountId');
-        if (expected !== null && expected !== String(user!.id)) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
-        return { status: 200, body: { stored: await loadStudentProfile(db, user!.id) } };
+        if (expected !== String(user!.id)) throw new HttpError(409, 'برای امنیت حساب، برنامه را به‌روز و دوباره باز کنید.');
+        return { status: 200, body: { stored: await loadStudentProfile(db, user!.id), sharingVersion: user!.coachAccessVersion } };
       },
     },
 
@@ -297,12 +297,13 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
-        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        if (input.accountId !== user!.id) throw new HttpError(409, 'برای امنیت حساب، برنامه را به‌روز و دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'انتخاب اشتراک پروفایل با مربی الزامی است.');
         if (input.shareWithCoach && (user!.coachId === null || !user!.coachAccess)) throw new HttpError(409, 'دسترسی مربی فعال نیست.');
+        if (input.shareWithCoach && input.sharingVersion !== user!.coachAccessVersion) throw new HttpError(409, 'وضعیت اشتراک تغییر کرده است؛ برنامه را به‌روز و وضعیت دسترسی را دوباره بررسی کنید.');
         const profile = validateStudentProfile(body);
-        const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString(), user!.coachAccessVersion);
-        return { status: 200, body: { stored } };
+        const stored = await saveStudentProfile(db, user!.id, profile, input.shareWithCoach, now().toISOString(), user!.coachAccessVersion, input.profile, user!.authVersion);
+        return { status: 200, body: { stored, sharingVersion: stored.sharingVersion } };
       },
     },
 
@@ -312,11 +313,16 @@ export function createApp(options: AppOptions) {
       auth: ['student'],
       handler: async ({ user, body }) => {
         const input = requireObject(body);
-        if (input.accountId !== undefined && input.accountId !== user!.id) throw new HttpError(409, 'حساب پروفایل تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        if (input.accountId !== user!.id) throw new HttpError(409, 'برای امنیت حساب، برنامه را به‌روز و دوباره باز کنید.');
         if (typeof input.shareWithCoach !== 'boolean') throw new HttpError(400, 'فیلد shareWithCoach باید بولین باشد.');
         if (input.shareWithCoach && (user!.coachId === null || !user!.coachAccess)) throw new HttpError(409, 'دسترسی مربی فعال نیست.');
-        const exists = await setStudentProfileSharing(db, user!.id, input.shareWithCoach, now().toISOString(), user!.coachAccessVersion);
-        return { status: 200, body: { shareWithCoach: input.shareWithCoach && exists } };
+        if (!input.shareWithCoach) {
+          const sharingVersion = await revokeStudentProfileSharing(db, user!.id, user!.authVersion, now().toISOString());
+          return { status: 200, body: { shareWithCoach: false, sharingVersion } };
+        }
+        if (input.sharingVersion !== user!.coachAccessVersion) throw new HttpError(409, 'وضعیت اشتراک تغییر کرده است؛ برنامه را به‌روز و وضعیت دسترسی را دوباره بررسی کنید.');
+        const exists = await setStudentProfileSharing(db, user!.id, true, now().toISOString(), user!.coachAccessVersion, user!.authVersion);
+        return { status: 200, body: { shareWithCoach: exists, sharingVersion: user!.coachAccessVersion } };
       },
     },
 
@@ -325,9 +331,9 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/students\/(\d+)\/profile$/,
       auth: ['coach'],
       handler: async ({ user, params }) => {
-        const student = await ownStudent(user!, Number(params[0]));
-        const stored = await loadStudentProfile(db, student.id);
-        return { status: 200, body: { studentName: student.displayName, profile: stored?.shareWithCoach ? stored.profile : null, updatedAt: stored?.shareWithCoach ? stored.updatedAt : null, shared: stored?.shareWithCoach ?? false } };
+        const result = await loadStudentProfileForCoach(db, Number(params[0]), user!.id);
+        if (!result) throw new HttpError(404, 'شاگرد پیدا نشد.');
+        return { status: 200, body: result };
       },
     },
 
@@ -1203,8 +1209,9 @@ export function createApp(options: AppOptions) {
       auth: ['coach'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        if (student.selfRegistered) throw new HttpError(403, 'حسابی که شاگرد خودش ساخته است توسط مربی حذف نمی‌شود.');
-        await deleteUser(db, student.id);
+        if (!(await deleteUnclaimedStudent(db, student.id, user!.id))) {
+          throw new HttpError(403, 'حساب فعال‌شدهٔ شاگرد را مربی نمی‌تواند حذف کند.');
+        }
         return { status: 200, body: { ok: true } };
       },
     },
@@ -1215,10 +1222,9 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        if (user!.role === 'coach' && student.selfRegistered) throw new HttpError(403, 'رمز حسابی که شاگرد خودش ساخته است توسط مربی تغییر نمی‌کند.');
         const password = generatePassword();
-        if (!(await resetUserPassword(db, student.id, hashPassword(password), encryptSecret(secretKey, password)))) {
-          throw new HttpError(404, 'شاگرد پیدا نشد.');
+        if (!(await resetUserPassword(db, student.id, hashPassword(password), encryptSecret(secretKey, password), user!.role === 'coach' ? user!.id : null))) {
+          throw new HttpError(403, 'رمز حساب فعال‌شدهٔ شاگرد را مربی نمی‌تواند تغییر دهد؛ از پشتیبانی کمک بگیرید.');
         }
         return { status: 200, body: { username: student.username, password } };
       },
@@ -1230,12 +1236,15 @@ export function createApp(options: AppOptions) {
       auth: ['coach', 'admin'],
       handler: async ({ user, params, body }) => {
         const student = await ownStudent(user!, Number(params[0]));
-        if (user!.role === 'coach' && student.selfRegistered) throw new HttpError(403, 'وضعیت حسابی که شاگرد خودش ساخته است توسط مربی تغییر نمی‌کند.');
         const input = requireObject(body);
         if (typeof input.active !== 'boolean') {
           throw new HttpError(400, 'فیلد active باید بولین باشد.');
         }
-        await setUserActive(db, student.id, input.active);
+        if (user!.role === 'coach') {
+          if (!(await setUnclaimedStudentActive(db, student.id, user!.id, input.active))) throw new HttpError(403, 'وضعیت حساب فعال‌شدهٔ شاگرد را مربی نمی‌تواند تغییر دهد.');
+        } else {
+          await setUserActive(db, student.id, input.active);
+        }
         return { status: 200, body: { ok: true, isActive: input.active, id: student.id } };
       },
     },
@@ -1314,13 +1323,17 @@ export function createApp(options: AppOptions) {
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       const nutritionWrite = request.method === 'PUT' && (path === '/api/me/diary' || /^\/api\/students\/\d+\/nutrition$/.test(path));
-      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' ? SESSIONS_BODY_BYTES : nutritionWrite ? NUTRITION_BODY_BYTES : undefined;
+      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' || path === '/api/me/profile' ? SESSIONS_BODY_BYTES : nutritionWrite ? NUTRITION_BODY_BYTES : undefined;
       const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);
     } catch (error) {
       if (error instanceof HttpError) {
-        send(response, error.status, { error: error.message });
+        if (error.status === 413) {
+          // Do not keep a connection with an oversized, possibly still streaming body.
+          request.resume();
+          send(response, 413, { error: error.message }, { Connection: 'close' });
+        } else send(response, error.status, { error: error.message });
       } else {
         console.error(error);
         send(response, 500, { error: 'خطای داخلی سرور.' });

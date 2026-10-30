@@ -91,15 +91,18 @@ export async function changeOwnPassword(
 }
 
 /** A reset invalidates every existing session, including concurrent logins using old credentials. */
-export async function resetUserPassword(db: Db, userId: number, newHash: string, passwordEnc: string): Promise<boolean> {
+export async function resetUserPassword(db: Db, userId: number, newHash: string, passwordEnc: string, coachId: number | null = null): Promise<boolean> {
   const rows = await db.query<{ id: number }>(
     `WITH updated AS (
-       UPDATE users SET password_hash = $2, must_change_password = 1, password_enc = $3, auth_version = auth_version + 1
-       WHERE id = $1 RETURNING id
+       UPDATE users SET password_hash = $2, must_change_password = 1,
+         password_enc = CASE WHEN role = 'student' AND (self_registered = 1 OR must_change_password = 0 OR password_enc IS NULL) THEN NULL ELSE $3 END,
+         auth_version = auth_version + 1
+       WHERE id = $1 AND ($4::integer IS NULL OR (role = 'student' AND self_registered = 0 AND coach_id = $4
+         AND coach_access = 1 AND must_change_password = 1 AND password_enc IS NOT NULL)) RETURNING id
      ), revoked AS (
        DELETE FROM sessions WHERE user_id = $1 AND EXISTS (SELECT 1 FROM updated)
      ) SELECT id FROM updated`,
-    [userId, newHash, passwordEnc],
+    [userId, newHash, passwordEnc, coachId],
   );
   return rows.length > 0;
 }

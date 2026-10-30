@@ -1,24 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { adminPersonalProgram } from '../data/adminProgram';
+import { originalProgramCopy } from './programStore';
+import { getExerciseGuide } from './exerciseGuide';
 import { normalizeAdminProgramNames } from './programPersistence';
 
-describe('admin programme name migration', () => {
-  it('updates saved admin exercise labels without changing prescriptions', () => {
-    const savedProgram = structuredClone(adminPersonalProgram);
+describe('legacy exercise-name normalization', () => {
+  it('updates a legacy alias without changing its saved prescription', () => {
+    const savedProgram = originalProgramCopy();
     const firstDay = savedProgram[0]!;
-    const oldExercise = firstDay.exercises[0]!;
-    firstDay.exercises[0] = {
-      ...oldExercise,
-      name: 'پرس بالاسینه دستگاه یا دمبل',
-      prescription: { ...oldExercise.prescription, sets: 5 },
-    };
-
+    firstDay.exercises[0] = { ...firstDay.exercises[0]!, exerciseId: 'admin-pec-deck', name: 'نام قدیمی',
+      prescription: { ...firstDay.exercises[0]!.prescription, sets: 5 } };
     const result = normalizeAdminProgramNames(savedProgram, true);
-    const updatedExercise = result.program[0]!.exercises[0]!;
-
     expect(result.changed).toBe(true);
-    expect(updatedExercise.name).toBe(adminPersonalProgram[0]!.exercises[0]!.name);
-    expect(updatedExercise.prescription.sets).toBe(5);
+    expect(result.program[0]!.exercises[0]!.name).toBe(getExerciseGuide('admin-pec-deck')!.name);
+    expect(result.program[0]!.exercises[0]!.prescription.sets).toBe(5);
     expect(result.program[0]!.exercises.slice(1)).toEqual(firstDay.exercises.slice(1));
   });
 });
