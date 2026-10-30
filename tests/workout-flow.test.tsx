@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -28,6 +29,15 @@ beforeEach(async () => {
 afterEach(() => cleanup());
 
 describe('workout flow', () => {
+  it('shows a storage warning rather than creating a session or waiting forever after a read failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(db.sessions, 'toArray').mockImplementationOnce((() => Dexie.Promise.reject(new Error('read failed'))) as typeof db.sessions.toArray);
+    renderWorkout();
+    expect(await screen.findByText('وضعیت تمرین در دستگاه نامشخص است')).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'وزنه به کیلوگرم' })).not.toBeInTheDocument();
+    expect(await db.sessions.count()).toBe(0);
+    vi.restoreAllMocks();
+  });
   it('logs weight, reps and RIR, then starts a controllable rest timer', async () => {
     const user = userEvent.setup();
     renderWorkout();
@@ -131,9 +141,10 @@ describe('workout flow', () => {
 
     await user.click(screen.getByRole('button', { name: /اتمام و ثبت جلسهٔ قبلی و شروع این روز/ }));
 
-    // Verify previous session is marked completed in db
-    const prevInDb = await db.sessions.get('active-day-1');
-    expect(prevInDb?.status).toBe('completed');
+    expect(await screen.findByRole('heading', { name: 'زیربغل سیمکش مچ برعکس' })).toBeInTheDocument();
+    const stored = await db.sessions.toArray();
+    expect(stored.find((item) => item.id === 'active-day-1')?.status).toBe('completed');
+    expect(stored.find((item) => item.templateId === 'day-2')?.status).toBe('active');
   });
 
   it('resolves conflict by discarding previous active session and starting new workout day', async () => {
@@ -156,10 +167,11 @@ describe('workout flow', () => {
     renderWorkout('/workout/day-2');
 
     expect(await screen.findByText('جلسهٔ دیگری در حال انجام است')).toBeInTheDocument();
-    const cancelBtn = screen.getByRole('button', { name: /لغو جلسهٔ قبلی و شروع این روز/ });
+    const cancelBtn = screen.getByRole('button', { name: /حذف جلسهٔ قبلی و شروع این روز/ });
     await user.click(cancelBtn);
 
-    const prevInDb = await db.sessions.get('active-to-cancel');
-    expect(prevInDb).toBeUndefined();
+    expect(await screen.findByRole('heading', { name: 'زیربغل سیمکش مچ برعکس' })).toBeInTheDocument();
+    expect(await db.sessions.get('active-to-cancel')).toBeUndefined();
+    expect((await db.sessions.toArray()).find((item) => item.templateId === 'day-2')?.status).toBe('active');
   });
 });

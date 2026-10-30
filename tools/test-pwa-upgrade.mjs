@@ -174,12 +174,13 @@ try {
     await activateThroughOrdinaryReload(page);
     await checkRole(page, user);
     await page.goto(base + '/settings', { waitUntil: 'load' });
-    const revision = page.getByText('شناسهٔ نسخهٔ رابط در این دستگاه:', { exact: false });
-    await revision.waitFor();
-    if (process.env.PWA_EXPECT_REVISION) assert.equal(await revision.locator('code').textContent(), process.env.PWA_EXPECT_REVISION);
+    const signature = page.locator('.settings-signature');
+    await signature.waitFor();
+    assert.match(await signature.innerText(), /با مهرِ مهدی/);
+    if (process.env.PWA_EXPECT_REVISION) assert.equal(await signature.getAttribute('data-web-revision'), process.env.PWA_EXPECT_REVISION);
     await checkSentinels(page);
     await context.close();
-    console.log(`PASS: natural legacy upgrade, ${user.username}; role home, device version and localStorage/IndexedDB preserved`);
+    console.log(`PASS: natural legacy upgrade, ${user.username}; role home, signature and localStorage/IndexedDB preserved`);
   }
 
   // A failed worker download keeps the old page and its data; the next ordinary reload can retry.

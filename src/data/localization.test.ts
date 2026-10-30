@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultProfile, localizeKnownProfileCopy } from './profile';
+import { blankProfile, localizeKnownProfileCopy } from './profile';
 import { exercises } from './exercises';
 import { categoryLabels, difficultyLabels } from '../lib/labels';
 import { workoutTemplates } from './workouts';
@@ -56,28 +56,17 @@ describe('Persian training content', () => {
     expect(workoutTemplates.flatMap((workout) => workout.exercises).every((item) => hasPersian(item.name))).toBe(true);
   });
 
-  it('localizes known legacy defaults but preserves personal profile text', () => {
-    const legacy = {
-      ...defaultProfile,
-      sex: 'Male',
-      primaryGoal: 'Muscle gain · hypertrophy · strength',
-      secondaryGoal: 'Balanced development',
-      trainingExperience: 'About 1 year total, with interruptions',
-      dailyActivity: 'Mostly sedentary desk work',
-      sleepHours: '7–8 hours',
-      injuries: 'No current injuries or known limitations reported',
-      equipment: 'Full gym: barbells, dumbbells, cables, machines, rack, benches and leg equipment',
-      workingWeightReferences: [
-        { label: 'Bench press', weightKg: 20, note: 'Working-weight reference; sets and reps not confirmed.' },
-        ...defaultProfile.workingWeightReferences.slice(1),
-      ],
+  it('localizes generic legacy gender labels without replacing personal text or references', () => {
+    const saved = {
+      ...blankProfile,
+      sex: 'Female',
+      primaryGoal: 'هدف شخصی کاربر',
+      workingWeightReferences: [{ label: 'حرکت آزمایشی', weightKg: 12, note: 'یادداشت شخصی' }],
     };
-    const localized = localizeKnownProfileCopy(legacy);
-    expect(localized.sex).toBe('مرد');
-    expect(localized.primaryGoal).toBe(defaultProfile.primaryGoal);
-    expect(localized.workingWeightReferences[0]).toEqual(defaultProfile.workingWeightReferences[0]);
-
-    const personal = localizeKnownProfileCopy({ ...defaultProfile, primaryGoal: 'ماراتن و قدرت شخصی' });
-    expect(personal.primaryGoal).toBe('ماراتن و قدرت شخصی');
+    const localized = localizeKnownProfileCopy(saved);
+    expect(localized.sex).toBe('زن');
+    expect(localized.primaryGoal).toBe(saved.primaryGoal);
+    expect(localized.workingWeightReferences).toEqual(saved.workingWeightReferences);
+    expect(localizeKnownProfileCopy({ ...saved, sex: '' }).sex).toBe('');
   });
 });

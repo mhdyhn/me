@@ -86,9 +86,9 @@ export function Progress() {
   const metricUnit = selectedMetric === 'weight' ? ' کیلوگرم' : selectedMetric === 'reps' ? ' تکرار' : ' کیلوگرم·تکرار';
   const metricDescription = selectedMetric === 'weight' ? 'سنگین‌ترین ست کاری ثبت‌شده در هر جلسهٔ کامل‌شده · کیلوگرم' : selectedMetric === 'reps' ? 'مجموع تکرارهای ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده' : 'وزنه × تکرار ثبت‌شده برای این حرکت در هر جلسهٔ کامل‌شده';
   const metricName = selectedMetric === 'weight' ? 'وزنهٔ کاری' : selectedMetric === 'reps' ? 'مجموع تکرارها' : 'حجم تمرین';
-  const latestWeight = bodyweights[0]?.weightKg ?? profile.weightKg;
+  const latestWeight = bodyweights[0]?.weightKg ?? (profile.weightKg >= 30 ? profile.weightKg : null);
   const firstLoggedWeight = bodyweights.length > 1 ? bodyweights.at(-1)?.weightKg ?? null : null;
-  const change = firstLoggedWeight === null || firstLoggedWeight === undefined ? null : latestWeight - firstLoggedWeight;
+  const change = firstLoggedWeight === null || firstLoggedWeight === undefined || latestWeight === null ? null : latestWeight - firstLoggedWeight;
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const recentWeights = bodyweights.filter((entry) => new Date(`${entry.date}T00:00:00`).getTime() >= new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate()).getTime());
@@ -180,7 +180,7 @@ export function Progress() {
 
       <div className="progress-summary-cards">
         <div className="progress-summary-card panel-card"><span className="summary-card-icon"><CalendarDays size={17} /></span><span className="eyebrow">جلسه‌های ثبت‌شده</span><strong>{faNumber(completedSessions.length)}</strong><small>جلسهٔ کامل‌شده</small></div>
-        <div className="progress-summary-card panel-card"><span className="summary-card-icon"><Weight size={17} /></span><span className="eyebrow">وزن فعلی بدن</span><strong>{kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : 'وزن پایهٔ پروفایل · هنوز ثبت نشده'}</small></div>
+        <div className="progress-summary-card panel-card"><span className="summary-card-icon"><Weight size={17} /></span><span className="eyebrow">وزن فعلی بدن</span><strong>{latestWeight === null ? '—' : kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : latestWeight === null ? 'هنوز ثبت نشده' : 'وزن پایهٔ پروفایل'}</small></div>
         <div className="progress-summary-card panel-card"><span className="summary-card-icon"><Activity size={17} /></span><span className="eyebrow">تغییر وزن</span><strong>{change === null ? '—' : `${change > 0 ? '+' : ''}${kg(change)}`}</strong><small>{change === null ? 'دست‌کم دو بار وزن را ثبت کن' : 'از اولین وزن‌کشی ثبت‌شده'}</small></div>
       </div>
 
@@ -219,7 +219,7 @@ export function Progress() {
       <section id="bodyweight" className="bodyweight-progress-grid">
         <div className="panel-card bodyweight-trend-card">
           <div className="card-topline"><div><span className="eyebrow">روند وزن بدن</span><h2>پیوسته باش، نه افراطی.</h2></div><Weight size={18} className="icon-accent" /></div>
-          <div className="bodyweight-metrics"><div><span>فعلی</span><strong>{kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : 'وزن پایهٔ پروفایل'}</small></div><div><span>آغازین</span><strong>{firstLoggedWeight === null ? '—' : kg(firstLoggedWeight)}</strong><small>{firstLoggedWeight === null ? 'به ۲ ثبت وزن نیاز است' : 'اولین ثبت'}</small></div><div><span>میانگین ۷ روز</span><strong>{weeklyAverage === null ? '—' : kg(weeklyAverage)}</strong><small>{recentWeights.length ? `${faNumber(recentWeights.length)} بار ثبت` : 'ثبت تازه‌ای نیست'}</small></div></div>
+          <div className="bodyweight-metrics"><div><span>فعلی</span><strong>{latestWeight === null ? '—' : kg(latestWeight)}</strong><small>{bodyweights.length ? 'آخرین ثبت' : latestWeight === null ? 'هنوز ثبت نشده' : 'وزن پایهٔ پروفایل'}</small></div><div><span>آغازین</span><strong>{firstLoggedWeight === null ? '—' : kg(firstLoggedWeight)}</strong><small>{firstLoggedWeight === null ? 'به ۲ ثبت وزن نیاز است' : 'اولین ثبت'}</small></div><div><span>میانگین ۷ روز</span><strong>{weeklyAverage === null ? '—' : kg(weeklyAverage)}</strong><small>{recentWeights.length ? `${faNumber(recentWeights.length)} بار ثبت` : 'ثبت تازه‌ای نیست'}</small></div></div>
           <ProgressChart points={weightPoints} unit=" کیلوگرم" label="وزن بدن" color="var(--blue)" />
           <div className="weight-log-list">
             {bodyweights.slice(0, visibleWeights).map((entry) => (

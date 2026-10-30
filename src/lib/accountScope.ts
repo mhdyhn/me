@@ -1,7 +1,7 @@
 /**
  * Personal data (sessions, body weight, nutrition, profile, programme) lives in the browser.
  * Scopes avoid automatically showing another account's records; they are not a security boundary.
- * Each signed-in account uses its own scope. Legacy owner data needs explicit import.
+ * Each signed-in account uses its own scope. Legacy data is not imported automatically.
  */
 export const LEGACY_DB_NAME = 'meety-personal-coach';
 export const SCOPE_KEY = 'meety.account-scope';

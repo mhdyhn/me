@@ -23,7 +23,7 @@ const timerLabel = (total: number) => faDigits(`${String(Math.floor(Math.max(0, 
 export function Workout() {
   const { templateId = '' } = useParams();
   const navigate = useNavigate();
-  const { sessions, loading, activeSession, startWorkout, saveSession, completeActiveSession, deleteSession } = useGym();
+  const { sessions, loading, refreshing, storageWarning, activeSession, startWorkout, saveSession, completeActiveSession, deleteSession } = useGym();
   const sync = usePersonalSyncState();
   const activeSessions = sessions.filter((item) => item.status === 'active');
   const initialSyncPending = !isOfflineBuild && import.meta.env.MODE !== 'test' && !sync.lastSyncAt && (sync.phase === 'idle' || sync.phase === 'syncing');
@@ -48,6 +48,7 @@ export function Workout() {
   const [timerBusy, setTimerBusy] = useState(false);
   const [formError, setFormError] = useState('');
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
+  const leavingRef = useRef(false);
   const [previewFrame, setPreviewFrame] = useState<FigureState>('start');
 
   useEffect(() => {
@@ -59,15 +60,16 @@ export function Workout() {
 
   useEffect(() => {
     // Completing a session clears activeSession. Do not immediately create a fresh one while the summary is open.
-    if (!template || loading || summary || initialSyncPending || initialSyncFailed || sessionSyncConflict || activeSessions.length > 1) return;
+    if (leavingRef.current || loading || refreshing || summary || initialSyncPending || initialSyncFailed || sessionSyncConflict || activeSessions.length > 1 || (storageWarning && !activeSession && !sessionId)) return;
     if (activeSession) {
+      // Remember even legacy sessions without an available template before they are closed.
       setSessionId(activeSession.id);
       return;
     }
     // Do not recreate a session that another device just deleted or completed.
-    if (sessionId) return;
+    if (!template || sessionId) return;
     void startWorkout(template.id).then((started) => { if (started) setSessionId(started.id); });
-  }, [template, loading, activeSession?.id, activeSessions.length, initialSyncPending, initialSyncFailed, sessionSyncConflict, startWorkout, summary, sessionId]);
+  }, [template, loading, refreshing, storageWarning, activeSession?.id, activeSessions.length, initialSyncPending, initialSyncFailed, sessionSyncConflict, startWorkout, summary, sessionId]);
 
   const session = summary ? sessions.find((item) => item.id === summary.id) ?? summary : (sessionId ? sessions.find((item) => item.id === sessionId) ?? null : activeSession);
   const notes = useGuardedDraft(session?.notes ?? '');
@@ -143,6 +145,7 @@ export function Workout() {
   if (initialSyncPending) return <div className="workout-loading"><span className="loader-dot" /><p>در حال بررسی تمرین‌های دستگاه‌های دیگر…</p></div>;
   if (initialSyncFailed) return <div className="page-stack"><EmptyState title="بررسی تمرین‌های سرور انجام نشد" detail="ممکن است تمرین فعالی روی دستگاه دیگر باشد. اطلاعات این دستگاه دست‌نخورده مانده‌اند؛ مشکل همگام‌سازی را در تنظیمات بررسی کن." action={<Link to="/settings" className="button button--secondary">بررسی همگام‌سازی</Link>} /></div>;
   if (sessionSyncConflict) return <div className="page-stack"><EmptyState title="ابتدا تعارض تمرین را بررسی کن" detail="نسخهٔ تمرین روی این دستگاه و سرور متفاوت است. برای جلوگیری از حذف یا جایگزینی ناخواسته، پیش از ادامه نسخه‌ها را در تنظیمات بررسی کن." action={<Link to="/settings" className="button button--secondary">بررسی همگام‌سازی</Link>} /></div>;
+  if (storageWarning && !loading && !activeSession && !sessionId) return <div className="page-stack"><EmptyState title="وضعیت تمرین در دستگاه نامشخص است" detail="خواندن یا ذخیره‌سازی اطلاعات دستگاه تأیید نشد؛ برای جلوگیری از ایجاد جلسهٔ ناخواسته، وضعیت حافظه را بررسی کن." action={<Link to="/settings" className="button button--secondary">بررسی تنظیمات</Link>} /></div>;
   if (activeSessions.length > 1) return <div className="page-stack">
     <EmptyState title="چند جلسهٔ فعال پیدا شد" detail="ممکن است در دستگاه‌های مختلف تمرین شروع شده باشد. برای ادامه، جلسه‌های اضافی را با ست‌های ثبت‌شده ببند؛ هیچ ستی حذف نمی‌شود." />
     {formError && <p className="form-error" role="alert">{formError}</p>}
@@ -167,9 +170,13 @@ export function Workout() {
       {formError && <p className="form-error" role="alert">{formError}</p>}
       <button type="button" className="button button--primary" onClick={async () => {
         const confirmed = await confirmModal({ title: 'بستن جلسه با ست‌های ثبت‌شده', message: 'جلسه با همین ست‌های موجود ثبت می‌شود. حرکت‌ها یا ست‌های باقیمانده تکمیل‌شده محسوب نمی‌شوند. ادامه می‌دهی؟', confirmText: 'ثبت و بستن جلسه', cancelText: 'انصراف' });
-        if (!confirmed) return;
-        try { if (await completeActiveSession(activeSession.id)) navigate('/progress'); else setFormError('بستن جلسه انجام نشد.'); }
-        catch (error) { setFormError(error instanceof Error ? error.message : 'بستن جلسه انجام نشد.'); }
+        if (!confirmed || leavingRef.current) return;
+        leavingRef.current = true;
+        setSessionId(activeSession.id);
+        try {
+          if (await completeActiveSession(activeSession.id)) navigate('/progress');
+          else { leavingRef.current = false; setFormError('بستن جلسه انجام نشد.'); }
+        } catch (error) { leavingRef.current = false; setFormError(error instanceof Error ? error.message : 'بستن جلسه انجام نشد.'); }
       }}>ثبت و بستن جلسه با ست‌های موجود</button>
     </div>;
     return <EmptyState title="جلسه پیدا نشد" detail="این جلسه در برنامهٔ تمرینی فعلی نیست." action={<Link to="/program" className="button button--secondary">بازگشت به برنامه</Link>} />;
@@ -192,7 +199,7 @@ export function Workout() {
         <h2>تمرین روز قبل هنوز پایان نیافته است.</h2>
         {formError && <p className="form-error" role="alert">{formError}</p>}
         <p>
-          جلسهٔ <strong>{prevWorkoutName}</strong> همچنان باز است. شما می‌توانید این جلسهٔ جدید را آغاز کنید، جلسهٔ قبلی را به اتمام برسانید، یا آن را لغو کنید:
+          جلسهٔ <strong>{prevWorkoutName}</strong> همچنان باز است. شما می‌توانید این جلسهٔ جدید را آغاز کنید، جلسهٔ قبلی را به اتمام برسانید، یا آن را با آگاهی از حذف اطلاعاتش کنار بگذارید:
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
           <button
@@ -212,9 +219,9 @@ export function Workout() {
             className="button button--secondary"
             onClick={async () => {
               if (await confirmModal({
-                title: 'لغو جلسه قبلی',
-                message: `آیا جلسهٔ قبلی (${prevWorkoutName}) لغو شود و تمرین امروز آغاز گردد؟`,
-                confirmText: 'لغو جلسه و شروع',
+                title: 'حذف جلسهٔ قبلی',
+                message: `جلسهٔ قبلی (${prevWorkoutName}) و تمام ست‌ها و یادداشت‌های آن حذف می‌شوند. سپس تمرین این روز آغاز می‌شود. ادامه می‌دهی؟`,
+                confirmText: 'حذف جلسه و شروع',
                 cancelText: 'انصراف',
                 variant: 'danger',
               })) {
@@ -223,7 +230,7 @@ export function Workout() {
               }
             }}
           >
-            <Trash2 size={16} /> لغو جلسهٔ قبلی و شروع این روز
+            <Trash2 size={16} /> حذف جلسهٔ قبلی و شروع این روز
           </button>
           <Link className="button button--ghost" to={`/workout/${activeSession.templateId}`}>
             ادامهٔ جلسهٔ قبلی ({prevWorkoutName}) <ArrowRight size={16} />
@@ -298,12 +305,15 @@ export function Workout() {
     if (!hasAnySets) {
       if (await confirmModal({
         title: 'خروج بدون ثبت ست',
-        message: 'هنوز هیچ ستی در این جلسه ثبت نکرده‌اید. مایلید بدون ثبت تمرین خارج شوید؟',
-        confirmText: 'خروج از تمرین',
+        message: 'هنوز هیچ ستی در این جلسه ثبت نشده است. با خروج، جلسهٔ خالی و یادداشت‌های آن حذف می‌شوند.',
+        confirmText: 'حذف جلسه و خروج',
         cancelText: 'ادامه تمرین',
         variant: 'warning',
       })) {
-        navigate('/');
+        try {
+          if (!await deleteSession(session.id, session)) { setFormError('حذف جلسه انجام نشد.'); return; }
+          navigate('/');
+        } catch (error) { setFormError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); }
       }
       return;
     }
@@ -334,15 +344,14 @@ export function Workout() {
     if (!hasAnySets) {
       const discard = await confirmModal({
         title: 'لغو جلسه تمرین',
-        message: 'هنوز هیچ ستی برای این جلسه ثبت نشده است.\n\n• برای لغو و حذف این جلسه «لغو و حذف» را بزنید.\n• برای ذخیره پیش‌نویس بدون تغییر «انصراف» را بزنید.',
+        message: 'هنوز هیچ ستی برای این جلسه ثبت نشده است. با حذف جلسه، یادداشت‌های آن هم حذف می‌شوند. برای نگه‌داشتن جلسه و پیش‌نویس در همین صفحه بمان.',
         confirmText: 'لغو و حذف جلسه',
-        cancelText: 'انصراف و حفظ پیش‌نویس',
+        cancelText: 'ماندن در جلسه',
         variant: 'danger',
       });
-      if (discard) {
-        try { if (!await deleteSession(session.id, session)) { setFormError('حذف جلسه انجام نشد.'); return; } }
-        catch (error) { setFormError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); return; }
-      }
+      if (!discard) return;
+      try { if (!await deleteSession(session.id, session)) { setFormError('حذف جلسه انجام نشد.'); return; } }
+      catch (error) { setFormError(error instanceof Error ? error.message : 'حذف جلسه انجام نشد.'); return; }
       navigate('/');
       return;
     }
@@ -421,7 +430,6 @@ export function Workout() {
 
   const skipRest = () => updateTimer(undefined);
   const progressPercent = plannedSetCount ? Math.round((loggedSetCount / plannedSetCount) * 100) : 0;
-  const suggestedReference = exercise?.referenceWeightKg;
 
   return (
     <div className="workout-mode">
@@ -490,7 +498,6 @@ export function Workout() {
             <div className="set-card-top"><div><span className="eyebrow">ست فعلی</span><div className="set-counter"><strong>{faDigits(String(setNumber).padStart(2, '0'))}</strong><span>/ {faDigits(String(prescription.sets).padStart(2, '0'))}</span></div></div><div className="target-chips"><span>{faNumber(prescription.minReps)}–{faNumber(prescription.maxReps)} تکرار</span><span>{faDigits(prescription.targetRirLabel)} تکرار در ذخیره</span></div></div>
             <div className="set-target-note"><Info size={15} /><span>{loggedSet ? 'این ست ثبت شده است. پیش از رفتن به مرحلهٔ بعد، زمان استراحت را شروع کن.' : `برای ${faNumber(prescription.minReps)} تا ${faNumber(prescription.maxReps)} تکرار کنترل‌شده تلاش کن و حدود ${faDigits(prescription.targetRirLabel)} تکرار باکیفیت در ذخیره نگه دار.`}</span></div>
             {previous && <div className="last-time-card"><span className="eyebrow">دفعهٔ قبل · {formatDate(previous.session.startedAt, { month: 'short', day: 'numeric' })}</span><div>{previous.sets.map((set) => <span key={set.setNumber}>{kg(set.weightKg)} × {faNumber(set.reps)}<small> · {faNumber(set.rir)} تکرار در ذخیره</small></span>)}</div></div>}
-            {!previous && suggestedReference !== undefined && <div className="reference-hint"><Info size={14} /><span>وزنهٔ تقریبی پروفایل: حدود {kg(suggestedReference)} · این مقدار تأیید نشده و فقط برای شناخت وزنهٔ کاری است؛ پیش از ثبت بررسی‌اش کن. این عدد نه ست قبلی است و نه رکورد یک‌تکرار بیشینه.</span></div>}
 
             {setFormConflict && <DraftConflictNotice latest={session} discard={() => {
               clearSetEdit();

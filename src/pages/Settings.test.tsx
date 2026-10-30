@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { UserProfile } from '../types';
 
 const mocks = vi.hoisted(() => ({
-  api: vi.fn(), saveProfile: vi.fn(), loading: false,
-  profile: { age: 28, sex: 'مرد', heightCm: 180, weightKg: 80, primaryGoal: 'قدرت', secondaryGoal: '', trainingDays: 4, sessionMinutes: 60, trainingExperience: 'مبتدی', sleepHours: '۷ ساعت', dailyActivity: 'متوسط', stressLevel: 3, injuries: '', workingWeightReferences: [] },
+  api: vi.fn(), saveProfile: vi.fn(), loading: false, user: { id: 12, role: 'student', coachId: 4 } as { id: number; role: string; coachId: number | null },
+  profile: { age: 28, sex: 'مرد', heightCm: 180, weightKg: 80, primaryGoal: 'قدرت', secondaryGoal: '', trainingDays: 4, sessionMinutes: 60, trainingExperience: 'مبتدی', sleepHours: '۷ ساعت', dailyActivity: 'متوسط', stressLevel: 3, injuries: '', equipment: '', workingWeightReferences: [] } as UserProfile,
   sessions: [] as unknown[], bodyweights: [] as unknown[], nutritionDays: [] as unknown[], nutritionGoals: {},
 }));
 vi.mock('../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
@@ -13,24 +14,73 @@ vi.mock('../context/GymProvider', () => ({
     sessions: mocks.sessions, bodyweights: mocks.bodyweights, nutritionDays: mocks.nutritionDays, nutritionGoals: mocks.nutritionGoals, saveProfile: mocks.saveProfile,
   }),
 }));
-vi.mock('../context/SessionContext', () => ({ useSession: () => ({ user: { id: 12, role: 'student' } }) }));
+vi.mock('../context/SessionContext', () => ({ useSession: () => ({ user: mocks.user }) }));
 
 import { Settings } from './Settings';
+import { blankProfile } from '../data/profile';
+import { sampleProfile } from '../../tests/fixtures/profile';
 
 describe('settings profile sharing status', () => {
   beforeEach(() => {
     mocks.api.mockReset();
     mocks.saveProfile.mockReset();
     mocks.loading = false;
-    mocks.profile = { ...mocks.profile, age: 28 };
+    mocks.user = { id: 12, role: 'student', coachId: 4 };
+    mocks.profile = structuredClone(sampleProfile);
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-  it('shows the device interface version, or an honest unknown value outside a build', async () => {
+  it('shows the designer signature instead of a visible device revision', async () => {
     mocks.api.mockResolvedValue({ stored: null });
     render(<Settings />);
-    expect(screen.getByText('شناسهٔ نسخهٔ رابط در این دستگاه:', { exact: false })).toHaveTextContent('نامشخص');
+    expect(screen.getByText('طراحی رابط و تجربهٔ کاربری')).toBeInTheDocument();
+    expect(screen.getByText(/با مهرِ مهدی/)).toBeInTheDocument();
+    expect(screen.queryByText(/شناسهٔ نسخهٔ رابط/)).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+  });
+
+
+  it.each(['student', 'coach', 'admin'])('starts %s with blank fields and no legacy import button', async (role) => {
+    mocks.user = { id: 12, role, coachId: role === 'student' ? 4 : null } as typeof mocks.user;
+    mocks.profile = { ...blankProfile } as typeof mocks.profile;
+    mocks.api.mockResolvedValue({ stored: null });
+    render(<Settings />);
+    expect(screen.getByLabelText('سن')).toHaveValue(null);
+    expect(screen.getByLabelText(/قد/)).toHaveValue(null);
+    expect(screen.getByLabelText(/وزن پروفایل/)).toHaveValue(null);
+    expect(screen.getByLabelText('جنسیت')).toHaveValue('');
+    expect(screen.getByLabelText('هدف اصلی')).toHaveValue('');
+    expect(screen.getByLabelText('روزهای تمرین در هفته')).toHaveValue(null);
+    expect(screen.getByLabelText(/حداکثر زمان جلسه/)).toHaveValue(null);
+    expect(screen.queryByText('وزنه‌های کاری گزارش‌شده')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /انتقال.*قدیمی/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/شناسهٔ نسخهٔ رابط/)).not.toBeInTheDocument();
+    if (role === 'student') await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+  });
+
+  it('keeps information actually saved in the account visible and editable', async () => {
+    mocks.profile = { ...blankProfile, age: 37, sex: 'زن', heightCm: 165, weightKg: 70, primaryGoal: 'هدف خودم' } as typeof mocks.profile;
+    mocks.api.mockResolvedValue({ stored: null });
+    render(<Settings />);
+    expect(screen.getByLabelText('سن')).toHaveValue(37);
+    expect(screen.getByLabelText('جنسیت')).toHaveValue('زن');
+    expect(screen.getByLabelText('هدف اصلی')).toHaveValue('هدف خودم');
+    expect(screen.queryByRole('button', { name: /انتقال.*قدیمی/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+  });
+
+  it('can share a filled profile without inventing optional days or session duration', async () => {
+    mocks.profile = { ...blankProfile, age: 37, heightCm: 165, weightKg: 70, primaryGoal: 'هدف خودم' } as typeof mocks.profile;
+    mocks.api.mockResolvedValueOnce({ stored: null }).mockResolvedValueOnce({ stored: { shareWithCoach: true } });
+    mocks.saveProfile.mockResolvedValue(true);
+    render(<Settings />);
+    const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
+    await waitFor(() => expect(checkbox).toBeEnabled());
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('PUT', '/me/profile', expect.objectContaining({
+      shareWithCoach: true, profile: expect.objectContaining({ trainingDays: 0, sessionMinutes: 0 }),
+    })));
   });
 
   it('keeps sharing controls disabled after a load error and retries successfully', async () => {

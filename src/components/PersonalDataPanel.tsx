@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { confirmModal } from './ConfirmModal';
 import { usePersonalSyncState } from './PersonalSync';
-import { importLegacyOwnerData, personalKindLabel } from '../lib/legacyImport';
+import { personalKindLabel } from '../lib/personalKindLabel';
 import { resolvePersonalConflict, schedulePersonalSync, type PersonalConflict } from '../lib/personalSync';
 import { useSession } from '../context/SessionContext';
-import { faNumber } from '../lib/format';
 
 export function PersonalDataPanel() {
   const { user } = useSession();
@@ -22,17 +21,6 @@ export function PersonalDataPanel() {
     finally { setBusy(false); }
   }
 
-  async function importLegacy() {
-    const includesOwnerDatabase = user?.role === 'admin';
-    const description = includesOwnerDatabase ? 'داده‌های قدیمی مدیر و سلامت این مرورگر و مقادیر پیش‌فرض بسته‌بندی‌شدهٔ مدیر' : 'داده‌های سلامت قدیمی این مرورگر (این داده‌ها پیش‌تر بین حساب‌های همین مرورگر مشترک بودند)';
-    if (!await confirmModal({ title: 'انتقال دادهٔ قدیمی این دستگاه', message: `فقط اگر ${description} متعلق به حساب فعلی شماست ادامه دهید. دادهٔ قبلی پاک نمی‌شود؛ موارد موجود رونویسی نمی‌شوند و اختلاف با سرور برای بررسی نمایش داده می‌شود.`, confirmText: 'اطلاعات متعلق به من است؛ انتقال بده', cancelText: 'انصراف', variant: 'primary' })) return;
-    setBusy(true); setMessage('');
-    try {
-      const result = await importLegacyOwnerData(includesOwnerDatabase);
-      setMessage(`${faNumber(result.imported)} مورد وارد شد؛ ${faNumber(result.skipped)} مورد موجود یا نامعتبر بدون رونویسی باقی ماند.`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'انتقال انجام نشد.'); }
-    finally { setBusy(false); }
-  }
 
   return (
     <section className="panel-card personal-sync-panel" aria-labelledby="personal-sync-title">
@@ -54,7 +42,6 @@ export function PersonalDataPanel() {
       ))}
       <div className="personal-sync-actions">
         <button type="button" className="button button--secondary button--small" disabled={busy || sync.phase === 'syncing'} onClick={schedulePersonalSync}>تلاش دوباره</button>
-        <button type="button" className="button button--secondary button--small" disabled={busy} onClick={() => void importLegacy()}>{user.role === 'admin' ? 'انتقال دادهٔ قدیمی این دستگاه' : 'انتقال سلامت قدیمی این دستگاه'}</button>
       </div>
       {message && <p role="status" className="small-text">{message}</p>}
     </section>

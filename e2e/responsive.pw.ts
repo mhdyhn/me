@@ -60,6 +60,7 @@ async function mockAccount(page: Page, user: typeof student | typeof independent
     const path = new URL(request.url()).pathname;
     let json: unknown = {};
     if (path === '/api/me') json = { user };
+    else if (path === '/api/me/profile') json = { stored: null };
     else if (path === '/api/me/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [] };
     else if (path === '/api/me/program' || path === '/api/students/5/program') json = { program: { ...activeProgramme, priceTomans: paid ? 0 : 2_500_000 }, student, isPaid: paid, isTestPurchase: testPurchased, testPurchaseAvailable: testAvailable && !paid && !testPurchased, testPurchaseExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), coachName: coach.displayName };
     else if (path === '/api/students/5/programs/archive') json = { programs: withArchive ? [{ ...programme, id: 'previous-program', title: `برنامهٔ قبلی ${long}` }] : [], nextCursor: null };
@@ -345,6 +346,30 @@ test('a delayed legacy session is not replaced or guessed and can close with its
   const saved = mock.records.find((record) => record.key === 'legacy-active')!.value as { exercises: Array<{ sets: unknown[] }> };
   expect(saved.exercises[0]!.sets).toEqual([loggedSet]);
   expect(mock.records.filter((record) => record.kind === 'session')).toHaveLength(1);
+  await expectNoPageOverflow(page);
+});
+
+test('finishing a previous workout before starting another day does not reuse a completed session', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const mock = await mockAccount(page, student);
+  await page.goto('/workout/assigned-day-1', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('وزنه به کیلوگرم')).toBeVisible();
+  await page.getByLabel('وزنه به کیلوگرم').fill('12');
+  await page.getByRole('button', { name: 'ثبت ست و شروع استراحت' }).click();
+  await expect(page.getByText(/ست ۱ ثبت شد/)).toBeVisible();
+  await page.goto('/workout/assigned-day-2', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('تمرین روز قبل هنوز پایان نیافته است.')).toBeVisible();
+  await page.getByRole('button', { name: /حذف جلسهٔ قبلی و شروع این روز/ }).click();
+  const discardDialog = page.getByRole('dialog', { name: 'حذف جلسهٔ قبلی' });
+  await expect(discardDialog).toContainText('تمام ست‌ها و یادداشت‌های آن حذف می‌شوند');
+  await discardDialog.getByRole('button', { name: 'انصراف' }).click();
+  await page.getByRole('button', { name: /اتمام و ثبت جلسهٔ قبلی و شروع این روز/ }).click();
+  await expect(page.getByLabel('وزنه به کیلوگرم')).toBeVisible();
+  await expect.poll(() => mock.records.filter((record) => record.kind === 'session').length).toBe(2);
+  const saved = mock.records.filter((record) => record.kind === 'session').map((record) => record.value as { status: string; templateId: string; exercises: Array<{ sets: unknown[] }> });
+  expect(saved.find((item) => item.templateId === 'assigned-day-1')).toMatchObject({ status: 'completed' });
+  expect(saved.find((item) => item.templateId === 'assigned-day-1')!.exercises[0]!.sets).toHaveLength(1);
+  expect(saved.find((item) => item.templateId === 'assigned-day-2')).toMatchObject({ status: 'active' });
   await expectNoPageOverflow(page);
 });
 
@@ -815,4 +840,105 @@ test('weekly summary labels keep their own space on a small phone', async ({ pag
   expect(Math.abs(first!.y - second!.y)).toBeLessThan(2);
   expect(third!.y).toBeGreaterThanOrEqual(Math.max(first!.y + first!.height, second!.y + second!.height));
   await expectNoPageOverflow(page);
+});
+
+
+const personalWorkoutDays = [1, 2].map((day) => ({
+  id: `personal-day-${day}`, name: `روز شخصی ${day}`, focus: 'تمرین', dayLabel: `روز ${day}`, durationMinutes: 30, description: '',
+  exercises: [{ exerciseId: 'push-up', name: 'شنا', prescription: { sets: 3, minReps: 8, maxReps: 12, minimumRir: 1, targetRirLabel: '۱', restSeconds: 60, note: '' } }],
+}));
+
+for (const [label, account] of [['admin', admin], ['student', student]] as const) {
+  test(`${label} sees blank settings and the true start, resume and completed states`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mock = await mockAccount(page, account);
+    if (account.role === 'admin') mock.records.push({ kind: 'program', key: 'main', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z', value: personalWorkoutDays });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/settings');
+    await expect(page.getByLabel('سن')).toHaveValue('');
+    await expect(page.getByLabel('جنسیت')).toHaveValue('');
+    await expect(page.getByLabel('هدف اصلی')).toHaveValue('');
+    await expect(page.getByRole('button', { name: /انتقال.*قدیمی/ })).toHaveCount(0);
+    await expect(page.getByText(/شناسهٔ نسخهٔ رابط/)).toHaveCount(0);
+    await expect(page.getByText(/با مهرِ مهدی/)).toBeVisible();
+    await expectNoPageOverflow(page);
+    await page.goto('/nutrition');
+    await expect(page.locator('.nutrition-goals-card').getByRole('spinbutton', { name: /پروتئین/ })).toHaveValue('');
+    await expect(page.getByText(/برای دیدن بازهٔ تقریبی پروتئین/)).toBeVisible();
+    await expectNoPageOverflow(page);
+
+    await page.goto('/');
+    const start = page.getByRole('button', { name: 'شروع تمرین', exact: true });
+    await expect(start).toBeVisible({ timeout: 15000 });
+    await start.click();
+    await expect(page.getByLabel('وزنه به کیلوگرم')).toBeVisible();
+    await expect.poll(() => mock.records.filter((record) => record.kind === 'session').length).toBe(1);
+
+    // Merely opening the session and navigating away is not a logged workout.
+    await page.goto('/');
+    await expect(start).toBeVisible();
+    await expect(page.getByText(/هنوز ستی ثبت نشده/)).toBeVisible();
+    await start.click();
+    await page.getByLabel('وزنه به کیلوگرم').fill('10');
+    await page.getByRole('button', { name: 'ثبت ست و شروع استراحت' }).click();
+    await expect(page.getByText(/ست ۱ ثبت شد/)).toBeVisible();
+    await page.locator('.workout-mobile-footer').getByRole('button', { name: 'خروج', exact: true }).click();
+    await page.getByRole('dialog', { name: 'خروج از تمرین' }).getByRole('button', { name: 'ذخیره موقت و خروج' }).click();
+    const resume = page.getByRole('button', { name: 'ادامهٔ تمرین', exact: true });
+    await expect(resume).toBeVisible();
+    await resume.click();
+    await expect(page.getByText(/ست ۱ ثبت شد/)).toBeVisible();
+    await page.locator('.workout-mobile-footer').getByRole('button', { name: 'اتمام جلسه', exact: true }).click();
+    await page.getByRole('dialog', { name: 'اتمام جلسه تمرین' }).getByRole('button', { name: 'ثبت و پایان تمرین' }).click();
+    await expect(page.getByText('تمرین کامل شد', { exact: false })).toBeVisible();
+    await page.getByRole('link', { name: /بازگشت به صفحهٔ اصلی/ }).click();
+    await expect(start).toBeVisible();
+    await expect(resume).toHaveCount(0);
+    await expect.poll(() => {
+      const record = mock.records.find((item) => item.kind === 'session');
+      return (record?.value as { status?: string } | undefined)?.status;
+    }).toBe('completed');
+    await expectNoPageOverflow(page);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('coach starts with blank personal settings and no legacy transfer action', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mockAccount(page, coach);
+  await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('سن')).toHaveValue('');
+  await expect(page.getByLabel('هدف اصلی')).toHaveValue('');
+  await expect(page.getByRole('button', { name: /انتقال.*قدیمی/ })).toHaveCount(0);
+  await expect(page.getByText(/با مهرِ مهدی/)).toBeVisible();
+  await expectNoPageOverflow(page);
+});
+
+test('home waits for a remote completion before deciding whether to resume', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mock = await mockAccount(page, admin);
+  mock.records.push({ kind: 'program', key: 'main', version: 1, deleted: false, updatedAt: '2026-01-01T00:00:00Z', value: personalWorkoutDays });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'شروع تمرین', exact: true }).click();
+  await page.getByLabel('وزنه به کیلوگرم').fill('10');
+  await page.getByRole('button', { name: 'ثبت ست و شروع استراحت' }).click();
+  await expect(page.getByText(/ست ۱ ثبت شد/)).toBeVisible();
+  await expect.poll(() => {
+    const record = mock.records.find((item) => item.kind === 'session');
+    return (record?.value as { exercises?: { sets: unknown[] }[] } | undefined)?.exercises?.[0]?.sets.length;
+  }).toBe(1);
+  const release = mock.pauseSync();
+  const remote = mock.records.find((record) => record.kind === 'session')!;
+  remote.value = { ...(remote.value as Record<string, unknown>), status: 'completed', completedAt: '2026-10-30T09:00:00Z' };
+  remote.version += 1;
+  try {
+    await page.goto('/');
+    await expect(page.getByText('در حال بررسی اطلاعات حساب…')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ادامهٔ تمرین', exact: true })).toHaveCount(0);
+    release();
+    await expect(page.getByRole('heading', { name: 'روز شخصی 2' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'شروع تمرین', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ادامهٔ تمرین', exact: true })).toHaveCount(0);
+  } finally { release(); }
 });

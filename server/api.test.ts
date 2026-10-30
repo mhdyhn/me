@@ -85,6 +85,18 @@ describe('student profile sharing', () => {
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(32);
   });
 
+  it('shares a profile with unspecified training days and duration only with its coach', async () => {
+    const owner = await coachSession();
+    const other = await coachSession();
+    const student = await createStudentAccount(owner.token);
+    const partial = { ...profile, trainingDays: 0, sessionMinutes: 0 };
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: partial, shareWithCoach: true }, student.token)).status).toBe(200);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(partial);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, other.token)).status).toBe(404);
+    expect((await call('PUT', '/api/me/profile', { profile: { ...partial, sessionMinutes: 10 }, shareWithCoach: true }, student.token)).status).toBe(400);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(partial);
+  });
+
   it('refuses profile or sharing requests made with another account after a tab switch', async () => {
     const owner = await coachSession();
     const first = await createStudentAccount(owner.token);
