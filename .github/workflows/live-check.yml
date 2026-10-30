@@ -14,20 +14,24 @@ jobs:
     steps:
       - name: Poll the live deployment
         run: |
-          rm -f /tmp/live.txt
-          for i in $(seq 1 12); do
-            code=$(curl -s --max-time 25 -o /tmp/live.txt -w '%{http_code}' "https://meety-985n.onrender.com/api/release?check=gh-$i")
-            echo "attempt $i http=$code"
-            head -c 400 /tmp/live.txt
-            echo
-            if [ "$code" = "200" ]; then break; fi
-            sleep 15
-          done
           {
-            echo "--- health ---"
-            curl -s --max-time 25 -w '\nhttp=%{http_code}\n' "https://meety-985n.onrender.com/api/health?check=gh-health" || echo "health request failed"
-          } >> /tmp/live.txt 2>&1
+            echo "=== dns ==="
+            getent hosts meety-985n.onrender.com || true
+            for i in $(seq 1 10); do
+              echo "=== attempt $i ($(date -u +%H:%M:%S)) ==="
+              curl -sS --max-time 30 -D /tmp/head.txt -o /tmp/live.txt -w 'http=%{http_code} connect=%{time_connect} start=%{time_starttransfer} total=%{time_total}\n' \
+                "https://meety-985n.onrender.com/api/release?check=gh-$i" || echo "curl exit=$?"
+              echo "--- headers ---"
+              cat /tmp/head.txt 2>/dev/null | head -20
+              echo "--- body (first 600 bytes) ---"
+              head -c 600 /tmp/live.txt 2>/dev/null
+              echo
+              if grep -q '"revision"' /tmp/live.txt 2>/dev/null; then break; fi
+              sleep 20
+            done
+          } >> /tmp/live.txt 2>&1 || true
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: live-deployment-check
           path: /tmp/live.txt
