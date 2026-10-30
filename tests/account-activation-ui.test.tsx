@@ -29,16 +29,17 @@ describe('Coach and Admin Activation UI', () => {
     expect(screen.getByLabelText('رمز فعلی')).toBeInTheDocument();
   });
 
-  it('Coach panel shows student status badge and toggles student active state', async () => {
+  it('Coach panel can toggle a manually created account before handover', async () => {
     const mockStudent = {
       id: 101,
       username: 's101',
       displayName: 'شاگرد آزمایشی',
       role: 'student' as const,
       coachId: 1,
-      mustChangePassword: false,
+      selfRegistered: false,
+      mustChangePassword: true,
       isActive: true,
-      password: null,
+      password: 'temporary-pass',
     };
 
     const apiSpy = vi.spyOn(apiModule, 'api').mockImplementation(async (method, path, body) => {
@@ -79,6 +80,7 @@ describe('Coach and Admin Activation UI', () => {
 
     expect(await screen.findByText('شاگرد آزمایشی')).toBeInTheDocument();
     expect(screen.getByText('فعال', { selector: '.badge--success' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('بیشتر'));
 
     const deactBtn = screen.getByRole('button', { name: /غیرفعال‌سازی/i });
     fireEvent.click(deactBtn);

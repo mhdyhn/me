@@ -22,6 +22,15 @@ describe('profile defaults and stored values', () => {
     expect(await db.preferences.get('nutritionGoals')).toBeUndefined();
   });
 
+  it('displays missing legacy fields as empty without rewriting a saved profile', async () => {
+    const legacy = { age: 32, sex: 'زن', primaryGoal: 'هدف من' };
+    await db.preferences.put({ key: 'profile', value: legacy });
+    render(<GymProvider><ProfileProbe /></GymProvider>);
+    const displayed = JSON.parse((await screen.findByTestId('profile')).textContent!).profile;
+    expect(displayed).toMatchObject({ age: 32, sex: 'زن', primaryGoal: 'هدف من', equipment: '', workingWeightReferences: [] });
+    expect((await db.preferences.get('profile'))?.value).toEqual(legacy);
+  });
+
   it('preserves user-saved data on remount instead of clearing it', async () => {
     await db.preferences.put({ key: 'profile', value: sampleProfile });
     await db.preferences.put({ key: 'nutritionGoals', value: sampleNutritionGoals });

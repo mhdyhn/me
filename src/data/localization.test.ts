@@ -69,4 +69,12 @@ describe('Persian training content', () => {
     expect(localized.workingWeightReferences).toEqual(saved.workingWeightReferences);
     expect(localizeKnownProfileCopy({ ...saved, sex: '' }).sex).toBe('');
   });
+
+  it('fills missing legacy fields for display without modifying the saved object', () => {
+    const legacy = { age: 29, sex: 'Female', primaryGoal: 'هدف محفوظ' } as typeof blankProfile;
+    const displayed = localizeKnownProfileCopy(legacy);
+    expect(displayed).toMatchObject({ age: 29, sex: 'زن', primaryGoal: 'هدف محفوظ', equipment: '', workingWeightReferences: [] });
+    expect(legacy).not.toHaveProperty('workingWeightReferences');
+    expect(legacy).not.toHaveProperty('equipment');
+  });
 });

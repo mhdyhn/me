@@ -166,6 +166,33 @@ export async function setUserActive(db: Db, id: number, isActive: boolean): Prom
   );
 }
 
+/** A coach may administer a manual account only while its temporary password is unclaimed. */
+export async function deleteUnclaimedStudent(db: Db, id: number, coachId: number): Promise<boolean> {
+  try {
+    const rows = await db.query<{ id: number }>(`DELETE FROM users WHERE id = $1 AND role = 'student'
+      AND self_registered = 0 AND coach_id = $2 AND coach_access = 1
+      AND must_change_password = 1 AND password_enc IS NOT NULL RETURNING id`, [id, coachId]);
+    return rows.length > 0;
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') {
+      throw new HttpError(409, 'این حساب به سوابق یا حساب‌های دیگری مرتبط است و حذف نمی‌شود؛ به‌جای حذف، آن را غیرفعال کنید.');
+    }
+    throw error;
+  }
+}
+
+export async function setUnclaimedStudentActive(db: Db, id: number, coachId: number, isActive: boolean): Promise<boolean> {
+  const rows = await db.query<{ id: number }>(`WITH updated AS (
+      UPDATE users SET is_active = $3, pending_approval = CASE WHEN $3 = 1 THEN 0 ELSE pending_approval END,
+        auth_version = auth_version + CASE WHEN $3 = 0 THEN 1 ELSE 0 END
+      WHERE id = $1 AND role = 'student' AND self_registered = 0 AND coach_id = $2 AND coach_access = 1
+        AND must_change_password = 1 AND password_enc IS NOT NULL RETURNING id
+    ), revoked AS (
+      DELETE FROM sessions WHERE user_id = $1 AND $3 = 0 AND EXISTS (SELECT 1 FROM updated)
+    ) SELECT id FROM updated`, [id, coachId, isActive ? 1 : 0]);
+  return rows.length > 0;
+}
+
 /** Coaches with how many students each one has, for the admin's coach list. */
 export interface CoachSummary extends PublicUser {
   studentCount: number;

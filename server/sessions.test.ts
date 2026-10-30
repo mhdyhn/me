@@ -165,11 +165,11 @@ describe('workout summaries', () => {
     expect(after.some((item: { id: string }) => item.id === 'legacy-only')).toBe(true);
   });
 
-  it('removes a deleted student\'s sessions with the account', async () => {
+  it('does not allow a coach to delete sessions by deleting a claimed student', async () => {
     const { coachToken, studentToken, studentId } = await coachAndStudent();
     await call('PUT', '/api/me/sessions', { sessions: [session('s-1')] }, studentToken);
-    expect((await call('DELETE', `/api/students/${studentId}`, undefined, coachToken)).status).toBe(200);
+    expect((await call('DELETE', `/api/students/${studentId}`, undefined, coachToken)).status).toBe(403);
     const rows = await db.query('SELECT COUNT(*) AS n FROM workout_sessions WHERE student_id = $1', [studentId]);
-    expect(Number(rows[0]!.n)).toBe(0);
+    expect(Number(rows[0]!.n)).toBe(1);
   });
 });

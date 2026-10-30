@@ -13,9 +13,10 @@ import { createPaymentRequest, isProgramPaid } from './payments.ts';
 import { applyPersonalChange } from './personalData.ts';
 import { openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
-import { deleteUser, findUserById, insertUser, type Role, type StoredUser } from './users.ts';
+import { deleteUnclaimedStudent, deleteUser, findUserById, insertUser, setUnclaimedStudentActive, type Role, type StoredUser } from './users.ts';
+import { changeOwnPassword, createSession, resetUserPassword } from './auth.ts';
 import { migrateAccountHistory } from './accountHistory.ts';
-import { saveStudentProfile, setStudentProfileSharing } from './studentProfile.ts';
+import { loadStudentProfileForCoach, revokeStudentProfileSharing, saveStudentProfile, setStudentProfileSharing } from './studentProfile.ts';
 
 const url = process.env.TEST_POSTGRES_URL;
 const schema = `meety_invite_${randomBytes(10).toString('hex')}`;
@@ -329,6 +330,96 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     await migrateBiometrics(db!);
     expect((await loadBiometrics(db!, student.id, b.id)).limitations).toBe('');
     expect((await loadBiometrics(db!, student.id, a.id)).limitations).toBe('خصوصی');
+  }, 30000);
+
+  it('lets a withdrawn manual account reconnect only once, and only to its original coach', async () => {
+    const coach = await user('coach'); const other = await user('coach');
+    const id = await insertUser(db!, { username: `manual-race-${++sequence}`, passwordHash: 'not-used', role: 'student', displayName: 'شاگرد آزمایشی', coachId: coach.id, selfRegistered: false, mustChangePassword: false, now });
+    const detached = await withdrawCoachAccess(db!, (await findUserById(db!, id))!, { accountId: id });
+    await expect(attach(detached, (await issue(other)).code)).rejects.toMatchObject({ status: 409 });
+    const first = (await issue(coach)).code; const second = (await issue(coach)).code;
+    const outcomes = await Promise.allSettled([attach(detached, first), attach(detached, second)]);
+    expect(outcomes.filter((item) => item.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((item) => item.status === 'rejected')).toHaveLength(1);
+    expect(await findUserById(db!, id)).toMatchObject({ coachId: coach.id, coachAccess: true, selfRegistered: false });
+    expect(await db!.query('SELECT consumed_by FROM coach_invitations WHERE consumed_by = $1', [id])).toHaveLength(1);
+  }, 30000);
+
+  it('does not enable sharing from a session invalidated by an administrator password reset', async () => {
+    const coach = await user('coach'); const student = await user('student', true);
+    const attached = await attach(student, (await issue(coach)).code);
+    await applyPersonalChange(db!, student.id, { kind: 'profile', key: 'main', baseVersion: 0, operationId: 'auth-reset-profile', deleted: false, value: profile }, now.toISOString());
+    await saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion);
+    await revokeStudentProfileSharing(db!, student.id, attached.authVersion, now.toISOString());
+    const beforeReset = (await findUserById(db!, student.id))!;
+    await sql!.query('BEGIN');
+    try {
+      expect(await resetUserPassword(txDb(), student.id, 'new-password-hash', 'encrypted-temp')).toBe(true);
+      const pending = setStudentProfileSharing(db!, student.id, true, now.toISOString(), beforeReset.coachAccessVersion, beforeReset.authVersion)
+        .then(() => null, (error: unknown) => error);
+      await waitForLock('coach_access_version = $4');
+      await sql!.query('COMMIT');
+      expect(await pending).toMatchObject({ status: 409 });
+      expect(await loadStudentProfileForCoach(db!, student.id, coach.id)).toMatchObject({ shared: false, profile: null });
+    } finally { await sql!.query('ROLLBACK'); }
+  }, 30000);
+
+  it.each(['save', 'toggle'] as const)('rejects stale %s after profile-only consent is revoked', async (mode) => {
+    const coach = await user('coach'); const student = await user('student', true);
+    const attached = await attach(student, (await issue(coach)).code);
+    await applyPersonalChange(db!, student.id, { kind: 'profile', key: 'main', baseVersion: 0, operationId: `privacy-write-${mode}`, deleted: false, value: profile }, now.toISOString());
+    await saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion);
+    await sql!.query('BEGIN');
+    try {
+      const generation = await revokeStudentProfileSharing(txDb(), student.id, attached.authVersion, now.toISOString());
+      expect(generation).toBe(attached.coachAccessVersion + 1);
+      const stale = (mode === 'save'
+        ? saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion)
+        : setStudentProfileSharing(db!, student.id, true, now.toISOString(), attached.coachAccessVersion))
+        .then(() => null, (error: unknown) => error);
+      await waitForLock('coach_access_version');
+      await sql!.query('COMMIT');
+      expect(await stale).toMatchObject({ status: 409 });
+      expect(await loadStudentProfileForCoach(db!, student.id, coach.id)).toMatchObject({ shared: false, profile: null });
+    } finally { await sql!.query('ROLLBACK'); }
+  }, 30000);
+
+  it('does not re-share a deleted and recreated profile while stale approval waits', async () => {
+    const coach = await user('coach'); const student = await user('student', true);
+    const attached = await attach(student, (await issue(coach)).code);
+    await applyPersonalChange(db!, student.id, { kind: 'profile', key: 'main', baseVersion: 0, operationId: 'privacy-create', deleted: false, value: profile }, now.toISOString());
+    await saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion);
+    await sql!.query('BEGIN');
+    try {
+      expect((await applyPersonalChange(txDb(), student.id, { kind: 'profile', key: 'main', baseVersion: 1, operationId: 'privacy-delete', deleted: true, value: null }, now.toISOString())).status).toBe('saved');
+      const stale = saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion).then(() => null, (error: unknown) => error);
+      await waitForLock('coach_access_version');
+      await sql!.query('COMMIT');
+      expect(await stale).toMatchObject({ status: 409 });
+      expect((await applyPersonalChange(db!, student.id, { kind: 'profile', key: 'main', baseVersion: 2, operationId: 'privacy-recreate', deleted: false, value: profile }, now.toISOString())).status).toBe('saved');
+      await expect(saveStudentProfile(db!, student.id, profile, true, now.toISOString(), attached.coachAccessVersion, profile, attached.authVersion)).rejects.toMatchObject({ status: 409 });
+      expect(await loadStudentProfileForCoach(db!, student.id, coach.id)).toMatchObject({ shared: false, profile: null });
+    } finally { await sql!.query('ROLLBACK'); }
+  }, 30000);
+
+  it.each(['reset', 'deactivate', 'delete'] as const)('blocks coach %s racing with handover of a manual account', async (action) => {
+    const coach = await user('coach');
+    const id = await insertUser(db!, { username: `manual-${action}-${++sequence}`, passwordHash: 'temporary-hash', passwordEnc: 'temporary-secret', role: 'student', displayName: 'شاگرد آزمایشی', coachId: coach.id, selfRegistered: false, mustChangePassword: true, now });
+    const student = (await findUserById(db!, id))!;
+    const token = (await createSession(db!, id, student.authVersion, now))!;
+    await sql!.query('BEGIN');
+    try {
+      expect(await changeOwnPassword(txDb(), id, student.passwordHash, student.authVersion, token, 'owned-password-hash', now)).toBe(true);
+      const blocked = action === 'reset'
+        ? resetUserPassword(db!, id, 'unauthorized-hash', 'unauthorized-secret', coach.id)
+        : action === 'deactivate'
+          ? setUnclaimedStudentActive(db!, id, coach.id, false)
+          : deleteUnclaimedStudent(db!, id, coach.id);
+      await waitForLock('must_change_password');
+      await sql!.query('COMMIT');
+      expect(await blocked).toBe(false);
+      expect(await findUserById(db!, id)).toMatchObject({ passwordHash: 'owned-password-hash', passwordEnc: null, mustChangePassword: false, isActive: true });
+    } finally { await sql!.query('ROLLBACK'); }
   }, 30000);
 
   it.each(['save', 'toggle'] as const)('does not restore profile consent when stale %s waits for withdrawal', async (mode) => {

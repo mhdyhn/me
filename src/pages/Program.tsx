@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
 import { StudentTestPurchase } from '../components/StudentTestPurchase';
+import { ProgramFilePanel } from '../components/ProgramFilePanel';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide } from '../lib/exerciseGuide';
@@ -14,7 +15,7 @@ import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
 import { useSession } from '../context/SessionContext';
-import { adminProgramGuidelines } from '../data/adminProgram';
+import { generalTrainingGuidelines } from '../data/generalTrainingGuidelines';
 
 export function Program() {
   const { sessions, activeSession } = useGym();
@@ -212,6 +213,7 @@ export function Program() {
       )}
 
       {readOnly && <p className="account-muted">این برنامه را مربی شما تنظیم کرده است.</p>}
+      {!readOnly && <ProgramFilePanel program={workoutTemplates} hasActiveSession={Boolean(activeSession)} />}
 
       {feedback && (
         <div className={feedback.type === 'success' ? 'form-success' : 'form-error'} role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -242,7 +244,7 @@ export function Program() {
         <details className="panel-card" style={{ padding: 16 }}>
           <summary style={{ cursor: 'pointer', fontWeight: 700 }}>راهنمای عمومی اجرا و ریکاوری</summary>
           <ul style={{ margin: '12px 0 0', paddingInlineStart: 24, lineHeight: 1.9 }}>
-            {adminProgramGuidelines.map((guideline) => <li key={guideline}>{guideline}</li>)}
+            {generalTrainingGuidelines.map((guideline) => <li key={guideline}>{guideline}</li>)}
           </ul>
         </details>
       )}

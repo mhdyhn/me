@@ -1,3 +1,5 @@
+import type { IncomingMessage } from 'node:http';
+
 export class HttpError extends Error {
   // Written out rather than as constructor parameter properties: Node's built-in TypeScript
   // support only strips types and cannot run parameter properties.
@@ -18,10 +20,11 @@ export const NUTRITION_BODY_BYTES = 192 * 1024;
 export const CHAT_BODY_BYTES = 6 * 1024 * 1024;
 
 /** Reads the request body as JSON. An empty body is treated as an empty object. */
-export async function readJsonBody(request: AsyncIterable<Buffer>, limit = MAX_BODY_BYTES): Promise<unknown> {
+export async function readJsonBody(request: IncomingMessage, limit = MAX_BODY_BYTES): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of request) {
+  // Keep the socket alive long enough to send 413 instead of resetting it on early exit.
+  for await (const chunk of request.iterator({ destroyOnReturn: false })) {
     size += chunk.length;
     if (size > limit) throw new HttpError(413, 'درخواست بیش از حد بزرگ است.');
     chunks.push(chunk);

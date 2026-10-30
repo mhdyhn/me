@@ -26,7 +26,7 @@ function deferred() {
 }
 
 beforeEach(() => {
-  mocks.api.mockReset().mockResolvedValue({ stored: { shareWithCoach: false } });
+  mocks.api.mockReset().mockResolvedValue({ stored: { shareWithCoach: false }, sharingVersion: 0 });
   mocks.saveGoals.mockReset(); mocks.saveDay.mockReset(); mocks.saveProfile.mockReset();
   mocks.gym = { profile: sampleProfile, nutritionGoals: sampleNutritionGoals, sessions: [], bodyweights: [], nutritionDays: [], loading: false,
     saveNutritionGoals: mocks.saveGoals, saveNutritionDay: mocks.saveDay, saveProfile: mocks.saveProfile };
@@ -77,7 +77,7 @@ it('locks today’s note until the save resolves and allows retry after failure'
 
 it('does not allow consent or profile to change while the profile save is in flight', async () => {
   const request = deferred(); mocks.saveProfile.mockReturnValue(request.promise);
-  mocks.api.mockResolvedValueOnce({ stored: { shareWithCoach: false } }).mockResolvedValueOnce({ stored: { shareWithCoach: true } });
+  mocks.api.mockResolvedValueOnce({ stored: { shareWithCoach: false }, sharingVersion: 0 }).mockResolvedValueOnce({ stored: { shareWithCoach: true } });
   render(<Settings />);
   const share = await screen.findByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
   await act(async () => {});

@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { workoutTemplates } from '../data/workouts';
+import { setActiveProgram } from './programStore';
+
+beforeEach(() => setActiveProgram(structuredClone(workoutTemplates)));
+afterEach(() => setActiveProgram([]));
 import { exerciseById, exercises } from '../data/exercises';
 import { getCompletedThisWeek, getNextWorkout, getProgressionAdvice, getRecentRecord, getSessionTotals } from './analytics';
 import type { WorkoutSession } from '../types';

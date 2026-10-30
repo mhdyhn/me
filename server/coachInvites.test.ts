@@ -47,6 +47,9 @@ const invite = (coach: Session) => call('POST', '/api/coach/invitations', {}, co
 const preview = (student: Session, code: string, accountId = student.id) => call('POST', '/api/me/coach-invitation/preview', { accountId, code }, student);
 const accept = (student: Session, code: string, accountId = student.id, consent = true) => call('POST', '/api/me/coach-invitation/accept', { accountId, code, consent }, student);
 const withdraw = (student: Session, accountId = student.id) => call('POST', '/api/me/coach-access/withdraw', { accountId }, student);
+const syncProfile = (student: Session) => call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [{ kind: 'profile', key: 'main', baseVersion: 0, deleted: false, value: profile, operationId: 'profile-sync-before-share' }] }, student);
+const sharingVersion = async (student: Session) => (await call('GET', `/api/me/profile?accountId=${student.id}`, undefined, student)).json.sharingVersion as number;
+const shareProfile = async (student: Session) => call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student);
 
 describe('consent-based coach invitations', () => {
   it('requires the correct account and explicit consent, keeps the personal programme, and protects account ownership', async () => {
@@ -88,7 +91,8 @@ describe('consent-based coach invitations', () => {
     const other = await account('coach-two', 'coach');
     const student = await account('independent', 'student', null, true);
     expect((await accept(student, (await invite(coach)).json.code)).status).toBe(200);
-    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true }, student)).status).toBe(200);
+    await syncProfile(student);
+    expect((await shareProfile(student)).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, coach)).json.shared).toBe(true);
     await db.query("INSERT INTO student_programs (student_id, coach_id, body, updated_at, price_tomans, programme_id, version) VALUES ($1, $2, $3, $4, 100, 'existing-offer', 1)", [student.id, coach.id, JSON.stringify({ title: 'برنامه موجود', days: [] }), clock.toISOString()]);
     await db.query("INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, programme_id, programme_mapping, gateway_mode) VALUES ($1, $2, 100, 90, 10, 'existing-authority', 'paid', 'real-ref', $3, 'existing-offer', 'explicit', 'production')", [student.id, coach.id, clock.toISOString()]);
@@ -110,9 +114,62 @@ describe('consent-based coach invitations', () => {
     expect((await preview(student, again)).status).toBe(200);
     expect((await accept(student, again)).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, coach)).json).toMatchObject({ shared: false, profile: null });
-    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true }, student)).status).toBe(200);
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student)).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, coach)).json.shared).toBe(true);
   });
+
+  it('lets a manually created student withdraw all coach access, preserve data, and reconnect only to the original coach', async () => {
+    const coach = await account('manual-coach', 'coach');
+    const other = await account('other-coach', 'coach');
+    const student = await account('manual-student', 'student', coach.id, false);
+    await syncProfile(student);
+    expect((await shareProfile(student)).status).toBe(200);
+    await db.query("INSERT INTO student_programs (student_id, coach_id, body, updated_at, price_tomans, programme_id, version) VALUES ($1, $2, $3, $4, 100, 'manual-offer', 1)", [student.id, coach.id, JSON.stringify({ title: 'برنامهٔ نمونه', days: [] }), clock.toISOString()]);
+    await db.query("INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, programme_id, programme_mapping, gateway_mode) VALUES ($1, $2, 100, 90, 10, 'manual-purchase', 'paid', $3, 'manual-offer', 'explicit', 'live')", [student.id, coach.id, clock.toISOString()]);
+    const diary = { accountId: student.id, day: '2026-10-29', meals: [{ name: 'ناهار', items: [] }] };
+    expect((await call('PUT', '/api/me/diary', diary, student)).status).toBe(200);
+    const session = { id: 'manual-session', templateId: 'day', name: 'تمرین', startedAt: '2026-10-29T08:00:00Z', completedAt: '2026-10-29T09:00:00Z', status: 'completed', notes: '', currentExerciseIndex: 0, currentSetIndex: 0, exercises: [] };
+    expect((await call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [{ kind: 'session', key: session.id, baseVersion: 0, operationId: 'manual-session-write', deleted: false, value: session }] }, student)).json.results[0].status).toBe('saved');
+    expect((await call('GET', `/api/students/${student.id}/diary/2026-10-29`, undefined, coach)).json.diary.meals).toHaveLength(1);
+    expect((await call('GET', `/api/students/${student.id}/sessions`, undefined, coach)).json.sessions).toHaveLength(1);
+    expect((await withdraw(student)).json.user).toMatchObject({ coachAccess: false, selfRegistered: false });
+    for (const path of [`/api/students/${student.id}/profile`, `/api/students/${student.id}/diary/2026-10-29`, `/api/students/${student.id}/sessions`]) {
+      expect((await call('GET', path, undefined, coach)).status).toBe(404);
+    }
+    expect((await call('GET', `/api/me/diary/2026-10-29?accountId=${student.id}`, undefined, student)).json.diary.meals).toHaveLength(1);
+    expect((await call('GET', `/api/me/personal-data?accountId=${student.id}`, undefined, student)).json.records).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'session' }), expect.objectContaining({ kind: 'profile' })]));
+    expect((await call('POST', '/api/me/personal-program/activate', { accountId: student.id }, student)).json.user).toMatchObject({ personalProgramMode: true });
+    expect((await db.query('SELECT programme_id FROM student_programs WHERE student_id = $1', [student.id]))[0]).toMatchObject({ programme_id: 'manual-offer' });
+    expect((await db.query('SELECT authority, status FROM payment_transactions WHERE student_id = $1', [student.id]))[0]).toMatchObject({ authority: 'manual-purchase', status: 'paid' });
+    const otherCode = (await invite(other)).json.code as string;
+    expect((await preview(student, otherCode)).status).toBe(400);
+    expect((await accept(student, otherCode)).status).toBe(409);
+    const ownCode = (await invite(coach)).json.code as string;
+    expect((await preview(student, ownCode)).status).toBe(200);
+    expect((await accept(student, ownCode)).json.user).toMatchObject({ coachId: coach.id, coachAccess: true, selfRegistered: false });
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, coach)).json).toMatchObject({ shared: false, profile: null });
+  }, 30000);
+
+  it('protects active manual-account workouts and rejects invalid or consumed reconnect codes', async () => {
+    const coach = await account('manual-workout-coach', 'coach');
+    const student = await account('manual-workout-student', 'student', coach.id, false);
+    expect((await withdraw(student)).status).toBe(200);
+    expect((await preview(student, 'x'.repeat(32))).status).toBe(400);
+    expect((await accept(student, 'x'.repeat(32))).status).toBe(409);
+    const code = (await invite(coach)).json.code as string;
+    const session = { id: 'manual-active', templateId: 'day', name: 'تمرین', startedAt: '2026-10-29T08:00:00Z', status: 'active', notes: '', currentExerciseIndex: 0, currentSetIndex: 0, exercises: [] };
+    const change = (version: number, value: unknown, operationId: string) => ({ accountId: student.id, changes: [{ kind: 'session', key: session.id, baseVersion: version, operationId, deleted: false, value }] });
+    expect((await call('POST', '/api/me/personal-data/batch', change(0, session, 'manual-active-01'), student)).json.results[0].status).toBe('saved');
+    expect((await call('POST', '/api/me/personal-program/activate', { accountId: student.id }, student)).status).toBe(409);
+    expect((await accept(student, code)).status).toBe(409);
+    expect((await preview(student, code)).status).toBe(200);
+    expect((await call('POST', '/api/me/personal-data/batch', change(1, { ...session, status: 'completed', completedAt: clock.toISOString() }, 'manual-active-02'), student)).json.results[0].status).toBe('saved');
+    expect((await call('POST', '/api/me/personal-program/activate', { accountId: student.id }, student)).status).toBe(200);
+    expect((await accept(student, code)).status).toBe(200);
+    expect((await withdraw(student)).status).toBe(200);
+    expect((await preview(student, code)).status).toBe(400);
+    expect((await accept(student, code)).status).toBe(409);
+  }, 30000);
 
   it('returns to personal mode and changes coaches without sharing or destroying previous purchases, plans, settings or conversations', async () => {
     const admin = await account('admin', 'admin');
@@ -124,7 +181,8 @@ describe('consent-based coach invitations', () => {
     await call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [{ kind: 'program', key: 'main', baseVersion: 0, operationId: 'personal-switch-01', deleted: false, value: personal }] }, student);
     await accept(student, (await invite(a)).json.code);
     const firstRelationship = (await findUserById(db, student.id))!.coachAccessVersion;
-    await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true }, student);
+    await syncProfile(student);
+    await shareProfile(student);
     const input = { title: 'برنامه مربی الف', priceTomans: 100000, days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
     const first = (await call('PUT', `/api/students/${student.id}/program`, input, a)).json.program;
     expect(first).toMatchObject({ title: input.title, version: 1 });
@@ -251,7 +309,8 @@ describe('consent-based coach invitations', () => {
     const student = await account('independent', 'student', null, true);
     await accept(student, (await invite(coach)).json.code);
     const oldVersion = (await findUserById(db, student.id))!.coachAccessVersion;
-    await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true }, student);
+    await syncProfile(student);
+    await shareProfile(student);
     await withdraw(student);
     await accept(student, (await invite(coach)).json.code);
     await expect(saveStudentProfile(db, student.id, profile, true, clock.toISOString(), oldVersion)).rejects.toMatchObject({ status: 409 });

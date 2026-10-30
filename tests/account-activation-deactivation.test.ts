@@ -49,18 +49,18 @@ async function setupCoach() {
   return { token, id: created.json.user.id as number, username: created.json.username as string, adminToken: admin };
 }
 
-async function setupStudent(coachToken: string) {
+async function setupStudent(coachToken: string, claim = true) {
   const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد هدف' }, coachToken);
   const studentLogin = await login(created.json.username, created.json.password);
   const token = studentLogin.json.token as string;
-  await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
-  return { token, id: created.json.user.id as number, username: created.json.username as string };
+  if (claim) await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
+  return { token, id: created.json.user.id as number, username: created.json.username as string, password: claim ? 'student-new-pass-1' : created.json.password as string };
 }
 
 describe('Account Activation and Deactivation', () => {
-  it('Coach can deactivate and reactivate their own student', async () => {
+  it('Coach can deactivate and reactivate a manually created account before handover', async () => {
     const { token: coachToken } = await setupCoach();
-    const student = await setupStudent(coachToken);
+    const student = await setupStudent(coachToken, false);
 
     // Verify student is initially active
     const meBefore = await call('GET', '/api/me', undefined, student.token);
@@ -77,7 +77,7 @@ describe('Account Activation and Deactivation', () => {
     expect(accessBlocked.status).toBe(401);
 
     // Trying to log in with valid credentials returns 403 Forbidden with clear message
-    const loginAttempt = await login(student.username, 'student-new-pass-1');
+    const loginAttempt = await login(student.username, student.password);
     expect(loginAttempt.status).toBe(403);
     expect(loginAttempt.json.error).toBe('حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
 
@@ -87,9 +87,17 @@ describe('Account Activation and Deactivation', () => {
     expect(reactRes.json.isActive).toBe(true);
 
     // Student can now log in successfully again
-    const loginAgain = await login(student.username, 'student-new-pass-1');
+    const loginAgain = await login(student.username, student.password);
     expect(loginAgain.status).toBe(200);
     expect(loginAgain.json.user.isActive).toBe(true);
+  });
+
+  it('the coach cannot disable a student after the account has been claimed', async () => {
+    const { token: coachToken } = await setupCoach();
+    const student = await setupStudent(coachToken);
+    expect((await call('PUT', `/api/students/${student.id}/active`, { active: false }, coachToken)).status).toBe(403);
+    expect((await call('GET', '/api/me', undefined, student.token)).status).toBe(200);
+    expect((await login(student.username, student.password)).status).toBe(200);
   });
 
   it('Admin can deactivate and reactivate a coach', async () => {

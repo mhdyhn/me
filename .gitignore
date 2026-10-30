@@ -43,3 +43,6 @@ android/app/src/main/assets/capacitor.plugins.json
 *.p12
 *.pfx
 android/key.properties
+
+# Private, local backups; never publish or commit
+/private-backups/

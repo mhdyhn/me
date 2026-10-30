@@ -70,9 +70,16 @@ describe('coach connection controls', () => {
     expect(mocks.confirm.mock.calls[0]![0].message).toContain('خرید آزمایشی');
   });
 
-  it('hides the control for manually provisioned students', () => {
+  it('lets a manually provisioned student withdraw and explains reconnection is limited to the same coach', async () => {
     mocks.user = { ...independent, selfRegistered: false, coachId: 12 };
-    const { container } = render(<CoachConnection />);
-    expect(container).toBeEmptyDOMElement();
+    mocks.confirm.mockResolvedValue(true);
+    const revoked = { ...mocks.user, coachAccess: false };
+    mocks.api.mockResolvedValue({ user: revoked });
+    const view = render(<CoachConnection />);
+    fireEvent.click(screen.getByRole('button', { name: 'قطع دسترسی مربی' }));
+    await waitFor(() => expect(mocks.setUser).toHaveBeenCalledWith(revoked));
+    mocks.user = revoked; view.rerender(<CoachConnection />);
+    expect(screen.getByText(/با کد تازه فقط به همان مربی دوباره متصل می‌شود/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'بازگشت به برنامهٔ شخصی' })).toBeInTheDocument();
   });
 });

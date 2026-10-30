@@ -49,7 +49,7 @@ export async function revokeCoachInvitations(db: Db, coach: StoredUser): Promise
 
 /** Preview reveals the coach only to someone holding the complete secret. */
 export async function previewCoachInvitation(db: Db, key: SecretKey, student: StoredUser, body: unknown, now: Date): Promise<{ coachName: string; expiresAt: string }> {
-  if (!student.selfRegistered) throw new HttpError(403, 'این مسیر فقط برای حسابی است که شاگرد خودش ساخته است.');
+  if (!student.selfRegistered && (student.coachId === null || student.coachAccess)) throw new HttpError(403, 'این حساب دستی فقط پس از قطع دسترسی می‌تواند به همان مربی بازگردد.');
   if (student.coachId !== null && student.coachAccess) throw new HttpError(409, 'این حساب هم‌اکنون به مربی متصل است.');
   await throttle(db, `coach-invite-check:${student.id}`, now, 20);
   const code = readCode(body, student.id);
@@ -58,7 +58,7 @@ export async function previewCoachInvitation(db: Db, key: SecretKey, student: St
     JOIN users c ON c.id = i.coach_id
     WHERE i.token_hash = $1 AND i.consumed_at IS NULL AND i.expires_at > $2 AND c.role = 'coach' AND c.is_active = 1
   `, [codeHash(key, code), now.toISOString()]))[0];
-  if (!row) throw new HttpError(400, INVITE_ERROR);
+  if (!row || (!student.selfRegistered && Number(row.coach_id) !== student.coachId)) throw new HttpError(400, INVITE_ERROR);
   return { coachName: row.display_name, expiresAt: row.expires_at };
 }
 
@@ -66,7 +66,7 @@ export async function previewCoachInvitation(db: Db, key: SecretKey, student: St
 export async function acceptCoachInvitation(db: Db, key: SecretKey, student: StoredUser, body: unknown, now: Date): Promise<StoredUser> {
   const input = requireObject(body);
   if (input.consent !== true) throw new HttpError(400, 'برای اتصال، توضیح دسترسی مربی را بخوانید و تأیید کنید.');
-  if (!student.selfRegistered) throw new HttpError(403, 'این مسیر فقط برای حسابی است که شاگرد خودش ساخته است.');
+  if (!student.selfRegistered && (student.coachId === null || student.coachAccess)) throw new HttpError(403, 'این حساب دستی فقط پس از قطع دسترسی می‌تواند به همان مربی بازگردد.');
   await throttle(db, `coach-invite-accept:${student.id}`, now, 20);
   const code = readCode(body, student.id);
   const rows = await db.query<{ id: number }>(`
@@ -78,7 +78,7 @@ export async function acceptCoachInvitation(db: Db, key: SecretKey, student: Sto
     ), attached AS (
       UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1, personal_program_mode = 0,
         coach_access_version = s.coach_access_version + 1 FROM candidate
-      WHERE s.id = $2 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $3
+      WHERE s.id = $2 AND s.role = 'student' AND (s.self_registered = 1 OR s.coach_id = candidate.coach_id) AND s.is_active = 1 AND s.auth_version = $3
         AND s.coach_access_version = $5 AND s.session_guard_version = $6 AND (s.coach_id IS NULL OR s.coach_access = 0)
         AND NOT EXISTS (SELECT 1 FROM personal_data_records d WHERE d.user_id = s.id AND d.kind = 'session' AND d.deleted = 0 AND d.body::jsonb ->> 'status' = 'active')
       RETURNING s.id
@@ -182,11 +182,11 @@ export async function acceptCoachRegistrationLink(db: Db, key: SecretKey, studen
 export async function withdrawCoachAccess(db: Db, student: StoredUser, body: unknown): Promise<StoredUser> {
   const input = requireObject(body);
   if (input.accountId !== student.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
-  if (!student.selfRegistered || student.coachId === null) throw new HttpError(409, 'این حساب اتصال قابل قطع ندارد.');
+  if (student.coachId === null) throw new HttpError(409, 'این حساب اتصال قابل قطع ندارد.');
   const rows = await db.query<{ id: number }>(`
     WITH withdrawn AS (
       UPDATE users SET coach_access = 0, coach_access_version = coach_access_version + 1
-      WHERE id = $1 AND role = 'student' AND self_registered = 1 AND is_active = 1 AND auth_version = $2
+      WHERE id = $1 AND role = 'student' AND is_active = 1 AND auth_version = $2
         AND coach_id = $3 AND coach_access = 1 AND coach_access_version = $4
       RETURNING id
     ), profile AS (
@@ -201,13 +201,13 @@ export async function withdrawCoachAccess(db: Db, student: StoredUser, body: unk
 export async function returnToPersonalProgram(db: Db, student: StoredUser, body: unknown): Promise<StoredUser> {
   const input = requireObject(body);
   if (input.accountId !== student.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
-  if (!student.selfRegistered || student.coachId === null || student.coachAccess) {
+  if (student.coachId === null || student.coachAccess) {
     throw new HttpError(409, 'ابتدا دسترسی مربی را قطع کنید.');
   }
   const rows = await db.query<{ id: number }>(`
     WITH switched AS (
       UPDATE users s SET personal_program_mode = 1, coach_access_version = coach_access_version + 1
-      WHERE s.id = $1 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $2
+      WHERE s.id = $1 AND s.role = 'student' AND s.is_active = 1 AND s.auth_version = $2
         AND s.coach_id = $3 AND s.coach_access = 0 AND s.coach_access_version = $4 AND s.session_guard_version = $5
         AND NOT EXISTS (SELECT 1 FROM personal_data_records d WHERE d.user_id = s.id AND d.kind = 'session'
           AND d.deleted = 0 AND d.body::jsonb ->> 'status' = 'active')

@@ -5,7 +5,7 @@ import { useGym } from '../context/GymProvider';
 import { ApiError, api, type PublicUser } from '../lib/api';
 import { confirmModal } from './ConfirmModal';
 
-/** Self-registered students grant coach access with a one-use invitation, not a guessed user ID. */
+/** Students control their relationship; manually created accounts can reconnect to the same coach. */
 export function CoachConnection() {
   const { user, setUser, refresh } = useSession();
   const { activeSession, loading } = useGym();
@@ -14,7 +14,7 @@ export function CoachConnection() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  if (!user || user.role !== 'student' || !user.selfRegistered) return null;
+  if (!user || user.role !== 'student' || (!user.selfRegistered && user.coachId === null)) return null;
   const accountId = user.id;
   const connected = user.coachId !== null && user.coachAccess !== false;
   const withdrawn = user.coachId !== null && user.coachAccess === false;
@@ -89,7 +89,7 @@ export function CoachConnection() {
         <p>مربی به سوابق تمرین و دفتر خوراک دسترسی دارد؛ اشتراک پروفایل جداگانه در تنظیمات است. برنامه و خریدهای تو محفوظ‌اند.</p>
         <button type="button" className="button button--secondary button--small" disabled={busy} onClick={() => void withdraw()}>قطع دسترسی مربی</button>
       </> : <>
-        <p>{withdrawn ? 'می‌توانی برنامهٔ شخصی‌ات را فعال کنی یا با کد جدید، به همین مربی یا مربی دیگری وصل شوی.' : 'حساب مستقل خودت را نگه دار؛ اگر مربی داری، با کد یک‌بارمصرف او وصل شو.'}</p>
+        <p>{withdrawn ? user.selfRegistered ? 'می‌توانی برنامهٔ شخصی‌ات را فعال کنی یا با کد جدید، به همین مربی یا مربی دیگری وصل شوی.' : 'می‌توانی برنامهٔ شخصی‌ات را فعال کنی. حسابی که مربی ساخته است، با کد تازه فقط به همان مربی دوباره متصل می‌شود.' : 'حساب مستقل خودت را نگه دار؛ اگر مربی داری، با کد یک‌بارمصرف او وصل شو.'}</p>
         {withdrawn && !user.personalProgramMode && <button type="button" className="button button--secondary button--small" disabled={busy || loading || Boolean(activeSession)} onClick={() => void activatePersonal()}>بازگشت به برنامهٔ شخصی</button>}
         {withdrawn && user.personalProgramMode && <p className="registration-note" role="status">برنامهٔ شخصی فعال است؛ برنامه‌های قبلی را در بایگانی صفحهٔ برنامه ببین.</p>}
         {activeSession && <p className="registration-note" role="status">پیش از اتصال یا تغییر برنامه، تمرین در حال انجام را تمام کن تا برنامه هنگام تغییر قطع نشود. در دستگاه‌های دیگر هم تمرین فعال را بررسی و همگام کن.</p>}

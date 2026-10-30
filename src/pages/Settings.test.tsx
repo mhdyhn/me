@@ -31,7 +31,7 @@ describe('settings profile sharing status', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
   it('shows the designer signature instead of a visible device revision', async () => {
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
     render(<Settings />);
     expect(screen.getByText('طراحی رابط و تجربهٔ کاربری')).toBeInTheDocument();
     expect(screen.getByText(/با مهرِ مهدی/)).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('settings profile sharing status', () => {
   it.each(['student', 'coach', 'admin'])('starts %s with blank fields and no legacy import button', async (role) => {
     mocks.user = { id: 12, role, coachId: role === 'student' ? 4 : null } as typeof mocks.user;
     mocks.profile = { ...blankProfile } as typeof mocks.profile;
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
     render(<Settings />);
     expect(screen.getByLabelText('سن')).toHaveValue(null);
     expect(screen.getByLabelText(/قد/)).toHaveValue(null);
@@ -58,9 +58,58 @@ describe('settings profile sharing status', () => {
     if (role === 'student') await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
   });
 
+  it.each(['student', 'coach', 'admin'])('%s can add, edit, and delete their own working weights, including zero', async (role) => {
+    mocks.user = { id: 12, role, coachId: role === 'student' ? 4 : null };
+    mocks.profile = structuredClone(blankProfile);
+    mocks.api.mockImplementation(async (method: string) => method === 'GET' ? { stored: null, sharingVersion: 0 } : { shareWithCoach: false, sharingVersion: 1 });
+    mocks.saveProfile.mockResolvedValue(true);
+    render(<Settings />);
+    if (role === 'student') await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'افزودن وزنهٔ کاری' }));
+    fireEvent.change(screen.getByLabelText('نام حرکت وزنهٔ ۱'), { target: { value: 'حرکت خودم' } });
+    fireEvent.change(screen.getByLabelText('مقدار وزنهٔ ۱ به کیلوگرم'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('یادداشت وزنهٔ ۱'), { target: { value: 'یادداشت خودم' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    await waitFor(() => expect(mocks.saveProfile).toHaveBeenLastCalledWith(expect.objectContaining({ workingWeightReferences: [{ label: 'حرکت خودم', weightKg: 0, note: 'یادداشت خودم' }] }), expect.anything()));
+    fireEvent.change(screen.getByLabelText('مقدار وزنهٔ ۱ به کیلوگرم'), { target: { value: '12.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    await waitFor(() => expect(mocks.saveProfile).toHaveBeenLastCalledWith(expect.objectContaining({ workingWeightReferences: [{ label: 'حرکت خودم', weightKg: 12.5, note: 'یادداشت خودم' }] }), expect.anything()));
+    fireEvent.click(screen.getByLabelText('حذف وزنهٔ ۱'));
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    await waitFor(() => expect(mocks.saveProfile).toHaveBeenLastCalledWith(expect.objectContaining({ workingWeightReferences: [] }), expect.anything()));
+  });
+
+  it('does not accept a blank weight and keeps all 25 saved references', async () => {
+    const references = Array.from({ length: 25 }, (_, index) => ({ label: `حرکت ${index}`, weightKg: index, note: '' }));
+    mocks.user = { id: 12, role: 'admin', coachId: null };
+    mocks.profile = { ...blankProfile, workingWeightReferences: references };
+    mocks.saveProfile.mockResolvedValue(true);
+    render(<Settings />);
+    expect(screen.getAllByLabelText(/مقدار وزنهٔ .* به کیلوگرم/)).toHaveLength(25);
+    fireEvent.change(screen.getByLabelText('مقدار وزنهٔ ۱ به کیلوگرم'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    expect(await screen.findByText(/برای هر وزنه نام حرکت و عددی بین صفر/)).toBeInTheDocument();
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('مقدار وزنهٔ ۱ به کیلوگرم'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    await waitFor(() => expect(mocks.saveProfile).toHaveBeenCalledWith(expect.objectContaining({ workingWeightReferences: references }), expect.anything()));
+  });
+
+  it('revokes sharing before validating or saving even when the previously loaded state was off', async () => {
+    mocks.api.mockResolvedValueOnce({ stored: null, sharingVersion: 0 }).mockResolvedValueOnce({ shareWithCoach: false, sharingVersion: 1 });
+    mocks.saveProfile.mockResolvedValue(true);
+    render(<Settings />);
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText('سن'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
+    expect(await screen.findByText(/دسترسی پروفایل قطع شد/)).toBeInTheDocument();
+    expect(mocks.api).toHaveBeenLastCalledWith('POST', '/me/profile/sharing', { accountId: 12, shareWithCoach: false });
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
+  });
+
   it('keeps information actually saved in the account visible and editable', async () => {
     mocks.profile = { ...blankProfile, age: 37, sex: 'زن', heightCm: 165, weightKg: 70, primaryGoal: 'هدف خودم' } as typeof mocks.profile;
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
     render(<Settings />);
     expect(screen.getByLabelText('سن')).toHaveValue(37);
     expect(screen.getByLabelText('جنسیت')).toHaveValue('زن');
@@ -71,7 +120,7 @@ describe('settings profile sharing status', () => {
 
   it('can share a filled profile without inventing optional days or session duration', async () => {
     mocks.profile = { ...blankProfile, age: 37, heightCm: 165, weightKg: 70, primaryGoal: 'هدف خودم' } as typeof mocks.profile;
-    mocks.api.mockResolvedValueOnce({ stored: null }).mockResolvedValueOnce({ stored: { shareWithCoach: true } });
+    mocks.api.mockResolvedValueOnce({ stored: null, sharingVersion: 0 }).mockResolvedValueOnce({ stored: { shareWithCoach: true } });
     mocks.saveProfile.mockResolvedValue(true);
     render(<Settings />);
     const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
@@ -85,7 +134,7 @@ describe('settings profile sharing status', () => {
 
   it('keeps sharing controls disabled after a load error and retries successfully', async () => {
     mocks.api.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
-      stored: { profile: {}, shareWithCoach: true },
+      stored: { profile: {}, shareWithCoach: true }, sharingVersion: 0,
     });
     render(<Settings />);
 
@@ -100,7 +149,7 @@ describe('settings profile sharing status', () => {
     expect(mocks.api).toHaveBeenCalledTimes(2);
   });
   it('does not claim success when local profile persistence fails', async () => {
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockResolvedValueOnce({ stored: null, sharingVersion: 0 }).mockResolvedValueOnce({ shareWithCoach: false, sharingVersion: 1 });
     mocks.saveProfile.mockResolvedValue(false);
     render(<Settings />);
     await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
@@ -112,7 +161,7 @@ describe('settings profile sharing status', () => {
 
   it('waits for local data before allowing a profile edit', async () => {
     mocks.loading = true;
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
     const view = render(<Settings />);
     expect(screen.getByRole('status')).toHaveTextContent('در حال آماده‌سازی');
     expect(screen.queryByLabelText('سن')).not.toBeInTheDocument();
@@ -122,20 +171,22 @@ describe('settings profile sharing status', () => {
     await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
   });
 
-  it('allows local profile edits while the sharing status is unavailable without changing consent', async () => {
+  it('keeps the draft unsaved while coach sharing status is unavailable', async () => {
     mocks.api.mockRejectedValue(new Error('offline'));
     mocks.saveProfile.mockResolvedValue(true);
     render(<Settings />);
     await screen.findByText('وضعیت همگام‌سازی با سرور بارگذاری نشد.');
     fireEvent.change(screen.getByLabelText('سن'), { target: { value: '29' } });
     fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
-    await waitFor(() => expect(mocks.saveProfile).toHaveBeenCalledWith(expect.objectContaining({ age: 29 }), expect.objectContaining({ age: 28 })));
+    expect(screen.getByText(/ابتدا وضعیت دسترسی مربی را بررسی کن/)).toBeInTheDocument();
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('سن')).toHaveValue(29);
     expect(mocks.api).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeDisabled();
   });
 
   it('preserves an unsaved draft when a newer profile arrives and requires an explicit choice', async () => {
-    mocks.api.mockResolvedValue({ stored: null });
+    mocks.api.mockImplementation(async (method: string) => method === 'GET' ? { stored: null, sharingVersion: 0 } : { shareWithCoach: false, sharingVersion: 1 });
     mocks.saveProfile.mockResolvedValue(true);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const view = render(<Settings />);
@@ -153,8 +204,8 @@ describe('settings profile sharing status', () => {
     await waitFor(() => expect(mocks.saveProfile).toHaveBeenCalledWith(expect.objectContaining({ age: 29 }), expect.objectContaining({ age: 30 })));
   });
 
-  it('warns that revoking sharing failed even when the profile was saved locally', async () => {
-    mocks.api.mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true } }).mockRejectedValueOnce(new Error('offline'));
+  it('does not save or sync the new profile when revoking sharing fails', async () => {
+    mocks.api.mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true }, sharingVersion: 0 }).mockRejectedValueOnce(new Error('offline'));
     mocks.saveProfile.mockResolvedValue(true);
     render(<Settings />);
     const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
@@ -163,10 +214,11 @@ describe('settings profile sharing status', () => {
     fireEvent.click(screen.getByRole('button', { name: /ذخیرهٔ پروفایل/ }));
     expect(await screen.findByText(/مربی ممکن است همچنان دسترسی داشته باشد/)).toBeInTheDocument();
     expect(mocks.api).toHaveBeenLastCalledWith('POST', '/me/profile/sharing', { accountId: 12, shareWithCoach: false });
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
   });
 
   it('does not assume consent is off when the profile response is malformed', async () => {
-    mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true } });
+    mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true }, sharingVersion: 0 });
     render(<Settings />);
     expect(await screen.findByText('وضعیت همگام‌سازی با سرور بارگذاری نشد.')).toBeInTheDocument();
     const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });
@@ -176,7 +228,7 @@ describe('settings profile sharing status', () => {
   });
 
   it('warns instead of claiming privacy when the revocation response is malformed', async () => {
-    mocks.api.mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true } }).mockResolvedValueOnce({});
+    mocks.api.mockResolvedValueOnce({ stored: { profile: {}, shareWithCoach: true }, sharingVersion: 0 }).mockResolvedValueOnce({});
     mocks.saveProfile.mockResolvedValue(true);
     render(<Settings />);
     const checkbox = screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ });

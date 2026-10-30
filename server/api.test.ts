@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { createServer, type Server } from 'node:http';
+import { createServer, request as nodeRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
@@ -53,82 +53,107 @@ async function coachSession() {
 describe('student profile sharing', () => {
   async function createStudentAccount(coachToken: string) {
     const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد پروفایل' }, coachToken);
-    const loginResult = await login(created.json.username, created.json.password);
-    const token = loginResult.json.token as string;
+    const token = (await login(created.json.username, created.json.password)).json.token as string;
     await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
     return { id: created.json.user.id as number, token };
   }
-
   const profile = {
     age: 28, sex: 'زن', heightCm: 168, weightKg: 64, primaryGoal: 'بهبود آمادگی', secondaryGoal: '',
     trainingExperience: 'تازه‌کار', trainingDays: 3, sessionMinutes: 45, dailyActivity: 'فعالیت سبک',
     sleepHours: '۷ ساعت', stressLevel: 0, injuries: 'بدون محدودیت', equipment: 'باشگاه کامل', workingWeightReferences: [],
   };
+  const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'profile', key: 'main', baseVersion: version, deleted, value, operationId });
+  const write = (student: { id: number; token: string }, item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [item] }, student.token);
+  const sharingVersion = async (student: { id: number; token: string }) => (await call('GET', `/api/me/profile?accountId=${student.id}`, undefined, student.token)).json.sharingVersion as number;
 
-  it('uses the versioned profile for consented sharing and never revives a deleted one', async () => {
+  it('shares only the synced version and never revives a deleted profile or its consent', async () => {
     const owner = await coachSession();
     const student = await createStudentAccount(owner.token);
-    await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
+    const enable = async (value: unknown) => call('PUT', '/api/me/profile', { accountId: student.id, profile: value, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token);
+    expect((await enable(profile)).status).toBe(409);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
     const versioned = { ...profile, age: 31 };
-    const change = (version: number, deleted: boolean, value: unknown, operationId: string) => ({ kind: 'profile', key: 'main', baseVersion: version, deleted, value, operationId });
-    const write = (item: unknown) => call('POST', '/api/me/personal-data/batch', { accountId: student.id, changes: [item] }, student.token);
-    expect((await write(change(0, false, versioned, 'profile-write-01'))).json.results[0].status).toBe('saved');
+    expect((await write(student, change(0, false, versioned, 'profile-write-01'))).json.results[0].status).toBe('saved');
+    expect((await enable(profile)).status).toBe(409);
+    expect((await enable(versioned)).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(31);
-    await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
-    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(31);
-    expect((await write(change(1, true, null, 'profile-delete-02'))).json.results[0].status).toBe('saved');
-    expect((await call('GET', '/api/me/profile', undefined, student.token)).json.stored).toBeNull();
+    const beforeDeletion = await sharingVersion(student);
+    expect((await write(student, change(1, true, null, 'profile-delete-02'))).json.results[0].status).toBe('saved');
+    expect(await sharingVersion(student)).toBe(beforeDeletion + 1);
+    expect((await call('GET', `/api/me/profile?accountId=${student.id}`, undefined, student.token)).json.stored).toBeNull();
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
-    expect((await write(change(2, false, { ...profile, age: 32 }, 'profile-write-03'))).json.results[0].status).toBe('saved');
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(400);
+    expect((await write(student, change(2, false, { ...profile, age: 32 }, 'profile-write-03'))).json.results[0].status).toBe('saved');
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: { ...profile, age: 32 }, shareWithCoach: true, sharingVersion: beforeDeletion }, student.token)).status).toBe(409);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null });
-    expect((await call('POST', '/api/me/profile/sharing', { shareWithCoach: true }, student.token)).json.shareWithCoach).toBe(true);
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(400);
+    expect((await enable({ ...profile, age: 32 })).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile.age).toBe(32);
   });
 
-  it('shares a profile with unspecified training days and duration only with its coach', async () => {
+  it('shows only the explicitly shared snapshot, never a later private profile sync', async () => {
+    const coach = await coachSession();
+    const student = await createStudentAccount(coach.token);
+    expect((await write(student, change(0, false, profile, 'snapshot-original'))).json.results[0].status).toBe('saved');
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(200);
+    const privateEdit = { ...profile, age: 31, workingWeightReferences: [{ label: 'حرکت خصوصی', weightKg: 22, note: '' }] };
+    expect((await write(student, change(1, false, privateEdit, 'snapshot-private-edit'))).json.results[0].status).toBe('saved');
+    const coachView = (await call('GET', `/api/students/${student.id}/profile`, undefined, coach.token)).json;
+    expect(coachView.profile).toEqual(profile);
+    expect(JSON.stringify(coachView)).not.toContain('حرکت خصوصی');
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(400);
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: privateEdit, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(200);
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, coach.token)).json.profile).toEqual(privateEdit);
+  });
+
+  it('shares optional fields and all weights without exposing unknown private fields to another coach', async () => {
     const owner = await coachSession();
     const other = await coachSession();
     const student = await createStudentAccount(owner.token);
-    const partial = { ...profile, trainingDays: 0, sessionMinutes: 0 };
-    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: partial, shareWithCoach: true }, student.token)).status).toBe(200);
-    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(partial);
+    const weights = Array.from({ length: 25 }, (_, i) => ({ label: `حرکت ${i}`, weightKg: i, note: 'یادداشت', hiddenReference: 'secret' }));
+    const partial = { ...profile, age: 0, heightCm: 0, weightKg: 0, primaryGoal: '', trainingDays: 0, sessionMinutes: 0, workingWeightReferences: weights, hiddenPrivateField: 'secret' };
+    expect((await write(student, change(0, false, partial, 'partial-profile-01'))).json.results[0].status).toBe('saved');
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: partial, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(200);
+    const result = (await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile;
+    expect(result).toMatchObject({ age: 0, heightCm: 0, weightKg: 0, trainingDays: 0, sessionMinutes: 0 });
+    expect(result.workingWeightReferences).toHaveLength(25);
+    expect(JSON.stringify(result)).not.toContain('secret');
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, other.token)).status).toBe(404);
-    expect((await call('PUT', '/api/me/profile', { profile: { ...partial, sessionMinutes: 10 }, shareWithCoach: true }, student.token)).status).toBe(400);
-    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(partial);
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile: { ...partial, sessionMinutes: 10 }, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(400);
   });
 
-  it('refuses profile or sharing requests made with another account after a tab switch', async () => {
+  it('requires the correct account id, including for legacy requests', async () => {
     const owner = await coachSession();
     const first = await createStudentAccount(owner.token);
     const second = await createStudentAccount(owner.token);
     expect((await call('GET', `/api/me/profile?accountId=${first.id}`, undefined, second.token)).status).toBe(409);
     expect((await call('PUT', '/api/me/profile', { accountId: first.id, profile, shareWithCoach: true }, second.token)).status).toBe(409);
     expect((await call('POST', '/api/me/profile/sharing', { accountId: first.id, shareWithCoach: true }, second.token)).status).toBe(409);
-    expect((await call('GET', '/api/me/profile', undefined, second.token)).json.stored).toBeNull();
+    expect((await call('GET', '/api/me/profile', undefined, second.token)).status).toBe(409);
+    expect((await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, second.token)).status).toBe(409);
+    expect((await call('POST', '/api/me/profile/sharing', { shareWithCoach: false }, second.token)).status).toBe(409);
+    expect((await call('GET', `/api/me/profile?accountId=${second.id}`, undefined, second.token)).json.stored).toBeNull();
   });
 
-  it('syncs only with explicit consent and limits the profile to the owning coach', async () => {
+  it('keeps a synced profile and weights private until consent and restricts them to the owning coach', async () => {
     const owner = await coachSession();
     const other = await coachSession();
     const student = await createStudentAccount(owner.token);
-
-    expect((await call('GET', '/api/me/profile', undefined, student.token)).json.stored).toBeNull();
-    const privateSave = await call('PUT', '/api/me/profile', { profile, shareWithCoach: false }, student.token);
-    expect(privateSave.status).toBe(200);
-    const privateView = await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token);
-    expect(privateView.json).toMatchObject({ shared: false, profile: null });
-
-    const sharedSave = await call('PUT', '/api/me/profile', { profile, shareWithCoach: true }, student.token);
-    expect(sharedSave.json.stored).toMatchObject({ shareWithCoach: true, profile });
+    expect((await call('GET', `/api/me/profile?accountId=${student.id}`, undefined, student.token)).json.stored).toBeNull();
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: false }, student.token)).status).toBe(200);
+    expect((await write(student, change(0, false, profile, 'profile-private-01'))).json.results[0].status).toBe('saved');
+    expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json).toMatchObject({ shared: false, profile: null, updatedAt: null });
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true, sharingVersion: await sharingVersion(student) }, student.token)).status).toBe(200);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toEqual(profile);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, other.token)).status).toBe(404);
-
     const admin = (await login('owner', 'owner-pass-123')).json.token as string;
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, admin)).status).toBe(403);
-    expect((await call('GET', '/api/me/profile', undefined, owner.token)).status).toBe(403);
-
-    const revoked = await call('POST', '/api/me/profile/sharing', { shareWithCoach: false }, student.token);
-    expect(revoked.json.shareWithCoach).toBe(false);
+    expect((await call('GET', `/api/me/profile?accountId=${student.id}`, undefined, owner.token)).status).toBe(403);
+    const staleSharingVersion = await sharingVersion(student);
+    const revoked = await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: false }, student.token);
+    expect(revoked.json).toMatchObject({ shareWithCoach: false, sharingVersion: staleSharingVersion + 1 });
+    expect((await call('PUT', '/api/me/profile', { accountId: student.id, profile, shareWithCoach: true, sharingVersion: staleSharingVersion }, student.token)).status).toBe(409);
+    expect((await call('POST', '/api/me/profile/sharing', { accountId: student.id, shareWithCoach: true, sharingVersion: staleSharingVersion }, student.token)).status).toBe(409);
     expect((await call('GET', `/api/students/${student.id}/profile`, undefined, owner.token)).json.profile).toBeNull();
   });
 });
@@ -234,18 +259,23 @@ describe('roles and student provisioning', () => {
     expect(res.status).toBe(404);
   });
 
-  it('resetting a password issues a new one and signs the student out everywhere', async () => {
-    const { token } = await coachSession();
-    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد ج' }, token);
-    const studentToken = (await login(created.json.username, created.json.password)).json.token as string;
-    await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'first-real-pass' }, studentToken);
-
-    const reset = await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, token);
+  it('lets the coach reset an unclaimed temporary password but not a password chosen by the student', async () => {
+    const coach = await coachSession();
+    const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد ج' }, coach.token);
+    const reset = await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, coach.token);
     expect(reset.status).toBe(200);
-    expect(reset.json.password).not.toBe(created.json.password);
+    const studentToken = (await login(created.json.username, reset.json.password)).json.token as string;
+    await call('POST', '/api/me/password', { currentPassword: reset.json.password, newPassword: 'first-real-pass' }, studentToken);
+    expect((await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, coach.token)).status).toBe(403);
+    expect((await call('PUT', `/api/students/${created.json.user.id}/active`, { active: false }, coach.token)).status).toBe(403);
+    expect((await call('DELETE', `/api/students/${created.json.user.id}`, {}, coach.token)).status).toBe(403);
+    expect((await call('GET', '/api/me', undefined, studentToken)).status).toBe(200);
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const supportReset = await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, admin);
+    expect(supportReset.status).toBe(200);
+    expect((await call('POST', `/api/students/${created.json.user.id}/reset-password`, {}, coach.token)).status).toBe(403);
+    expect((await call('GET', '/api/students', undefined, coach.token)).json.students[0].password).toBeNull();
     expect((await call('GET', '/api/me', undefined, studentToken)).status).toBe(401);
-    expect((await login(created.json.username, created.json.password)).status).toBe(401);
-    expect((await login(created.json.username, reset.json.password)).status).toBe(200);
   });
 
   it('rejects an invalid new password and a wrong current password', async () => {
@@ -498,13 +528,13 @@ describe('text chat between a coach and a student', () => {
     expect(adminView.json.messages).toHaveLength(2);
   });
 
-  it('removes a student\'s messages when the student is deleted', async () => {
+  it('does not let the coach delete a claimed student or their messages', async () => {
     const coach = await coachSession();
     const student = await studentSession(coach.token, 'شاگرد حذفی چت');
     await call('POST', `/api/students/${student.id}/chat`, { body: 'پیام' }, coach.token);
-    expect((await call('DELETE', `/api/students/${student.id}`, {}, coach.token)).status).toBe(200);
+    expect((await call('DELETE', `/api/students/${student.id}`, {}, coach.token)).status).toBe(403);
     const count = (await db.query<{ n: string }>('SELECT COUNT(*) AS n FROM messages WHERE student_id = $1', [student.id]))[0]!;
-    expect(Number(count.n)).toBe(0);
+    expect(Number(count.n)).toBe(1);
   });
 });
 
@@ -970,7 +1000,18 @@ describe('concurrent nutrition editing', () => {
     expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(192 * 1024);
     expect((await call('PUT', path, body, coach.token)).status).toBe(200);
     expect((await call('PUT', path, { ...body, padding: 'x'.repeat(192 * 1024) }, coach.token)).status).toBe(413);
-    expect((await call('PUT', '/api/me/profile', { padding: 'x'.repeat(17 * 1024) }, coach.token)).status).toBe(413);
-  });
+    expect((await call('PUT', '/api/me/profile', { padding: 'x'.repeat(257 * 1024) }, coach.token)).status).toBe(413);
+    expect((await call('POST', '/api/me/password', { padding: 'x'.repeat(17 * 1024) }, coach.token)).status).toBe(413);
+    const chunkedStatus = await new Promise<number>((resolve, reject) => {
+      const request = nodeRequest(`${base}/api/me/password`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (response) => {
+        response.resume(); response.on('end', () => resolve(response.statusCode ?? 0));
+      });
+      request.on('error', reject);
+      request.write('{"padding":"');
+      for (let part = 0; part < 20; part += 1) request.write('x'.repeat(1024));
+      request.end('"}');
+    });
+    expect(chunkedStatus).toBe(413);
+  }, 15000);
 
 });

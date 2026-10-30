@@ -15,8 +15,7 @@ import { db } from '../src/lib/db';
 import { getLocalDateKey } from '../src/lib/format';
 import { getWeekComparison, getWeeklyTotals } from '../src/lib/analytics';
 import { exerciseNames } from '../src/data/exerciseNames';
-import { adminPersonalProgram } from '../src/data/adminProgram';
-import { adminExerciseCatalogId } from '../src/data/adminExerciseGuides';
+import { adminExerciseCatalogId, adminExerciseIds } from '../src/data/adminExerciseGuides';
 import { exercises } from '../src/data/exercises';
 import type { WorkoutSession } from '../src/types';
 
@@ -76,21 +75,17 @@ describe('exercise name map', () => {
     exercises.forEach((exercise) => expect(exerciseNames[exercise.id]).toBe(exercise.name));
   });
 
-  it('uses the matching catalogue name for every admin-program movement', () => {
-    for (const workout of adminPersonalProgram) {
-      for (const item of workout.exercises) {
-        const catalogId = adminExerciseCatalogId(item.exerciseId);
-        const catalogExercise = exercises.find((exercise) => exercise.id === catalogId);
-        expect(catalogExercise, item.exerciseId).toBeDefined();
-        expect(item.name, item.exerciseId).toBe(catalogExercise?.name);
-      }
+  it('keeps every legacy movement alias mapped to an existing catalogue entry', () => {
+    for (const id of adminExerciseIds()) {
+      const catalogId = adminExerciseCatalogId(id);
+      expect(exercises.find((exercise) => exercise.id === catalogId), id).toBeDefined();
     }
   });
 });
 
 describe('primary routes', () => {
   it.each([
-    ['/', 'جلسهٔ بعدی'],
+    ['/', 'برنامهٔ خودت را شروع کن'],
     ['/program', 'تقسیم‌بندی تمرین‌ها'],
     ['/exercises', 'آموزش حرکت‌ها'],
     ['/exercise/barbell-bench-press', 'شروع، حرکت، پایان.'],

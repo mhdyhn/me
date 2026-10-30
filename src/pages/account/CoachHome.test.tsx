@@ -35,7 +35,7 @@ describe('coach student list filters', () => {
     expect(mocks.api).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps common student actions visible and groups administrative actions under More', async () => {
+  it('keeps common actions but hides account controls after the student claims it', async () => {
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
     expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
     const card = screen.getByText('سارا رضایی').closest('li');
@@ -46,7 +46,17 @@ describe('coach student list filters', () => {
     const more = within(card).getByText('بیشتر');
     fireEvent.click(more);
     expect(within(card).getByRole('link', { name: /تغذیه/ })).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /رمز تازه|غیرفعال‌سازی|حذف/ })).not.toBeInTheDocument();
+  });
+
+  it('retains account controls for a manual account before handover', async () => {
+    mocks.api.mockResolvedValueOnce({ students: [{ ...students[0], selfRegistered: false, mustChangePassword: true, password: 'temporary-pass' }] });
+    render(<MemoryRouter><CoachHome /></MemoryRouter>);
+    const card = (await screen.findByText('سارا رضایی')).closest('li');
+    if (!card) throw new Error('Student card fixture is missing.');
+    fireEvent.click(within(card).getByText('بیشتر'));
     expect(within(card).getByRole('button', { name: /رمز تازه/ })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /غیرفعال‌سازی/ })).toBeInTheDocument();
   });
 
   it('searches name and username, filters account status, and clears filters', async () => {

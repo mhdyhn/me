@@ -3,7 +3,7 @@ import { db } from './db';
 import { validateProgram } from './programRules';
 import { usesOwnerData } from './accountScope';
 import { defaultPersonalProgram, isProgramReadOnly, originalProgramCopy, setActiveProgram } from './programStore';
-import { adminPersonalProgram } from '../data/adminProgram';
+import { getExerciseGuide } from './exerciseGuide';
 import { notifyPersonalDataApplied, notifyPersonalDataChanged } from './personalSyncEvents';
 import { DraftChangedError, requireUnchanged } from './draftGuard';
 
@@ -16,12 +16,11 @@ export function normalizeAdminProgramNames(
   enabled = usesOwnerData() && import.meta.env.MODE !== 'test',
 ): { program: WorkoutTemplate[]; changed: boolean } {
   if (!enabled) return { program, changed: false };
-  const namesById = new Map(adminPersonalProgram.flatMap((workout) => workout.exercises.map(({ exerciseId, name }) => [exerciseId, name] as const)));
   let changed = false;
   const normalized = program.map((workout) => ({
     ...workout,
     exercises: workout.exercises.map((item) => {
-      const name = namesById.get(item.exerciseId);
+      const name = item.exerciseId.startsWith('admin-') ? getExerciseGuide(item.exerciseId)?.name : undefined;
       if (!name || item.name === name) return item;
       changed = true;
       return { ...item, name };
@@ -53,15 +52,26 @@ export async function loadStoredProgram(): Promise<void> {
   }
 }
 
-async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[]): Promise<void> {
-  if (isProgramReadOnly()) throw new Error('برنامهٔ مربی قابل ویرایش شخصی نیست؛ صفحه را دوباره باز کنید.');
+async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[], options?: { requireNoActiveSession?: boolean; stillCurrent?: () => boolean }): Promise<void> {
+  const assertCurrent = () => {
+    if (isProgramReadOnly() || (options?.stillCurrent && !options.stillCurrent())) {
+      throw new Error('حساب یا وضعیت برنامه تغییر کرده است؛ صفحه را دوباره باز کن.');
+    }
+  };
+  assertCurrent();
   try {
-    await db.transaction('rw', db.preferences, async () => {
+    await db.transaction('rw', db.preferences, db.sessions, async () => {
+      if (options?.requireNoActiveSession && await db.sessions.where('status').equals('active').count()) {
+        throw new Error('ابتدا تمرین فعال را تمام یا متوقف و همگام کن؛ سپس برنامه را از فایل بازگردان.');
+      }
       const record = await db.preferences.get(PROGRAM_KEY);
       const current = record?.value ?? defaultPersonalProgram();
       if (expected !== undefined) requireUnchanged(current, expected);
+      assertCurrent();
       await db.preferences.put({ key: BACKUP_KEY, value: current });
+      assertCurrent();
       await db.preferences.put({ key: PROGRAM_KEY, value: next });
+      assertCurrent();
     });
   } catch (error) {
     if (error instanceof DraftChangedError) notifyPersonalDataApplied();
@@ -73,10 +83,10 @@ async function persistProgram(next: WorkoutTemplate[], expected?: WorkoutTemplat
 }
 
 /** Save locally first; reject a stale editor in the same IndexedDB transaction. */
-export async function saveProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[]): Promise<void> {
+export async function saveProgram(next: WorkoutTemplate[], expected?: WorkoutTemplate[], options?: { requireNoActiveSession?: boolean; stillCurrent?: () => boolean }): Promise<void> {
   const errors = validateProgram(next);
   if (errors.length) throw new Error(errors[0]);
-  await persistProgram(next, expected);
+  await persistProgram(next, expected, options);
 }
 export const clearProgram = (expected?: WorkoutTemplate[]) => persistProgram([], expected);
 export const resetProgram = (expected?: WorkoutTemplate[]) => saveProgram(originalProgramCopy(), expected);

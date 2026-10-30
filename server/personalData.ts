@@ -109,22 +109,26 @@ export async function applyPersonalChange(db: Db, userId: number, change: Person
   const select = 'kind, item_key, version, body, deleted, updated_at, last_operation_id';
   // Compare-and-swap is atomic. A stale device cannot overwrite a newer version.
   const session = change.kind === 'session';
+  const profileDeletion = change.kind === 'profile' && change.deleted;
+  const locksUser = session || profileDeletion;
   const write = change.baseVersion === 0
     ? `INSERT INTO personal_data_records (user_id, kind, item_key, version, body, deleted, updated_at, last_operation_id)
-       ${session ? 'SELECT $1, $2, $3, 1, $4, $5, $6, $7 FROM session_lock' : 'VALUES ($1, $2, $3, 1, $4, $5, $6, $7)'}
+       ${locksUser ? 'SELECT $1, $2, $3, 1, $4, $5, $6, $7 FROM user_lock' : 'VALUES ($1, $2, $3, 1, $4, $5, $6, $7)'}
        ON CONFLICT (user_id, kind, item_key) DO NOTHING RETURNING ${select}`
     : `UPDATE personal_data_records SET version = version + 1, body = $4, deleted = $5, updated_at = $6, last_operation_id = $7
-       WHERE user_id = $1 AND kind = $2 AND item_key = $3 AND version = $8 ${session ? 'AND EXISTS (SELECT 1 FROM session_lock)' : ''} RETURNING ${select}`;
+       WHERE user_id = $1 AND kind = $2 AND item_key = $3 AND version = $8 ${locksUser ? 'AND EXISTS (SELECT 1 FROM user_lock)' : ''} RETURNING ${select}`;
   const writeParams = change.baseVersion === 0 ? params.slice(0, 7) : params;
   // A relationship switch that races a session write must see a changed user row, not a stale snapshot.
   const statement = session
-    ? `WITH session_lock AS MATERIALIZED (SELECT id FROM users WHERE id = $1 FOR UPDATE), written AS (${write}), bumped AS (
+    ? `WITH user_lock AS MATERIALIZED (SELECT id FROM users WHERE id = $1 FOR UPDATE), written AS (${write}), bumped AS (
          UPDATE users SET session_guard_version = session_guard_version + 1 WHERE id = $1 AND EXISTS (SELECT 1 FROM written)
        ) SELECT * FROM written`
     // Deleting a shared profile also revokes consent atomically; recreating it must not silently re-share it.
-    : change.kind === 'profile' && change.deleted
-      ? `WITH written AS (${write}), revoked AS (
+    : profileDeletion
+      ? `WITH user_lock AS MATERIALIZED (SELECT id FROM users WHERE id = $1 FOR UPDATE), written AS (${write}), revoked AS (
            UPDATE student_profiles SET share_with_coach = 0 WHERE student_id = $1 AND EXISTS (SELECT 1 FROM written)
+         ), bumped AS (
+           UPDATE users SET coach_access_version = coach_access_version + 1 WHERE id = $1 AND role = 'student' AND EXISTS (SELECT 1 FROM written)
          ) SELECT * FROM written`
       : write;
   const rows = await db.query<RecordRow>(statement, writeParams);
