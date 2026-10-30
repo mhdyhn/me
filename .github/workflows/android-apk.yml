@@ -57,7 +57,9 @@ jobs:
       - name: Build the web app and copy it into the Android project
         run: |
           npm run build || { echo "::error title=Android web build::The web build failed before Capacitor synchronization."; exit 1; }
+          node tools/prepare-android-assets.mjs clean || { echo "::error title=Android assets::The gzip sidecars could not be removed."; exit 1; }
           npx cap sync android || { echo "::error title=Android synchronization::Capacitor could not copy the web assets."; exit 1; }
+          node tools/prepare-android-assets.mjs verify || { echo "::error title=Android assets::Gzip sidecars must not be packaged for Android."; exit 1; }
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
