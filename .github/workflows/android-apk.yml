@@ -77,8 +77,14 @@ jobs:
         if: steps.signing_secrets.outcome == 'failure'
         working-directory: android
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/meety-gradle-debug.log" || {
+            echo "::error title=Android debug compile::The debug compile failed. No release APK was created or published."
+            message="$(tail -40 "$RUNNER_TEMP/meety-gradle-debug.log" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{ if (NR>1) printf "%%0A"; printf "%s", $0 }')"
+            echo "::error title=Android debug compile::$message"
+            exit 1
+          }
 
       - name: Stop when release signing is unavailable
         if: steps.signing_secrets.outcome == 'failure'
@@ -149,4 +155,4 @@ jobs:
 
       - name: Remove temporary signing material
         if: always()
-        run: rm -f "$RUNNER_TEMP/meety-release.keystore" "$RUNNER_TEMP/meety-signing-cert.der" "$RUNNER_TEMP/meety-apk-signature.txt"
+        run: rm -f "$RUNNER_TEMP/meety-release.keystore" "$RUNNER_TEMP/meety-signing-cert.der" "$RUNNER_TEMP/meety-apk-signature.txt" "$RUNNER_TEMP/meety-gradle-debug.log"
