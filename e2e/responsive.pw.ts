@@ -861,7 +861,7 @@ for (const [label, account] of [['admin', admin], ['student', student]] as const
     await expect(page.getByLabel('هدف اصلی')).toHaveValue('');
     await expect(page.getByRole('button', { name: /انتقال.*قدیمی/ })).toHaveCount(0);
     await expect(page.getByText(/شناسهٔ نسخهٔ رابط/)).toHaveCount(0);
-    await expect(page.getByText(/با مهرِ مهدی/)).toBeVisible();
+    await expect(page.locator('.settings-signature')).toHaveText('طراحی شده توسط mhdy');
     await expectNoPageOverflow(page);
     await page.goto('/nutrition');
     await expect(page.locator('.nutrition-goals-card').getByRole('spinbutton', { name: /پروتئین/ })).toHaveValue('');
@@ -904,6 +904,29 @@ for (const [label, account] of [['admin', admin], ['student', student]] as const
   });
 }
 
+for (const account of [student, coach, admin]) {
+  for (const width of [320, 1280]) {
+    test(`${account.role} sees the small signature at the corner on ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockAccount(page, account);
+      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+      const signature = page.locator('.settings-signature');
+      await expect(signature).toHaveText('طراحی شده توسط mhdy');
+      await expect(signature.locator('bdi')).toHaveAttribute('dir', 'ltr');
+      await expect(signature).toHaveCSS('font-size', '12px');
+      await signature.scrollIntoViewIfNeeded();
+      const box = await signature.boundingBox();
+      const pageBox = await page.locator('.settings-page').boundingBox();
+      expect(box).not.toBeNull();
+      expect(pageBox).not.toBeNull();
+      // Inline end is the left edge in this RTL layout, not the centre.
+      expect(Math.abs(box!.x - pageBox!.x)).toBeLessThanOrEqual(2);
+      expect(box!.width).toBeLessThan(pageBox!.width / 2);
+      await expectNoPageOverflow(page);
+    });
+  }
+}
+
 test('coach starts with blank personal settings and no legacy transfer action', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await mockAccount(page, coach);
@@ -911,7 +934,7 @@ test('coach starts with blank personal settings and no legacy transfer action', 
   await expect(page.getByLabel('سن')).toHaveValue('');
   await expect(page.getByLabel('هدف اصلی')).toHaveValue('');
   await expect(page.getByRole('button', { name: /انتقال.*قدیمی/ })).toHaveCount(0);
-  await expect(page.getByText(/با مهرِ مهدی/)).toBeVisible();
+  await expect(page.locator('.settings-signature')).toHaveText('طراحی شده توسط mhdy');
   await expectNoPageOverflow(page);
 });
 

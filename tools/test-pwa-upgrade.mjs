@@ -176,7 +176,7 @@ try {
     await page.goto(base + '/settings', { waitUntil: 'load' });
     const signature = page.locator('.settings-signature');
     await signature.waitFor();
-    assert.match(await signature.innerText(), /با مهرِ مهدی/);
+    assert.equal(await signature.innerText(), 'طراحی شده توسط mhdy');
     if (process.env.PWA_EXPECT_REVISION) assert.equal(await signature.getAttribute('data-web-revision'), process.env.PWA_EXPECT_REVISION);
     await checkSentinels(page);
     await context.close();

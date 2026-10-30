@@ -263,8 +263,7 @@ export function Settings() {
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>
       <p className="settings-signature" data-web-revision={typeof __MEETY_WEB_REVISION__ === 'string' ? __MEETY_WEB_REVISION__ : 'نامشخص'}>
-        <span>طراحی رابط و تجربهٔ کاربری</span>
-        <strong>با مهرِ مهدی <span aria-hidden="true">✦</span></strong>
+        طراحی شده توسط <bdi dir="ltr">mhdy</bdi>
       </p>
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
