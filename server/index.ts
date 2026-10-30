@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { createApp } from './app.ts';
 import { ensureAdmin } from './bootstrap.ts';
-import { openDatabase } from './db.ts';
+import { lazyDatabase, openDatabase } from './db.ts';
 import { quarantineOwnerProfileCopies } from './personalData.ts';
 import { keyFromSecret } from './secrets.ts';
 import { isFile, resolveStaticDir, serveStatic } from './static.ts';
@@ -24,9 +24,10 @@ if (!databaseUrl && process.env.NODE_ENV === 'production') {
 }
 mkdirSync(dataDir, { recursive: true });
 
-const db = await openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
-const adminState = await ensureAdmin(db, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
-if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
+// The database can take a while to wake up (the hosted one scales down when it is idle).
+// The web server starts anyway and answers the health check while the connection is made.
+const dbOpen = openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
+const db = lazyDatabase(dbOpen);
 
 const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 // One process serves the built app (dist/) and the API, so the deployed site has a single address.
@@ -44,25 +45,29 @@ const server = createServer((request, response) => {
 });
 server.listen(port, host, () => {
   console.log(`Meety API listening on http://${host}:${port}`);
-  // The owner's personal profile may never stay inside another account; a leftover copy is removed.
-  // This runs after the server is up on purpose: a slow or failing cleanup must never keep the site offline,
-  // and the admin panel can still scan and remove the copies on demand.
-  void quarantineOwnerProfileCopies(db, new Date().toISOString())
-    .then((ownerCopies) => {
-      if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
-    })
-    .catch((error: Error) => console.error('Owner profile cleanup did not finish:', error.message));
+  // Everything that needs the database runs in the background: the site stays reachable
+  // while the hosted database wakes up.
+  void dbOpen.then(async (database) => {
+    const adminState = await ensureAdmin(database, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
+    if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
+    // The owner's personal profile may never stay inside another account; a leftover copy is removed.
+    // A slow or failing cleanup must never keep the site offline, and the admin panel can still
+    // scan and remove the copies on demand.
+    const ownerCopies = await quarantineOwnerProfileCopies(database, new Date().toISOString());
+    if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
+  }).catch((error: Error) => console.error('Database preparation did not finish:', error.message));
 });
 
-/** The hosted database may take a few seconds to wake up, so the first connection is retried before giving up. */
+/** The hosted database may take a while to wake up, so the connection is retried in the background. */
 async function openWithRetry(target: string) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await openDatabase(target);
     } catch (error) {
-      if (attempt >= 10) throw error;
-      console.error(`Database not ready (attempt ${attempt}); retrying in 3 seconds.`, (error as Error).message);
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      if (attempt === 1 || attempt % 12 === 0) {
+        console.error(`Database not ready (attempt ${attempt}); retrying in 5 seconds.`, (error as Error).message);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 }

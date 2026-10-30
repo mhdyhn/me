@@ -174,6 +174,11 @@ export function createApp(options: AppOptions) {
       // A simple DB check; its timing is not an end-to-end or authenticated benchmark.
       handler: async () => {
         try {
+          // While the hosted database is still waking up the process is up and must say so.
+          // Waiting for the database here would make the host restart the instance again.
+          if (db.isReady && !db.isReady()) {
+            return { status: 200, body: { ok: true, database: false, starting: true } };
+          }
           const started = performance.now();
           await db.query('SELECT 1');
           const databaseMs = Math.round(performance.now() - started);

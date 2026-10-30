@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { PGlite } from '@electric-sql/pglite';
 import { migrateChat } from './chat.ts';
+import { HttpError } from './http.ts';
 import { migrateNutrition } from './nutrition.ts';
 import { migrateSessions } from './sessions.ts';
 import { migratePayments } from './payments.ts';
@@ -24,6 +25,8 @@ export interface Db {
   query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<T[]>;
   exec(sql: string): Promise<void>;
   close(): Promise<void>;
+  /** False while the database is still connecting. Only the lazy handle reports it. */
+  isReady?(): boolean;
 }
 
 /** Opens the database. `target` is a postgres:// URL, 'memory', or a folder path for local use. */
@@ -31,6 +34,46 @@ export async function openDatabase(target: string): Promise<Db> {
   const db = target.startsWith('postgres') ? fromPool(target) : fromPGlite(target === 'memory' ? new PGlite() : new PGlite(target));
   await migrate(db);
   return db;
+}
+
+/**
+ * A handle that works before the database finished connecting. The hosted database can take a
+ * while to wake up; the web server must answer the health check in the meantime, otherwise the
+ * host restarts the instance and the site never comes up. Queries wait for the database and
+ * give up with a clear error when it stays unreachable.
+ */
+export function lazyDatabase(open: Promise<Db>, waitMs = 20000): Db {
+  let ready = false;
+  void open.then(() => { ready = true; }, () => undefined);
+  const wait = async (): Promise<Db> => {
+    if (ready) return open;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        open,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new HttpError(503, 'پایگاه داده در حال اتصال است؛ کمی بعد دوباره تلاش کنید.')), waitMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+  return {
+    async query<T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T[]> {
+      const database = await wait();
+      return database.query<T>(sql, params);
+    },
+    async exec(sql: string): Promise<void> {
+      const database = await wait();
+      await database.exec(sql);
+    },
+    async close(): Promise<void> {
+      const database = await open.catch(() => null);
+      if (database) await database.close();
+    },
+    isReady: () => ready,
+  };
 }
 
 function fromPool(url: string): Db {
