@@ -126,18 +126,18 @@ export function Settings() {
           <fieldset className="editor-fieldset" disabled={saving} aria-label="ویرایش پروفایل">
           <div className="card-topline"><div><span className="eyebrow">پروفایل تمرینی</span><h2>دربارهٔ تو.</h2></div><UserRound size={18} className="icon-accent" /></div>
           <div className="settings-fields-grid">
-            <label className="field-control"><span>سن</span><input type="number" min="13" max="100" value={draft.age} onChange={(event) => update('age', Number(event.target.value))} required /></label>
-            <label className="field-control"><span>جنسیت</span><select value={draft.sex} onChange={(event) => update('sex', event.target.value)}><option value="مرد">مرد</option><option value="زن">زن</option><option value="ترجیح می‌دهم نگویم">ترجیح می‌دهم نگویم</option></select></label>
-            <label className="field-control"><span>قد <small>سانتی‌متر</small></span><input type="number" min="100" max="250" value={draft.heightCm} onChange={(event) => update('heightCm', Number(event.target.value))} required /></label>
-            <label className="field-control"><span>وزن پروفایل <small>کیلوگرم</small></span><input type="number" min="30" max="300" step="0.1" value={draft.weightKg} onChange={(event) => update('weightKg', Number(event.target.value))} required /></label>
+            <label className="field-control"><span>سن</span><input type="number" min="13" max="100" value={draft.age === 0 ? '' : draft.age} onChange={(event) => update('age', Number(event.target.value))} required /></label>
+            <label className="field-control"><span>جنسیت</span><select value={draft.sex} onChange={(event) => update('sex', event.target.value)}><option value="">انتخاب کن</option><option value="مرد">مرد</option><option value="زن">زن</option><option value="ترجیح می‌دهم نگویم">ترجیح می‌دهم نگویم</option></select></label>
+            <label className="field-control"><span>قد <small>سانتی‌متر</small></span><input type="number" min="100" max="250" value={draft.heightCm === 0 ? '' : draft.heightCm} onChange={(event) => update('heightCm', Number(event.target.value))} required /></label>
+            <label className="field-control"><span>وزن پروفایل <small>کیلوگرم</small></span><input type="number" min="30" max="300" step="0.1" value={draft.weightKg === 0 ? '' : draft.weightKg} onChange={(event) => update('weightKg', Number(event.target.value))} required /></label>
             <label className="field-control"><span>هدف اصلی</span><input value={draft.primaryGoal} onChange={(event) => update('primaryGoal', event.target.value)} required /></label>
             <label className="field-control"><span>هدف دوم</span><input value={draft.secondaryGoal} onChange={(event) => update('secondaryGoal', event.target.value)} /></label>
-            <label className="field-control"><span>روزهای تمرین در هفته</span><input type="number" min="1" max="7" value={draft.trainingDays} onChange={(event) => update('trainingDays', Number(event.target.value))} /></label>
-            <label className="field-control"><span>حداکثر زمان جلسه <small>دقیقه</small></span><input type="number" min="20" max="180" value={draft.sessionMinutes} onChange={(event) => update('sessionMinutes', Number(event.target.value))} /></label>
+            <label className="field-control"><span>روزهای تمرین در هفته</span><input type="number" min="1" max="7" value={draft.trainingDays === 0 ? '' : draft.trainingDays} onChange={(event) => update('trainingDays', Number(event.target.value))} /></label>
+            <label className="field-control"><span>حداکثر زمان جلسه <small>دقیقه</small></span><input type="number" min="20" max="180" value={draft.sessionMinutes === 0 ? '' : draft.sessionMinutes} onChange={(event) => update('sessionMinutes', Number(event.target.value))} /></label>
             <label className="field-control"><span>سابقهٔ تمرین</span><input value={draft.trainingExperience} onChange={(event) => update('trainingExperience', event.target.value)} /></label>
             <label className="field-control"><span>خواب</span><input value={draft.sleepHours} onChange={(event) => update('sleepHours', event.target.value)} /></label>
             <label className="field-control"><span>فعالیت روزانه</span><input value={draft.dailyActivity} onChange={(event) => update('dailyActivity', event.target.value)} /></label>
-            <label className="field-control"><span>سطح استرس <small>۱ تا ۱۰</small></span><input type="number" min="1" max="10" value={draft.stressLevel} onChange={(event) => update('stressLevel', Number(event.target.value))} /></label>
+            <label className="field-control"><span>سطح استرس <small>۱ تا ۱۰</small></span><input type="number" min="1" max="10" value={draft.stressLevel === 0 ? '' : draft.stressLevel} onChange={(event) => update('stressLevel', Number(event.target.value))} /></label>
             <label className="field-control field-control--wide"><span>آسیب‌دیدگی یا محدودیت</span><textarea rows={3} value={draft.injuries} onChange={(event) => update('injuries', event.target.value)} /></label>
           </div>
           {hasCoach && (
@@ -181,12 +181,15 @@ export function Settings() {
             </button>
           </section>
 
-          <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>
+          {draft.workingWeightReferences.length > 0 && <section className="panel-card references-card"><div className="card-topline"><div><span className="eyebrow">وزنه‌های کاری گزارش‌شده</span><h3>فقط برای شناخت نقطهٔ شروع.</h3></div><Info size={17} className="icon-muted" /></div><p className="muted small-text">این اعداد فقط برآورد تقریبی وزنهٔ کاری پروفایل هستند؛ نه رکورد یک‌تکرار بیشینه و نه عملکرد ثبت‌شده. تعداد ست، تکرار، نوع حرکت و شیوهٔ نمایش وزنه در دستگاه تأیید نشده‌اند. هر وزنه را در باشگاه بررسی کن.</p><div className="reference-list">{draft.workingWeightReferences.map((reference) => <div key={reference.label}><strong>{reference.label}</strong><span>حدود {faNumber(reference.weightKg)} کیلوگرم</span><small>{reference.note}</small></div>)}</div></section>}
           <section className="panel-card privacy-card"><span className="privacy-icon"><LockKeyhole size={17} /></span><span className="eyebrow">حریم خصوصی</span><h3>داده‌های تو، انتخاب تو.</h3><p>{hasCoach ? 'پروفایل با حساب همگام می‌شود؛ مربی فقط با فعال‌کردن اشتراک آن را می‌بیند. داده‌های همگام‌نشده با پاک‌کردن مرورگر از دست می‌روند.' : 'پروفایل و گزارش‌های شخصی به حساب همگام می‌شوند؛ داده‌های همگام‌نشده ممکن است با پاک‌کردن مرورگر از دست بروند.'}</p><div className="privacy-points">{hasCoach && <span><ShieldCheck size={14} /> اشتراک پروفایل با مربی قابل مدیریت است</span>}<span><ShieldCheck size={14} /> فایل پشتیبان را در جای امن نگه دار</span></div><button className="button button--secondary button--full" onClick={() => void exportBackup()}><Download size={16} /> دریافت نسخهٔ پشتیبان</button><small className="field-hint">JSON شامل پروفایل، هدف‌های تغذیه، جلسه‌ها، وزن و یادداشت‌های محلی است؛ برنامه، گفت‌وگو و دفتر خوراک سرور را ندارد. بازیابی خودکار در برنامه وجود ندارد.</small>{backupError && <p className="form-error" role="alert">{backupError}</p>}</section>
         </aside>
       </div>
       <div className="settings-disclaimer"><Info size={16} /><span>راهنمای تمرین عمومی و آموزشی است و جایگزین توصیهٔ پزشکی یا تشخیص فردی نیست. حرکت‌ها را متناسب با توانت تنظیم کن و برای درد یا پرسش سلامت از متخصص کمک بگیر.</span></div>
-      <p className="muted small-text">شناسهٔ نسخهٔ رابط در این دستگاه: <code dir="ltr">{typeof __MEETY_WEB_REVISION__ === 'string' ? __MEETY_WEB_REVISION__ : 'نامشخص'}</code></p>
+      <p className="settings-signature" data-web-revision={typeof __MEETY_WEB_REVISION__ === 'string' ? __MEETY_WEB_REVISION__ : 'نامشخص'}>
+        <span>طراحی رابط و تجربهٔ کاربری</span>
+        <strong>با مهرِ مهدی <span aria-hidden="true">✦</span></strong>
+      </p>
       <InstallAppModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );

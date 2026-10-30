@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { blankNutritionGoals, blankProfile, defaultNutritionGoals, defaultProfile, localizeKnownProfileCopy } from '../data/profile';
+import { blankNutritionGoals, blankProfile, localizeKnownProfileCopy } from '../data/profile';
 import { db } from '../lib/db';
-import { usesOwnerData } from '../lib/accountScope';
 import { PERSONAL_DATA_APPLIED, notifyPersonalDataApplied, notifyPersonalDataChanged } from '../lib/personalSyncEvents';
 import { DraftChangedError, requireUnchanged } from '../lib/draftGuard';
 import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly } from '../lib/programStore';
@@ -15,6 +14,7 @@ interface GymContextValue {
   profile: UserProfile;
   nutritionGoals: NutritionGoals;
   loading: boolean;
+  refreshing: boolean;
   storageWarning: string | null;
   activeSession: WorkoutSession | null;
   saveSession: (session: WorkoutSession, expected?: WorkoutSession) => Promise<boolean>;
@@ -36,10 +36,13 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [bodyweights, setBodyweights] = useState<BodyweightEntry[]>([]);
   const [nutritionDays, setNutritionDays] = useState<NutritionDay[]>([]);
-  // Only the developer's own account starts with their details; everyone else starts blank.
-  const [profile, setProfile] = useState<UserProfile>(() => (usesOwnerData() ? defaultProfile : blankProfile));
-  const [nutritionGoals, setNutritionGoals] = useState<NutritionGoals>(() => (usesOwnerData() ? defaultNutritionGoals : blankNutritionGoals));
+  // A missing profile is blank in every scope; stored values are never cleared.
+  const [profile, setProfile] = useState<UserProfile>(() => blankProfile);
+  const [nutritionGoals, setNutritionGoals] = useState<NutritionGoals>(() => blankNutritionGoals);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  // Initial reads count too: a local save must not strand loading if it wins the race.
+  const refreshPending = useRef(true);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const startingRef = useRef<Promise<WorkoutSession | null> | null>(null);
   const loadGeneration = useRef(0);
@@ -60,19 +63,23 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setSessions(storedSessions.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()));
         setBodyweights(storedBodyweights.sort((a, b) => b.date.localeCompare(a.date)));
         setNutritionDays(storedNutrition.sort((a, b) => b.date.localeCompare(a.date)));
-        const nextProfile = storedProfile?.value ? localizeKnownProfileCopy(storedProfile.value as UserProfile) : (usesOwnerData() ? defaultProfile : blankProfile);
-        const nextGoals = storedGoals?.value ? storedGoals.value as NutritionGoals : (usesOwnerData() ? defaultNutritionGoals : blankNutritionGoals);
+        const nextProfile = storedProfile?.value ? localizeKnownProfileCopy(storedProfile.value as UserProfile) : blankProfile;
+        const nextGoals = storedGoals?.value ? storedGoals.value as NutritionGoals : blankNutritionGoals;
         setProfile((current) => JSON.stringify(current) === JSON.stringify(nextProfile) ? current : nextProfile);
         setNutritionGoals((current) => JSON.stringify(current) === JSON.stringify(nextGoals) ? current : nextGoals);
       } catch (error) {
         console.error('Meety could not read local data.', error);
         if (mounted && generation === loadGeneration.current) setStorageWarning('فضای ذخیره‌سازی محلی باز نشد. می‌توانی در همین زبانه از برنامه استفاده کنی، اما تغییرات ممکن است پس از بارگذاری دوباره باقی نمانند.');
       } finally {
-        if (mounted && generation === loadGeneration.current) setLoading(false);
+        if (mounted && generation === loadGeneration.current) {
+          refreshPending.current = false;
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     };
     void load();
-    const refresh = () => { void load(); };
+    const refresh = () => { refreshPending.current = true; setRefreshing(true); void load(); };
     window.addEventListener(PERSONAL_DATA_APPLIED, refresh);
     return () => { mounted = false; window.removeEventListener(PERSONAL_DATA_APPLIED, refresh); };
   }, []);
@@ -81,6 +88,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
     try {
       await action();
       loadGeneration.current++;
+      // If a save invalidated a pending remote refresh, read the committed state again.
+      if (refreshPending.current) notifyPersonalDataApplied();
       notifyPersonalDataChanged();
       return true;
     } catch (error) {
@@ -106,8 +115,6 @@ export function GymProvider({ children }: { children: ReactNode }) {
   }, [persist]);
 
   const startWorkout = useCallback(async (templateId: string) => {
-    const existing = sessions.find((session) => session.status === 'active');
-    if (existing) return existing;
     if (startingRef.current) return startingRef.current;
     const template = getWorkoutTemplate(templateId);
     if (!template) return null;
@@ -148,13 +155,13 @@ export function GymProvider({ children }: { children: ReactNode }) {
     } finally {
       startingRef.current = null;
     }
-  }, [persist, sessions]);
+  }, [persist]);
 
   const saveProfile = useCallback(async (nextProfile: UserProfile, expected?: UserProfile) => {
     const stored = await persist(() => db.transaction('rw', db.preferences, async () => {
       if (expected !== undefined) {
         const row = await db.preferences.get('profile');
-        const current = row?.value ? localizeKnownProfileCopy(row.value as UserProfile) : (usesOwnerData() ? defaultProfile : blankProfile);
+        const current = row?.value ? localizeKnownProfileCopy(row.value as UserProfile) : blankProfile;
         requireUnchanged(current, expected);
       }
       await db.preferences.put({ key: 'profile', value: nextProfile });
@@ -167,7 +174,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const stored = await persist(() => db.transaction('rw', db.preferences, async () => {
       if (expected !== undefined) {
         const row = await db.preferences.get('nutritionGoals');
-        requireUnchanged(row?.value ?? (usesOwnerData() ? defaultNutritionGoals : blankNutritionGoals), expected);
+        requireUnchanged(row?.value ?? blankNutritionGoals, expected);
       }
       await db.preferences.put({ key: 'nutritionGoals', value: goals });
     }));
@@ -233,10 +240,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   const activeSession = sessions.find((session) => session.status === 'active') ?? null;
   const value = useMemo<GymContextValue>(() => ({
-    sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
+    sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, refreshing, storageWarning, activeSession,
     saveSession, deleteSession, completeActiveSession, startWorkout, saveProfile, saveNutritionGoals: saveGoals,
     addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay,
-  }), [sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, storageWarning, activeSession,
+  }), [sessions, bodyweights, nutritionDays, profile, nutritionGoals, loading, refreshing, storageWarning, activeSession,
       saveSession, deleteSession, completeActiveSession, startWorkout, saveProfile, saveGoals,
       addBodyweight, deleteBodyweight, saveNutritionDay, deleteNutritionDay]);
 

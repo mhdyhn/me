@@ -31,7 +31,6 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     commonMistakes: ['Bouncing the bar off the chest', 'Letting wrists fold back', 'Losing foot or upper-back contact', 'Flaring elbows aggressively'],
     safetyCues: ['Use safeties or a competent spotter for challenging sets.', 'Stop a rep if the bar path or shoulder position becomes uncontrolled.'],
     machineSetup: { title: 'BENCH SETUP', points: ['Bench level and centered in the rack.', 'Choose a grip that feels comfortable at the shoulder.', 'Set safeties just below the bar’s normal touch point.', 'Keep feet planted and shoulder blades gently supported.'] },
-    referenceWeightKg: 20, referenceNote: 'Reported working-weight reference only; reps and setup are unverified.',
   }),
   defineExercise({
     id: 'incline-dumbbell-press', name: 'Incline Dumbbell Press', category: 'Push',
@@ -56,7 +55,6 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     commonMistakes: ['Overarching the lower back', 'Using leg drive while seated', 'Letting wrists collapse', 'Shrugging hard at the top'],
     safetyCues: ['Use a comfortable range and stop if shoulder discomfort appears.', 'Set dumbbells down safely rather than dropping them from overhead.'],
     machineSetup: { title: 'SEATED SETUP', points: ['Set back support upright and stable.', 'Plant feet flat and sit close to the back pad.', 'Begin with dumbbells at a comfortable shoulder-height position.', 'Keep ribs stacked over the pelvis.'] },
-    referenceWeightKg: 10, referenceNote: 'Reported approximate reference; dumbbell-per-hand or total load is not confirmed.',
   }),
   defineExercise({
     id: 'cable-fly', name: 'Cable Fly', category: 'Push',
@@ -80,7 +78,6 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     breathing: 'Exhale while raising; inhale while lowering.', tempo: '2 sec up, brief pause, 2–3 sec down.',
     commonMistakes: ['Swinging the torso', 'Shrugging toward the ears', 'Raising much higher than a comfortable shoulder range'],
     safetyCues: ['A small load and controlled reps are more useful than momentum.', 'Stop short of sharp shoulder pain.'],
-    referenceWeightKg: undefined,
   }),
   defineExercise({
     id: 'cable-lateral-raise', name: 'Single-Arm Cable Lateral Raise', category: 'Push',
@@ -255,9 +252,8 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     finishPosition: 'Stand tall and re-rack only after both sides are aligned with the hooks.',
     breathing: 'Take a breath and brace before each rep; exhale near the top as you regain position.', tempo: '2–3 sec down, controlled turnaround, steady ascent.',
     commonMistakes: ['Heels lifting or balance shifting to toes', 'Knees collapsing inward', 'Losing trunk position', 'Rushing the descent'],
-    safetyCues: ['Set safeties before loading.', 'Use a depth you can control without pain or loss of balance.', 'Do not treat an unverified reference load as a prescribed working set.'],
+    safetyCues: ['Set safeties before loading.', 'Use a depth you can control without pain or loss of balance.', 'Choose a load that lets you keep control throughout the set.'],
     machineSetup: { title: 'RACK SETUP', points: ['Set hooks just below shoulder height.', 'Set safety bars just below your controlled squat depth.', 'Place the bar securely across the upper back in a comfortable position.', 'Choose a stance that lets knees track in line with toes; brace before unracking.'] },
-    referenceWeightKg: 30, referenceNote: 'Reported working-weight reference only; reps and setup are unverified.',
   }),
   defineExercise({
     id: 'romanian-deadlift', name: 'Romanian Deadlift', category: 'Legs',
@@ -281,7 +277,6 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     commonMistakes: ['Allowing the pelvis to tuck off the pad', 'Letting knees collapse inward', 'Bouncing at the bottom', 'Locking knees hard'],
     safetyCues: ['Set the machine stops before the set.', 'Use a pain-free depth and keep the back supported.'],
     machineSetup: { title: 'MACHINE SETUP', points: ['Adjust the seat/back pad so hips stay supported at the bottom.', 'Set safety stops within a range you can control.', 'Place feet evenly around shoulder width on the platform.', 'Keep knees tracking with toes and avoid forceful lockout.'] },
-    referenceWeightKg: 60, referenceNote: 'Reported working-weight reference; machine type and plate convention are unverified.',
   }),
   defineExercise({
     id: 'leg-extension', name: 'Leg Extension', category: 'Legs',
@@ -294,7 +289,6 @@ export const exerciseDefinitions: ExerciseDefinition[] = [
     commonMistakes: ['Using momentum', 'Setting the roller on the foot instead of lower shin', 'Slamming the weight stack'],
     safetyCues: ['Keep the knee in a comfortable range.', 'Use a light first set to verify machine alignment.'],
     machineSetup: { title: 'MACHINE SETUP', points: ['Align the machine pivot with the side of the knee as closely as practical.', 'Adjust the back pad so hips stay seated.', 'Place the lower roller just above the ankles.', 'Set the start range to a comfortable knee bend; test with a light load.'] },
-    referenceWeightKg: 100, referenceNote: 'Reported working-weight reference; machine type and displayed-weight convention are unverified.',
   }),
   defineExercise({
     id: 'leg-curl', name: 'Seated Leg Curl', category: 'Legs',

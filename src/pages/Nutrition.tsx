@@ -14,7 +14,7 @@ import type { Targets } from '../lib/nutrition';
 import type { NutritionGoals, NutritionDay } from '../types';
 
 const numeric = (value: string) => value.trim() ? Number(value) : undefined;
-const goalsView = (goals: NutritionGoals) => ({ calories: goals.dailyCalories?.toString() ?? '', protein: String(goals.proteinG), carbs: goals.carbsG?.toString() ?? '', fats: goals.fatsG?.toString() ?? '' });
+const goalsView = (goals: NutritionGoals) => ({ calories: goals.dailyCalories?.toString() ?? '', protein: goals.proteinG === 0 ? '' : String(goals.proteinG), carbs: goals.carbsG?.toString() ?? '', fats: goals.fatsG?.toString() ?? '' });
 const goalsValue = (view: ReturnType<typeof goalsView>): NutritionGoals => ({ dailyCalories: numeric(view.calories), proteinG: numeric(view.protein) ?? 0, carbsG: numeric(view.carbs), fatsG: numeric(view.fats) });
 
 export function Nutrition() {
@@ -64,12 +64,12 @@ export function Nutrition() {
     const carbs = numeric(targetCarbs);
     const fats = numeric(targetFats);
     if (calories !== undefined && (!Number.isFinite(calories) || calories < 500 || calories > 10000)) { setGoalError('برآورد کالری باید بین ۵۰۰ تا ۱۰٬۰۰۰ باشد یا این بخش را خالی بگذار.'); return; }
-    if (protein === undefined || !Number.isFinite(protein) || protein < 0 || protein > 500) { setGoalError('هدف پروتئین را به‌صورت عددی معتبر و بر حسب گرم وارد کن.'); return; }
+    if (protein !== undefined && (!Number.isFinite(protein) || protein < 0 || protein > 500)) { setGoalError('هدف پروتئین را معتبر وارد کن یا خالی بگذار.'); return; }
     if (carbs !== undefined && (!Number.isFinite(carbs) || carbs < 0 || carbs > 1000)) { setGoalError('هدف کربوهیدرات را معتبر وارد کن یا خالی بگذار.'); return; }
     if (fats !== undefined && (!Number.isFinite(fats) || fats < 0 || fats > 500)) { setGoalError('هدف چربی را معتبر وارد کن یا خالی بگذار.'); return; }
     goalSavingRef.current = true; setGoalSaving(true);
     try {
-      const next = { dailyCalories: calories, proteinG: protein, carbsG: carbs, fatsG: fats };
+      const next = { dailyCalories: calories, proteinG: protein ?? 0, carbsG: carbs, fatsG: fats };
       const stored = await saveNutritionGoals(next, goalsValue(goalDraft.base));
       if (stored === false) { setGoalSaved(false); setGoalError('ذخیره روی دستگاه انجام نشد؛ پیش‌نویس فقط تا وقتی این صفحه باز است باقی می‌ماند.'); return; }
       goalDraft.setDraft(goalsView(next));
@@ -117,7 +117,7 @@ export function Nutrition() {
           <form className="form-stack" aria-busy={goalSaving} onSubmit={(event) => void submitGoals(event)}>
             <fieldset className="editor-fieldset form-stack" disabled={goalSaving} aria-label="ویرایش هدف‌های تغذیه">
             <label className="field-control"><span>هدف کالری <small>اختیاری · کیلوکالری</small></span><input type="number" min="500" max="10000" step="25" inputMode="numeric" value={targetCalories} onChange={(event) => changeGoal('calories', event.target.value)} placeholder="برآورد دلخواهت را وارد کن" /></label>
-            <label className="field-control"><span>پروتئین <small>گرم در روز</small></span><div className="input-with-unit"><input type="number" min="0" max="500" step="1" value={targetProtein} onChange={(event) => changeGoal('protein', event.target.value)} required /><span>گرم</span></div><small className="field-hint">{hasWeight ? `بازهٔ تقریبی برای وزن فعلی: ${faNumber(proteinLow)} تا ${faNumber(proteinHigh)} گرم.` : 'برای برآورد بازهٔ پروتئین، ابتدا وزن را ثبت کن.'}</small></label>
+            <label className="field-control"><span>پروتئین <small>اختیاری · گرم در روز</small></span><div className="input-with-unit"><input type="number" min="0" max="500" step="1" value={targetProtein} onChange={(event) => changeGoal('protein', event.target.value)} /><span>گرم</span></div><small className="field-hint">{hasWeight ? `بازهٔ تقریبی برای وزن فعلی: ${faNumber(proteinLow)} تا ${faNumber(proteinHigh)} گرم.` : 'برای برآورد بازهٔ پروتئین، ابتدا وزن را ثبت کن.'}</small></label>
             <div className="macro-inputs"><label className="field-control"><span>کربوهیدرات <small>گرم</small></span><input type="number" min="0" max="1000" step="1" value={targetCarbs} onChange={(event) => changeGoal('carbs', event.target.value)} placeholder="اختیاری" /></label><label className="field-control"><span>چربی <small>گرم</small></span><input type="number" min="0" max="500" step="1" value={targetFats} onChange={(event) => changeGoal('fats', event.target.value)} placeholder="اختیاری" /></label></div>
             {goalDraft.conflict && <DraftConflictNotice latest={nutritionGoals} discard={goalDraft.discard} acceptCurrent={goalDraft.acceptCurrent} />}
             {goalError && <p className="form-error" role="alert">{goalError}</p>}

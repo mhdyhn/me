@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GymProvider, useGym } from '../src/context/GymProvider';
-import { defaultProfile } from '../src/data/profile';
+import { sampleProfile } from './fixtures/profile';
 import { db } from '../src/lib/db';
 import { originalProgramCopy } from '../src/lib/programStore';
 import { clearProgram, saveProgram } from '../src/lib/programPersistence';
@@ -30,7 +30,7 @@ function Harness() {
 
 beforeEach(async () => {
   await Promise.all([db.preferences.clear(), db.nutritionDays.clear(), db.sessions.clear(), db.syncMetadata.clear(), db.syncDeleted.clear()]);
-  await db.preferences.put({ key: 'profile', value: { ...defaultProfile, age: 28 } });
+  await db.preferences.put({ key: 'profile', value: { ...sampleProfile, age: 28 } });
   await db.preferences.put({ key: 'nutritionGoals', value: { proteinG: 100 } });
   await db.nutritionDays.put(day);
   await db.sessions.put(session);
@@ -41,7 +41,7 @@ describe('atomic local draft checks', () => {
   it.each(['profile', 'goals', 'day', 'session'] as const)('does not overwrite a newer %s even before the UI refresh event', async (kind) => {
     render(<GymProvider><Harness /></GymProvider>);
     await screen.findByText('28');
-    if (kind === 'profile') await db.preferences.put({ key: 'profile', value: { ...defaultProfile, age: 30 } });
+    if (kind === 'profile') await db.preferences.put({ key: 'profile', value: { ...sampleProfile, age: 30 } });
     if (kind === 'goals') await db.preferences.put({ key: 'nutritionGoals', value: { proteinG: 200 } });
     if (kind === 'day') await db.nutritionDays.put({ ...day, notes: 'جدید' });
     if (kind === 'session') await db.sessions.put({ ...session, notes: 'جدید' });

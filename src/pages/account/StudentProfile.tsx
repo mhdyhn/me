@@ -69,8 +69,8 @@ function StudentProfileScreen() {
                 <ProfileItem label="هدف اصلی" value={data.profile.primaryGoal} />
                 <ProfileItem label="هدف تکمیلی" value={data.profile.secondaryGoal || 'ثبت نشده'} />
                 <ProfileItem label="سابقهٔ تمرین" value={data.profile.trainingExperience || 'ثبت نشده'} />
-                <ProfileItem label="روزهای تمرین در هفته" value={faNumber(data.profile.trainingDays)} />
-                <ProfileItem label="زمان معمول جلسه" value={`${faNumber(data.profile.sessionMinutes)} دقیقه`} />
+                <ProfileItem label="روزهای تمرین در هفته" value={data.profile.trainingDays ? faNumber(data.profile.trainingDays) : 'ثبت نشده'} />
+                <ProfileItem label="زمان معمول جلسه" value={data.profile.sessionMinutes ? `${faNumber(data.profile.sessionMinutes)} دقیقه` : 'ثبت نشده'} />
                 <ProfileItem label="فعالیت روزانه" value={data.profile.dailyActivity || 'ثبت نشده'} />
                 <ProfileItem label="میزان خواب" value={data.profile.sleepHours || 'ثبت نشده'} />
                 <ProfileItem label="تجهیزات" value={data.profile.equipment || 'ثبت نشده'} />

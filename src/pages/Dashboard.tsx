@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { CoachConnection } from '../components/CoachConnection';
 import { RouteLoading } from '../components/RouteLoading';
 import { usePersonalSyncState } from '../components/PersonalSync';
+import { isOfflineBuild } from '../lib/accountScope';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedMeta, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
@@ -22,7 +23,7 @@ const shortcuts = [
 ];
 
 export function Dashboard() {
-  const { sessions, loading, activeSession } = useGym();
+  const { sessions, loading, refreshing, storageWarning, activeSession } = useGym();
   const { user } = useSession();
   const program = useProgram();
   const assignedProgramLoadState = useAssignedProgramLoadState();
@@ -56,6 +57,17 @@ export function Dashboard() {
   const exerciseCount = displayedWorkout?.exercises.length ?? 0;
   const setCount = displayedWorkout?.exercises.reduce((sum, item) => sum + item.prescription.sets, 0) ?? 0;
   const workoutName = activeSession ? displayedWorkout?.name ?? activeSession.name : displayedWorkout?.name ?? '';
+  // An untouched local session can be created just by opening the workout screen.
+  const sessionHasProgress = Boolean(activeSession && (
+    activeSession.exercises.some((exercise) => exercise.sets.length > 0)
+    || activeSession.currentExerciseIndex > 0 || activeSession.currentSetIndex > 0 || activeSession.notes?.trim()
+  ));
+  const untouchedSession = Boolean(activeSession && displayedWorkout && !sessionHasProgress);
+  const activeSessions = sessions.filter((session) => session.status === 'active');
+  const sessionSyncPending = Boolean(refreshing || (user && !isOfflineBuild && import.meta.env.MODE !== 'test' && !personalSync.lastSyncAt
+    && (personalSync.phase === 'idle' || personalSync.phase === 'syncing')));
+  const sessionSyncFailed = Boolean(user && !isOfflineBuild && !personalSync.lastSyncAt && personalSync.phase === 'error');
+  const sessionSyncConflict = personalSync.conflicts.some((item) => item.kind === 'session');
 
   const startOrResume = () => {
     if (activeSession) navigate(`/workout/${activeSession.templateId}`);
@@ -78,19 +90,44 @@ export function Dashboard() {
       </section>
 
       <div className={`dashboard-grid ${targetCount > 0 ? 'dashboard-grid--home' : 'dashboard-grid--single'}`}>
-        {displayedWorkout || activeSession ? (
-          <section className={`next-workout-card${activeSession ? ' next-workout-card--active' : ''}`}>
+        {sessionSyncPending ? (
+          <section className="dashboard-no-program panel-card" role="status" aria-live="polite">
+            <div className="dashboard-program-message">
+              <span className="hero-kicker"><span aria-hidden="true" /> وضعیت تمرین</span>
+              <h3>در حال بررسی اطلاعات حساب…</h3>
+              <p>جلسه‌های این دستگاه و سرور را بررسی می‌کنیم.</p>
+            </div>
+          </section>
+        ) : sessionSyncFailed || sessionSyncConflict || storageWarning ? (
+          <section className="dashboard-no-program panel-card" role="alert">
+            <EmptyState
+              title={sessionSyncConflict ? 'وضعیت تمرین نیاز به بررسی دارد' : storageWarning ? 'وضعیت تمرین در دستگاه نامشخص است' : personal && !activeSession && !displayedWorkout ? 'بررسی برنامهٔ شخصی کامل نشد' : 'بررسی تمرین‌های سرور انجام نشد'}
+              detail={sessionSyncConflict ? 'نسخهٔ تمرین در دستگاه و سرور متفاوت است؛ پیش از ادامه هر دو را بررسی کن.' : storageWarning || 'وضعیت جلسهٔ دستگاه‌های دیگر مشخص نیست؛ اطلاعات این دستگاه دست‌نخورده مانده‌اند.'}
+              action={<><Link to="/settings" className="button button--primary">بررسی همگام‌سازی <ArrowLeft size={15} /></Link>{personal && <> <Link to="/program" className="button button--secondary">برنامهٔ محلی</Link></>}</>}
+            />
+          </section>
+        ) : activeSessions.length > 1 && activeSession ? (
+          <section className="dashboard-no-program panel-card" role="alert">
+            <EmptyState
+              title="چند جلسهٔ باز پیدا شد"
+              detail="ممکن است جلسه‌ها در دستگاه‌های مختلف شروع شده باشند. پیش از ادامه، آن‌ها را بررسی کن؛ ست‌های ثبت‌شده پاک نمی‌شوند."
+              action={<Link to={`/workout/${activeSession.templateId}`} className="button button--primary">بررسی جلسه‌ها <ArrowLeft size={15} /></Link>}
+            />
+          </section>
+        ) : displayedWorkout || activeSession ? (
+          <section className={`next-workout-card${activeSession && !untouchedSession ? ' next-workout-card--active' : ''}`}>
             <div className="next-workout-card__content">
               <div className="next-workout-card__top">
-                <span className="hero-kicker"><span aria-hidden="true" /> {activeSession ? 'تمرین ادامه‌دار' : 'جلسهٔ بعدی'}</span>
-                <span className="day-chip">{activeSession ? 'در حال انجام' : displayedWorkout?.dayLabel ?? 'تمرین'}</span>
+                <span className="hero-kicker"><span aria-hidden="true" /> {activeSession && !untouchedSession ? 'تمرین ادامه‌دار' : 'جلسهٔ بعدی'}</span>
+                <span className="day-chip">{activeSession && !untouchedSession ? 'در حال انجام' : displayedWorkout?.dayLabel ?? 'تمرین'}</span>
               </div>
               <div className="next-workout-card__body">
                 <div className="next-workout-card__copy">
                   <p className="workout-focus">{displayedWorkout?.focus ?? 'جلسهٔ تمرینی'}</p>
                   <h3>{workoutName}</h3>
                   {displayedWorkout?.description && <p className="next-workout-description">{displayedWorkout.description}</p>}
-                  {activeSession && <p className="muted small-text">{displayedWorkout ? 'ست‌هایی که ثبت کرده‌ای ذخیره شده‌اند؛ هر وقت آماده‌ای ادامه بده.' : 'برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.'}</p>}
+                  {activeSession && <p className="muted small-text">{!displayedWorkout ? 'برنامهٔ اصلی جلسه در دسترس نیست؛ وضعیت جلسه و ست‌های ثبت‌شده را بررسی کن.' : untouchedSession ? 'هنوز ستی ثبت نشده؛ با شروع، همین جلسه باز می‌شود.' : 'جلسهٔ ناتمام ذخیره شده است؛ هر وقت آماده‌ای ادامه بده.'}</p>}
+                  {user && personalSync.phase === 'offline' && <p className="muted small-text">آفلاین هستی؛ وضعیت تمرین در دستگاه دیگر ممکن است متفاوت باشد.</p>}
                 </div>
               </div>
               {displayedWorkout && (
@@ -102,18 +139,10 @@ export function Dashboard() {
               )}
               <div className="next-workout-card__footer">
                 <button className="button button--primary button--large" onClick={startOrResume}>
-                  {activeSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowLeft size={17} />
+                  {activeSession && !untouchedSession ? 'ادامهٔ تمرین' : 'شروع تمرین'} <ArrowLeft size={17} />
                 </button>
                 <Link to="/program" className="hero-program-link">برنامهٔ من <ArrowLeft size={15} /></Link>
               </div>
-            </div>
-          </section>
-        ) : personal && user && !personalSync.lastSyncAt && personalSync.phase === 'syncing' ? (
-          <section className="dashboard-no-program panel-card" role="status" aria-live="polite">
-            <div className="dashboard-program-message">
-              <span className="hero-kicker"><span aria-hidden="true" /> برنامهٔ شخصی</span>
-              <h3>در حال بررسی اطلاعات حساب…</h3>
-              <p>برنامهٔ ذخیره‌شده را از سرور و این دستگاه بررسی می‌کنیم.</p>
             </div>
           </section>
         ) : personal && user && !personalSync.lastSyncAt && (personalSync.phase === 'offline' || personalSync.phase === 'error') ? (

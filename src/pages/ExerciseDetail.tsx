@@ -265,7 +265,7 @@ export function ExerciseDetail() {
               <p className="previous-date">{getWorkoutTemplate(previous.session.templateId)?.name ?? previous.session.name} · {formatDate(previous.session.startedAt, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               <div className="previous-set-list">{previous.sets.map((set) => <div key={set.setNumber}><span>ست {faNumber(set.setNumber)}</span><strong>{kg(set.weightKg)} × {faNumber(set.reps)}</strong><small>{faNumber(set.rir)} تکرار در ذخیره</small></div>)}</div>
               {advice && <div className={`progression-advice${advice.readyToIncrease ? ' progression-advice--ready' : ''}`}><CheckCircle2 size={16} /><div><strong>{advice.title}</strong><span>{advice.detail}</span></div></div>}
-            </> : <div className="previous-empty"><span className="previous-empty__mark">—</span><strong>هنوز ستی ثبت نشده</strong><p>پس از اولین جلسه، وزنه، تکرار و میزان تکرار در ذخیره اینجا نمایش داده می‌شود.</p>{exercise.referenceWeightKg && <div className="reference-note"><Info size={14} /><span>وزنهٔ تقریبی گزارش‌شده: <strong>حدود {kg(exercise.referenceWeightKg)}</strong>. {exercise.referenceNote} پیش از ثبت، وزنهٔ کاری را بررسی کن.</span></div>}</div>}
+            </> : <div className="previous-empty"><span className="previous-empty__mark">—</span><strong>هنوز ستی ثبت نشده</strong><p>پس از اولین جلسه، وزنه، تکرار و میزان تکرار در ذخیره اینجا نمایش داده می‌شود.</p></div>}
           </section>
 
           <section className="panel-card muscle-card">

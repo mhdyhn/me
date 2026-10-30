@@ -138,9 +138,9 @@ export function AiHub() {
     ? Math.min(...plannedMuscleRecovery.map((status) => status.recoveryPercent))
     : null;
   const currentWeightKg = [...bodyweights]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weightKg ?? profile.weightKg ?? 77;
-  const proteinMinG = Math.round(currentWeightKg * 1.6);
-  const proteinMaxG = Math.round(currentWeightKg * 2.2);
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weightKg ?? (profile.weightKg >= 30 ? profile.weightKg : null);
+  const proteinMinG = currentWeightKg === null ? null : Math.round(currentWeightKg * 1.6);
+  const proteinMaxG = currentWeightKg === null ? null : Math.round(currentWeightKg * 2.2);
 
   const handleSync = (source: HealthTrackerSource) => {
     setMetricsError('');
@@ -723,7 +723,7 @@ export function AiHub() {
               <div className="panel-card" style={{ margin: '12px 0', padding: 14 }}>
                 <strong>هدف تغذیهٔ برنامهٔ شخصی</strong>
                 <p className="muted" style={{ margin: '6px 0 0', lineHeight: 1.8 }}>
-                  با وزن فعلی ثبت‌شدهٔ {faNumber(currentWeightKg)} کیلوگرم، بازهٔ پیشنهادی برنامه برای پروتئین حدود {faNumber(proteinMinG)} تا {faNumber(proteinMaxG)} گرم در روز است؛ برای افزایش وزن، مازاد حدود ۳۰۰ کیلوکالری نسبت به نگهدارنده در نظر گرفته شده. این بخش یادآور هدف است و به‌تنهایی کالری یا پروتئین مصرفی را محاسبه نمی‌کند.
+                  {currentWeightKg !== null && proteinMinG !== null && proteinMaxG !== null ? `با وزن ثبت‌شدهٔ ${faNumber(currentWeightKg)} کیلوگرم، بازهٔ عمومی پروتئین حدود ${faNumber(proteinMinG)} تا ${faNumber(proteinMaxG)} گرم در روز است. این برآورد آموزشی است و نیاز فردی را تعیین نمی‌کند.` : 'برای دیدن بازهٔ تقریبی پروتئین، ابتدا وزن خود را در پروفایل یا بخش پیشرفت ثبت کن.'}
                 </p>
               </div>
             )}

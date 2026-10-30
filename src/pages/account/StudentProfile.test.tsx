@@ -44,6 +44,15 @@ describe('coach student profile status', () => {
     expect(screen.getByText('۲۸ سال')).toBeInTheDocument();
   });
 
+  it('shows unspecified training days and duration without inventing values', async () => {
+    mocks.api.mockResolvedValue({ ...sharedProfile, profile: { ...sharedProfile.profile, trainingDays: 0, sessionMinutes: 0 } });
+    renderProfile();
+    expect(await screen.findByText('اشتراک پروفایل فعال است')).toBeInTheDocument();
+    for (const label of ['روزهای تمرین در هفته', 'زمان معمول جلسه']) {
+      expect(screen.getByText(label).parentElement).toHaveTextContent('ثبت نشده');
+    }
+  });
+
   it('refreshes and reflects when the student has disabled sharing', async () => {
     mocks.api.mockResolvedValueOnce(sharedProfile).mockResolvedValueOnce({
       studentName: 'مهدی', profile: null, updatedAt: null, shared: false,
