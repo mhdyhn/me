@@ -30,13 +30,15 @@ describe('settings profile sharing status', () => {
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-  it('shows the designer signature instead of a visible device revision', async () => {
+  it.each(['student', 'coach', 'admin'])('shows the simple signature for %s without a visible device revision', async (role) => {
+    mocks.user = { id: 12, role, coachId: role === 'student' ? 4 : null };
     mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
     render(<Settings />);
-    expect(screen.getByText('طراحی رابط و تجربهٔ کاربری')).toBeInTheDocument();
-    expect(screen.getByText(/با مهرِ مهدی/)).toBeInTheDocument();
-    expect(screen.queryByText(/شناسهٔ نسخهٔ رابط/)).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
+    const signature = screen.getByText('mhdy').closest('.settings-signature');
+    expect(signature).toHaveTextContent('طراحی شده توسط mhdy');
+    expect(signature).toHaveAttribute('data-web-revision');
+    expect(screen.queryByText(/با مهرِ مهدی|طراحی رابط و تجربهٔ کاربری|شناسهٔ نسخهٔ رابط/)).not.toBeInTheDocument();
+    if (role === 'student') await waitFor(() => expect(screen.getByRole('checkbox', { name: /نمایش پروفایل به مربی/ })).toBeEnabled());
   });
 
 
