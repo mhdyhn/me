@@ -81,6 +81,107 @@ export function validateChange(input: unknown): PersonalChange {
 interface RecordRow { kind: PersonalKind; item_key: string; version: string | number; deleted: number; body: string | null; updated_at: string; last_operation_id: string }
 const fromRow = (row: RecordRow): PersonalRecord => ({ kind: row.kind, key: row.item_key, version: Number(row.version), deleted: Number(row.deleted) === 1, value: row.deleted ? null : JSON.parse(row.body!), updatedAt: row.updated_at });
 
+const PROFILE_TEXT_FIELDS = ['sex', 'primaryGoal', 'secondaryGoal', 'trainingExperience', 'dailyActivity', 'sleepHours', 'injuries', 'equipment'] as const;
+const PROFILE_NUMBER_FIELDS = ['age', 'heightCm', 'weightKg', 'trainingDays', 'sessionMinutes', 'stressLevel'] as const;
+
+const asRecord = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value : {}) as Record<string, unknown>;
+const parseBody = (body: string | null | undefined): Record<string, unknown> => {
+  if (!body) return {};
+  try { return asRecord(JSON.parse(body)); } catch { return {}; }
+};
+const trimmed = (value: unknown): string => String(value ?? '').trim();
+const finite = (value: unknown): number => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
+
+/** One comparable shape for a profile, so two records match only when their values match. */
+export function profileSignature(value: unknown): string {
+  const source = asRecord(value);
+  const text = PROFILE_TEXT_FIELDS.map((field) => `${field}=${trimmed(source[field])}`).join('|');
+  const numbers = PROFILE_NUMBER_FIELDS.map((field) => `${field}=${finite(source[field])}`).join('|');
+  const references = Array.isArray(source.workingWeightReferences)
+    ? source.workingWeightReferences.map((entry) => {
+      const item = asRecord(entry);
+      return `${trimmed(item.label)}@${finite(item.weightKg)}:${trimmed(item.note)}`;
+    }).join(';')
+    : '';
+  return `${text}||${numbers}||${references}`;
+}
+
+/** An empty profile is nobody's data; it is never treated as a copy of the owner's profile. */
+export function isMeaningfulProfile(value: unknown): boolean {
+  const source = asRecord(value);
+  if (PROFILE_NUMBER_FIELDS.some((field) => finite(source[field]) > 0)) return true;
+  if (PROFILE_TEXT_FIELDS.some((field) => trimmed(source[field]) !== '')) return true;
+  return Array.isArray(source.workingWeightReferences) && source.workingWeightReferences.length > 0;
+}
+
+export interface OwnerProfileCopy { userId: number; username: string; displayName: string; role: string }
+
+/**
+ * Accounts whose stored profile is a copy of an admin (the owner) profile. The owner's personal
+ * data must never live inside somebody else's account.
+ */
+export async function findOwnerProfileCopies(db: Db): Promise<OwnerProfileCopy[]> {
+  const owners = await db.query<{ body: string }>(
+    `SELECT p.body FROM personal_data_records p JOIN users u ON u.id = p.user_id
+      WHERE p.kind = 'profile' AND p.item_key = 'main' AND p.deleted = 0 AND u.role = 'admin'`, []);
+  const ownerSignatures = new Set(owners.map((row) => profileSignature(parseBody(row.body))));
+  if (!ownerSignatures.size) return [];
+  const rows = await db.query<{ user_id: string | number; username: string; display_name: string; role: string; body: string }>(
+    `SELECT p.user_id, u.username, u.display_name, u.role, p.body
+       FROM personal_data_records p JOIN users u ON u.id = p.user_id
+      WHERE p.kind = 'profile' AND p.item_key = 'main' AND p.deleted = 0 AND u.role <> 'admin'`, []);
+  return rows
+    .filter((row) => isMeaningfulProfile(parseBody(row.body)) && ownerSignatures.has(profileSignature(parseBody(row.body))))
+    .map((row) => ({ userId: Number(row.user_id), username: row.username, displayName: row.display_name, role: row.role }));
+}
+
+/** Removes the owner's copy from the other account and revokes the coach's access to it. */
+export async function quarantineOwnerProfileCopies(db: Db, at: string): Promise<OwnerProfileCopy[]> {
+  const copies = await findOwnerProfileCopies(db);
+  for (const copy of copies) {
+    await db.query(
+      `WITH changed AS (
+         UPDATE personal_data_records SET version = version + 1, body = NULL, deleted = 1, updated_at = $2, last_operation_id = 'owner-copy-quarantine'
+          WHERE user_id = $1 AND kind = 'profile' AND item_key = 'main' AND deleted = 0 RETURNING user_id
+       ), removed AS (
+         DELETE FROM student_profiles WHERE student_id = $1 AND EXISTS (SELECT 1 FROM changed)
+       ), revoked AS (
+         UPDATE users SET coach_access_version = coach_access_version + 1 WHERE id = $1 AND role = 'student' AND EXISTS (SELECT 1 FROM changed)
+       ) SELECT user_id FROM changed`, [copy.userId, at]);
+  }
+  return copies;
+}
+
+/** The account owner deletes their own stored profile; the coach keeps no copy of it. */
+export async function clearStoredProfile(db: Db, userId: number, at: string): Promise<{ version: number }> {
+  const rows = await db.query<{ version: string | number }>(
+    `WITH changed AS (
+       UPDATE personal_data_records SET version = version + 1, body = NULL, deleted = 1, updated_at = $2, last_operation_id = 'profile-purge'
+        WHERE user_id = $1 AND kind = 'profile' AND item_key = 'main' AND deleted = 0 RETURNING version
+     ), removed AS (
+       DELETE FROM student_profiles WHERE student_id = $1
+     ), revoked AS (
+       UPDATE users SET coach_access_version = coach_access_version + 1 WHERE id = $1 AND role = 'student'
+     )
+     SELECT COALESCE((SELECT version FROM changed), (SELECT version FROM personal_data_records WHERE user_id = $1 AND kind = 'profile' AND item_key = 'main')) AS version`,
+    [userId, at]);
+  return { version: Number(rows[0]?.version ?? 0) };
+}
+
+/** A profile that is a copy of the owner's data is refused before it reaches another account. */
+export async function assertProfileIsNotOwnerCopy(db: Db, userId: number, value: unknown): Promise<void> {
+  if (!isMeaningfulProfile(value)) return;
+  const writers = await db.query<{ role: string }>('SELECT role FROM users WHERE id = $1', [userId]);
+  if (writers[0]?.role === 'admin') return;
+  const owners = await db.query<{ body: string }>(
+    `SELECT p.body FROM personal_data_records p JOIN users u ON u.id = p.user_id
+      WHERE p.kind = 'profile' AND p.item_key = 'main' AND p.deleted = 0 AND u.role = 'admin'`, []);
+  const signature = profileSignature(value);
+  if (owners.some((row) => profileSignature(parseBody(row.body)) === signature)) {
+    throw new HttpError(409, 'این پروفایل با اطلاعات شخصی حساب مالک یکسان است؛ دادهٔ حساب دیگر در حساب تو ذخیره نمی‌شود.');
+  }
+}
+
 export async function getPersonalRecord(db: Db, userId: number, kind: PersonalKind, key: string): Promise<PersonalRecord | null> {
   const rows = await db.query<RecordRow>('SELECT kind, item_key, version, body, deleted, updated_at, last_operation_id FROM personal_data_records WHERE user_id = $1 AND kind = $2 AND item_key = $3', [userId, kind, key]);
   return rows[0] ? fromRow(rows[0]) : null;
@@ -105,6 +206,8 @@ export async function listPersonalRecords(db: Db, userId: number, cursor: string
 }
 
 export async function applyPersonalChange(db: Db, userId: number, change: PersonalChange, at: string): Promise<PersonalChangeResult> {
+  // The owner's personal data may not be stored inside another account.
+  if (change.kind === 'profile' && !change.deleted) await assertProfileIsNotOwnerCopy(db, userId, change.value);
   const params = [userId, change.kind, change.key, change.deleted ? null : JSON.stringify(change.value), change.deleted ? 1 : 0, at, change.operationId, change.baseVersion];
   const select = 'kind, item_key, version, body, deleted, updated_at, last_operation_id';
   // Compare-and-swap is atomic. A stale device cannot overwrite a newer version.

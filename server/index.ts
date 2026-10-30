@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { createApp } from './app.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase } from './db.ts';
+import { quarantineOwnerProfileCopies } from './personalData.ts';
 import { keyFromSecret } from './secrets.ts';
 import { isFile, resolveStaticDir, serveStatic } from './static.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -26,6 +27,9 @@ mkdirSync(dataDir, { recursive: true });
 const db = await openWithRetry(databaseUrl || resolve(dataDir, 'pgdata'));
 const adminState = await ensureAdmin(db, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
 if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
+// The owner's personal profile may never stay inside another account; a leftover copy is removed.
+const ownerCopies = await quarantineOwnerProfileCopies(db, new Date().toISOString());
+if (ownerCopies.length) console.log(`Owner profile copies removed from: ${ownerCopies.map((item) => item.username).join(', ')}.`);
 
 const api = createApp({ db, secretKey: loadSecretKey(dataDir) });
 // One process serves the built app (dist/) and the API, so the deployed site has a single address.

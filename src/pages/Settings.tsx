@@ -6,13 +6,16 @@ import { InstallAppModal } from '../components/InstallAppModal';
 import { PersonalDataPanel } from '../components/PersonalDataPanel';
 import { FormerCoachRecords } from '../components/FormerCoachRecords';
 import { DraftConflictNotice } from '../components/DraftConflictNotice';
+import { confirmModal } from '../components/ConfirmModal';
 import { useGuardedDraft } from '../components/useGuardedDraft';
 import { DraftChangedError } from '../lib/draftGuard';
 import { useGym } from '../context/GymProvider';
 import { db } from '../lib/db';
 import { faNumber } from '../lib/format';
 import { ApiError, api } from '../lib/api';
-import { schedulePersonalSync } from '../lib/personalSync';
+import { forgetLocalProfile, schedulePersonalSync } from '../lib/personalSync';
+import { isOfflineBuild } from '../lib/accountScope';
+import { hasProfileContent } from '../data/profile';
 import { useSession } from '../context/SessionContext';
 import type { UserProfile } from '../types';
 
@@ -37,6 +40,9 @@ export function Settings() {
   const [error, setError] = useState('');
   const [backupError, setBackupError] = useState('');
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [profileCleared, setProfileCleared] = useState(false);
+  const profileHasContent = hasProfileContent(profile);
 
 
   useEffect(() => {
@@ -150,6 +156,27 @@ export function Settings() {
     } finally { savingRef.current = false; setSaving(false); }
   };
 
+  /** Deletes the stored profile of this account, on the server and on this device. */
+  const clearProfile = async () => {
+    if (!user || clearing) return;
+    const ok = await confirmModal({
+      title: 'پاک‌کردن پروفایل ذخیره‌شده',
+      message: 'پروفایل ذخیره‌شده و وزنه‌های کاری تو از این حساب پاک می‌شود و مربی هم دیگر آن‌ها را نمی‌بیند. اگر این اطلاعات متعلق به تو نیست، همین‌جا پاکش کن و بعد فقط داده‌های خودت را بنویس.',
+      confirmText: 'پاک کن', cancelText: 'انصراف', variant: 'danger',
+    });
+    if (!ok) return;
+    setClearing(true); setError(''); setSaved(false); setProfileCleared(false);
+    try {
+      const result = await api<{ cleared: boolean; version: number }>('POST', '/me/profile/purge', { accountId: user.id });
+      if (result?.cleared !== true || !Number.isSafeInteger(result.version)) throw new Error('Purge was not confirmed');
+      await forgetLocalProfile(result.version);
+      setProfileCleared(true);
+      setSharingReload((attempt) => attempt + 1);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'پروفایل ذخیره‌شده پاک نشد.');
+    } finally { setClearing(false); }
+  };
+
   const exportBackup = async () => {
     try {
       const [storedProfile, storedGoals] = await Promise.all([db.preferences.get('profile'), db.preferences.get('nutritionGoals')]);
@@ -195,6 +222,8 @@ export function Settings() {
             <label className="field-control field-control--wide"><span>تجهیزات در دسترس</span><input value={draft.equipment} onChange={(event) => update('equipment', event.target.value)} /></label>
             <label className="field-control field-control--wide"><span>آسیب‌دیدگی یا محدودیت</span><textarea rows={3} value={draft.injuries} onChange={(event) => update('injuries', event.target.value)} /></label>
           </div>
+          {!hasProfileContent(draft) && <p className="field-hint">ثبت نشده: هنوز چیزی از خودت ثبت نکرده‌ای. فقط اطلاعات خودت را وارد کن.</p>}
+          {profileCleared && <p className="field-hint" role="status">پروفایل ذخیره‌شده پاک شد و از دسترس مربی خارج شد. اگر این اطلاعات متعلق به تو نبود، حالا فقط داده‌های خودت را وارد کن.</p>}
           <section className="working-weights" aria-labelledby="working-weights-title">
             <div className="card-topline"><div><span className="eyebrow">اطلاعات شخصی تو</span><h3 id="working-weights-title">وزنه‌های کاری</h3></div></div>
             <p className="field-hint">اختیاری است؛ نام حرکت، وزنهٔ تقریبی و یادداشت خودت را وارد کن. این‌ها رکورد قطعی نیستند و ست‌های قبلی را تغییر نمی‌دهند.</p>
@@ -232,6 +261,14 @@ export function Settings() {
           )}
           {profileDraft.conflict && <DraftConflictNotice latest={profile} discard={profileDraft.discard} acceptCurrent={profileDraft.acceptCurrent} />}
           {error && <p className="form-error" role="alert">{error}</p>}
+          {profileHasContent && !isOfflineBuild && (
+            <div className="settings-profile-clear">
+              <button type="button" className="button button--ghost button--small" disabled={clearing} onClick={() => void clearProfile()}>
+                <Trash2 size={15} /> {clearing ? 'در حال پاک‌کردن…' : 'پاک‌کردن پروفایل ذخیره‌شده'}
+              </button>
+              <span className="field-hint">پروفایل و وزنه‌های کاری ذخیره‌شده از این حساب و از دسترس مربی پاک می‌شود.</span>
+            </div>
+          )}
           <div className="settings-save-row"><span className="field-hint">تغییرات، ست‌های ثبت‌شدهٔ قبلی را عوض نمی‌کنند.</span><button className="button button--primary" type="submit">{saving ? 'در حال ذخیره…' : saved ? <><Check size={16} /> ذخیره شد</> : <><Save size={16} /> ذخیرهٔ پروفایل</>}</button></div>
           </fieldset>
         </form>

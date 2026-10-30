@@ -342,3 +342,15 @@ export async function resolvePersonalConflict(conflict: PersonalConflict, choice
   notifyPersonalDataApplied();
   await run();
 }
+
+/**
+ * Drops the local copy of a profile the account owner deleted on the server, so the device stops
+ * showing data that no longer belongs to this account.
+ */
+export async function forgetLocalProfile(version: number): Promise<void> {
+  await db.transaction('rw', db.preferences, db.syncMetadata, async () => {
+    await db.preferences.delete('profile');
+    await db.syncMetadata.put({ id: recordId('profile', 'main'), kind: 'profile', key: 'main', version, signature: 'deleted' });
+  });
+  notifyPersonalDataApplied();
+}

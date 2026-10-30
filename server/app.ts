@@ -16,7 +16,7 @@ import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePl
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
 import { listFormerCoachBiometrics, loadBiometrics, saveBiometrics, validateBiometricsInput } from './biometrics.ts';
 import { loadStudentProfile, loadStudentProfileForCoach, revokeStudentProfileSharing, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
-import { applyPersonalChange, getPersonalRecord, listPersonalRecords, validateChange } from './personalData.ts';
+import { applyPersonalChange, clearStoredProfile, findOwnerProfileCopies, getPersonalRecord, listPersonalRecords, quarantineOwnerProfileCopies, validateChange } from './personalData.ts';
 
 export interface AppOptions {
   db: Db;
@@ -897,6 +897,36 @@ export function createApp(options: AppOptions) {
         if (identifiers.size !== changes.length) throw new HttpError(400, 'دادهٔ تکراری در درخواست وجود دارد.');
         const results = await Promise.all(changes.map((change) => applyPersonalChange(db, user!.id, change, now().toISOString())));
         return { status: 200, body: { results }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    // The account owner deletes their own stored profile. No other account can do this for them.
+    {
+      method: 'POST',
+      pattern: /^\/api\/me\/profile\/purge$/,
+      auth: 'signed-in',
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        if (input.accountId !== user!.id) throw new HttpError(409, 'حساب تغییر کرده است؛ صفحه را دوباره باز کنید.');
+        const result = await clearStoredProfile(db, user!.id, now().toISOString());
+        return { status: 200, body: { cleared: true, ...result }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    // The owner removes copies of their own profile that reached other accounts.
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/owner-profile-copies$/,
+      auth: ['admin'],
+      handler: async () => ({ status: 200, body: { accounts: await findOwnerProfileCopies(db) }, headers: { 'Cache-Control': 'no-store' } }),
+    },
+    {
+      method: 'POST',
+      pattern: /^\/api\/admin\/owner-profile-copies$/,
+      auth: ['admin'],
+      handler: async () => {
+        const removed = await quarantineOwnerProfileCopies(db, now().toISOString());
+        return { status: 200, body: { removed }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 

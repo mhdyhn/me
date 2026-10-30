@@ -12,7 +12,11 @@ function ProfileProbe() {
 }
 
 beforeEach(async () => { await db.preferences.clear(); });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.removeItem('meety.session-user');
+  window.localStorage.setItem('meety.account-scope', 'owner');
+});
 
 describe('profile defaults and stored values', () => {
   it('does not seed an owner-scope account or persist bundled information', async () => {
@@ -37,5 +41,13 @@ describe('profile defaults and stored values', () => {
     render(<GymProvider><ProfileProbe /></GymProvider>);
     expect(JSON.parse((await screen.findByTestId('profile')).textContent!)).toEqual({ profile: sampleProfile, nutritionGoals: sampleNutritionGoals });
     expect((await db.preferences.get('profile'))?.value).toEqual(sampleProfile);
+  });
+
+  it('shows nothing when the open database belongs to another account', async () => {
+    await db.preferences.put({ key: 'profile', value: sampleProfile });
+    window.localStorage.setItem('meety.session-user', JSON.stringify({ id: 42, username: 'other', role: 'student', displayName: 'حساب دیگر', coachId: null, mustChangePassword: false }));
+    window.localStorage.setItem('meety.account-scope', 'user-99');
+    render(<GymProvider><ProfileProbe /></GymProvider>);
+    expect(JSON.parse((await screen.findByTestId('profile')).textContent!)).toEqual({ profile: blankProfile, nutritionGoals: blankNutritionGoals });
   });
 });

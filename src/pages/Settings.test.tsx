@@ -241,4 +241,41 @@ describe('settings profile sharing status', () => {
     expect(screen.queryByText('ذخیره شد')).not.toBeInTheDocument();
   });
 
+  it('marks an empty profile as not registered and offers no delete action', async () => {
+    mocks.user = { id: 12, role: 'student', coachId: 4 };
+    mocks.profile = { ...blankProfile } as typeof mocks.profile;
+    mocks.api.mockResolvedValue({ stored: null, sharingVersion: 0 });
+    render(<Settings />);
+    expect(screen.getByText(/ثبت نشده/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /پاک‌کردن پروفایل ذخیره‌شده/ })).not.toBeInTheDocument();
+  });
+
+  it('lets the account owner delete a stored profile that is not theirs', async () => {
+    mocks.user = { id: 12, role: 'student', coachId: 4 };
+    mocks.profile = structuredClone(sampleProfile);
+    mocks.api.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET') return { stored: null, sharingVersion: 0 };
+      if (path === '/me/profile/purge') return { cleared: true, version: 4 };
+      return {};
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: /پاک‌کردن پروفایل ذخیره‌شده/ }));
+    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('POST', '/me/profile/purge', { accountId: 12 }));
+    expect(await screen.findByText(/پروفایل ذخیره‌شده پاک شد/)).toBeInTheDocument();
+  });
+
+  it('keeps the stored profile when the delete request fails', async () => {
+    mocks.user = { id: 12, role: 'student', coachId: 4 };
+    mocks.profile = structuredClone(sampleProfile);
+    mocks.api.mockImplementation(async (method: string) => {
+      if (method === 'GET') return { stored: null, sharingVersion: 0 };
+      throw new Error('offline');
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: /پاک‌کردن پروفایل ذخیره‌شده/ }));
+    expect(await screen.findByText(/پروفایل ذخیره‌شده پاک نشد/)).toBeInTheDocument();
+  });
+
 });
