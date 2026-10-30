@@ -44,6 +44,16 @@ describe('the server answers while the database is still waking up', () => {
     expect(db.isReady!()).toBe(false);
   });
 
+  it('reports why the database is not reachable, without an address or a secret', async () => {
+    const failure = new Error('connect ECONNREFUSED 10.0.0.1:5432') as Error & { code?: string };
+    failure.code = 'ECONNREFUSED';
+    const db = lazyDatabase(Promise.reject(failure));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const reported = db.startupFailure!();
+    expect(reported).toMatchObject({ code: 'ECONNREFUSED', message: 'پایگاه داده اتصال را نپذیرفت.' });
+    expect(JSON.stringify(reported)).not.toContain('10.0.0.1');
+  });
+
   it('uses the database as soon as it is ready', async () => {
     const real = await openDatabase('memory');
     const db = lazyDatabase(Promise.resolve(real));

@@ -177,7 +177,8 @@ export function createApp(options: AppOptions) {
           // While the hosted database is still waking up the process is up and must say so.
           // Waiting for the database here would make the host restart the instance again.
           if (db.isReady && !db.isReady()) {
-            return { status: 200, body: { ok: true, database: false, starting: true } };
+            const failure = db.startupFailure?.() ?? null;
+            return { status: 200, body: { ok: true, database: false, starting: true, ...(failure ? { error: failure } : {}) } };
           }
           const started = performance.now();
           await db.query('SELECT 1');
