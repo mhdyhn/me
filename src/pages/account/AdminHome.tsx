@@ -7,6 +7,7 @@ import { faNumber } from '../../lib/format';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
 import { AdminStudents } from './AdminStudents';
+import { OwnerProfileCopies } from './OwnerProfileCopies';
 
 interface CoachSummary extends PublicUser {
   studentCount: number;
@@ -364,6 +365,7 @@ function AdminCoaches() {
         </ul>
       )}
       <AdminStudents />
+      <OwnerProfileCopies />
     </PanelPage>
   );
 }

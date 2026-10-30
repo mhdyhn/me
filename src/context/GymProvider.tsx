@@ -4,6 +4,8 @@ import { db } from '../lib/db';
 import { PERSONAL_DATA_APPLIED, notifyPersonalDataApplied, notifyPersonalDataChanged } from '../lib/personalSyncEvents';
 import { DraftChangedError, requireUnchanged } from '../lib/draftGuard';
 import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly } from '../lib/programStore';
+import { isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
+import { getStoredUser } from '../lib/api';
 import { dateInputValue } from '../lib/format';
 import type { BodyweightEntry, NutritionDay, NutritionGoals, UserProfile, WorkoutSession } from '../types';
 
@@ -32,6 +34,17 @@ interface GymContextValue {
 const GymContext = createContext<GymContextValue | null>(null);
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `meety-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+/**
+ * Personal records belong to one account. When the open database is not this account's database
+ * (a leftover scope from another sign-in), nothing is read and nothing is shown.
+ */
+function readsOwnAccount(): boolean {
+  if (isOfflineBuild) return true;
+  const user = getStoredUser();
+  if (!user) return true;
+  return scopeMatchesAccount(user) && db.name === `meety-personal-user-${user.id}`;
+}
+
 export function GymProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [bodyweights, setBodyweights] = useState<BodyweightEntry[]>([]);
@@ -52,6 +65,13 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       const generation = ++loadGeneration.current;
       try {
+        if (!readsOwnAccount()) {
+          // Another account's database is open: show nothing rather than somebody else's records.
+          if (!mounted || generation !== loadGeneration.current) return;
+          setSessions([]); setBodyweights([]); setNutritionDays([]);
+          setProfile(blankProfile); setNutritionGoals(blankNutritionGoals);
+          return;
+        }
         const [storedSessions, storedBodyweights, storedNutrition, storedProfile, storedGoals] = await Promise.all([
           db.sessions.toArray(),
           db.bodyweights.toArray(),
