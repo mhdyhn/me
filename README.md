@@ -126,11 +126,12 @@ postgresql://postgres.<شناسه-پروژه>:<رمز>@aws-0-<منطقه>.pooler
 #### ب) تست اتصال پیش از استقرار
 
 ```bash
-DATABASE_URL="postgresql://postgres.<پروژه>:<رمز>@aws-0-<منطقه>.pooler.supabase.com:5432/postgres?sslmode=require" \
-  node tools/check-database.mjs
+node tools/check-database.mjs --ref <شناسه-پروژه> --password "<رمز-دیتابیس>"
 ```
 
-اگر `Connected in … ms` چاپ شد، رشته درست است. این اسکریپت فقط یک پرس ساده می‌زند، چیزی نمی‌نویسد و رشتهٔ اتصال را هم چاپ نمی‌کند.
+اگر `Connected in … ms` چاپ شد، رمز درست است و همان رشته‌ای که ابزار چاپ می‌کند را در Render بگذارید. رمز را خود ابزار در رشته **درست کدگذاری** می‌کند، پس رمزی که کاراکتر خاص (`@` `:` `/` `#` `%`) دارد هم رشتهٔ سالم می‌سازد. این اسکریپت فقط یک پرس ساده می‌زند و چیزی نمی‌نویسد.
+
+نوشتهٔ کامل رشته هم می‌توان داد: `node tools/check-database.mjs "postgresql://user:pass@host/postgres"`.
 
 #### پ) اتصال در Render
 
