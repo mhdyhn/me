@@ -173,18 +173,62 @@ function safeDetail(message: string): string | undefined {
   return text.slice(0, 140);
 }
 
-function fromPool(url: string): Db {
-  // A hosted database (Supabase, Aiven, ...) speaks TLS. The connection string says so with
-  // sslmode=require, and in production the database is always remote.
-  const isCloud = url.includes('sslmode=require') || process.env.NODE_ENV === 'production';
-  const pool = new pg.Pool({
+/** The SSL parameters of a connection string; the options of the app decide instead. */
+const SSL_PARAMETERS = /^(sslmode|sslcert|sslkey|sslrootcert|sslnegotiation)=/i;
+
+/** Hosts that run on the same machine and need no TLS. */
+const LOCAL_HOSTS = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i;
+
+/**
+ * Removes the SSL parameters from a connection string. node-postgres gives the parameters of
+ * the string priority over the options of the pool, and with `sslmode=require` it then leaves
+ * the certificate check on, which fails against a pooler whose certificate chain ends in a
+ * self-signed certificate.
+ */
+export function withoutSslParameters(url: string): string {
+  const at = url.indexOf('?');
+  if (at < 0) return url;
+  const base = url.slice(0, at);
+  const kept = url.slice(at + 1).split('&').filter((part) => part && !SSL_PARAMETERS.test(part));
+  return kept.length ? `${base}?${kept.join('&')}` : base;
+}
+
+export interface PoolOptions {
+  connectionString: string;
+  ssl?: { rejectUnauthorized: boolean };
+}
+
+/**
+ * The connection options for the database. A remote database speaks TLS; its certificate is
+ * often signed by a private authority, so the chain is not verified unless
+ * DATABASE_SSL_REJECT_UNAUTHORIZED is set to true.
+ */
+export function poolOptions(rawUrl: string): PoolOptions {
+  const url = withoutSslParameters(rawUrl);
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    hostname = '';
+  }
+  const remote = hostname !== '' && !LOCAL_HOSTS.test(hostname);
+  const strict = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true';
+  return {
     connectionString: url,
+    ...(remote || process.env.NODE_ENV === 'production' ? { ssl: { rejectUnauthorized: strict } } : {}),
+  };
+}
+
+function fromPool(rawUrl: string): Db {
+  const options = poolOptions(rawUrl);
+  const pool = new pg.Pool({
+    connectionString: options.connectionString,
     max: 5,
     // The hosted database scales down when it is idle. Without a limit a connection attempt can
     // wait forever, and then nothing retries. A failed attempt is retried by the caller.
     // A cold start on a free host can take longer than the usual limit, so it is configurable.
     connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 15000),
-    ssl: isCloud ? { rejectUnauthorized: false } : undefined,
+    ssl: options.ssl,
   });
   // The hosted database closes idle connections (free tier pauses after inactivity). Without this listener
   // Node treats the error as fatal and the whole server stops. The pool opens a new connection on the next request.
