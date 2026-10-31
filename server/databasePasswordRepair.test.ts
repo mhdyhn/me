@@ -68,6 +68,16 @@ describe('a password that lost a character in the connection string', () => {
     expect(parse(url).password).toBe('Mhdy2020x@');
   });
 
+  it('offers the password without a doubled @ as well', () => {
+    // The string has the @ twice, so the password may be the shorter one.
+    const url = `postgresql://${user}:Mhdy2020x@@${host}/postgres`;
+    expect(parse(url).password).toBe('Mhdy2020x@');
+    const candidates = connectionCandidates(url);
+    expect(candidates).toContain(`postgresql://${user}:Mhdy2020x@${host}/postgres`);
+    // Every candidate carries a password the server can be asked with.
+    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x@', 'Mhdy2020x']);
+  });
+
   it('keeps an @ that belongs to the password', () => {
     const url = `postgresql://user:pa@ss@${host}/postgres`;
     expect(parse(url).password).toBe('pa@ss');
