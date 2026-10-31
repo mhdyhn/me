@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { DatabaseNotice } from './components/DatabaseNotice';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { RouteLoading } from './components/RouteLoading';
@@ -93,6 +94,7 @@ export function App() {
         <ConfirmProvider>
         <PersonalSync />
         <Router>
+          <DatabaseNotice />
           <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="login" element={<Login />} />

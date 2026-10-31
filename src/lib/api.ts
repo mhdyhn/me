@@ -8,6 +8,8 @@ export const USER_KEY = 'meety.session-user';
 /** Empty on the website (same origin). The Android build sets it to the live server address. */
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 export const UNAUTHORIZED_EVENT = 'meety:unauthorized';
+/** Fired when a request fails because the database is not reachable. */
+export const DATABASE_UNAVAILABLE_EVENT = 'meety:database-unavailable';
 
 export type Role = 'admin' | 'coach' | 'student';
 
@@ -217,7 +219,16 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   }
   if (!response.ok) {
-    throw new ApiError(response.status, json.error ?? 'خطای ناشناخته‌ای رخ داد.');
+    // The server sends a plain message, but the health check sends the reason as an object.
+    const raw = (json as { error?: unknown }).error;
+    const text = typeof raw === 'string'
+      ? raw
+      : (raw && typeof raw === 'object' && 'message' in raw ? String((raw as { message: unknown }).message) : null)
+      ?? 'خطای ناشناخته‌ای رخ داد.';
+    if (response.status === 503 && (json as { database?: unknown }).database === true) {
+      window.dispatchEvent(new CustomEvent(DATABASE_UNAVAILABLE_EVENT, { detail: { message: text } }));
+    }
+    throw new ApiError(response.status, text);
   }
   return json;
 }

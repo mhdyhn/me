@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Db } from './db.ts';
+import { DatabaseError, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
@@ -132,7 +132,9 @@ export function createApp(options: AppOptions) {
       const databaseMs = Math.round(performance.now() - started);
       return { status: 200, body: { ok: true, database: true, databaseMs } };
     } catch {
-      return { status: 503, body: { ok: false, database: false } };
+      // The reason travels with the answer so the app can explain itself to the user.
+      const failure = db.startupFailure?.() ?? null;
+      return { status: 503, body: { ok: false, database: false, ...(failure ? { error: failure } : {}) } };
     }
   }
 
@@ -1503,6 +1505,9 @@ export function createApp(options: AppOptions) {
           // Do not keep a connection with an oversized, possibly still streaming body.
           request.resume();
           send(response, 413, { error: error.message }, { Connection: 'close' });
+        } else if (error instanceof DatabaseError) {
+          // The client shows a service notice for a database failure, not an empty screen.
+          send(response, error.status, { error: error.message, database: true });
         } else send(response, error.status, { error: error.message });
       } else {
         console.error(error);
