@@ -1,0 +1,68 @@
+name: Point the Render service at a database
+
+# Puts a new database connection string into the Render service and starts a deploy.
+# Useful when the hosted database changes: no need to open the Render dashboard by hand.
+#
+# Two repository secrets are needed (Settings → Secrets and variables → Actions):
+#   RENDER_API_KEY   an API key from render.com → Account Settings → API Keys
+#   DATABASE_URL     the connection string of the new database, for example
+#                    postgresql://user:password@host:5432/postgres?sslmode=require
+#
+# The password never appears in the workflow file or in the logs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'The name of the Render service'
+        required: false
+        default: meety
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set the connection string and deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SERVICE_NAME: ${{ inputs.service }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${DATABASE_URL:-}" ]; then
+            echo "RENDER_API_KEY or DATABASE_URL is missing in the repository secrets." >&2
+            exit 1
+          fi
+
+          service_id=$(curl -fsS "https://api.render.com/v1/services?limit=100" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.service&&x.service.name===process.env.SERVICE_NAME);if(!hit){console.error('Service not found: '+process.env.SERVICE_NAME);process.exit(1)}console.log(hit.service.id)})")
+          echo "Service ${SERVICE_NAME} = ${service_id}"
+
+          # The variable has to exist before it can be updated.
+          exists=$(curl -fsS "https://api.render.com/v1/services/${service_id}/env-vars" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);console.log(list.some(x=>x.envVar&&x.envVar.key==='DATABASE_URL')?'yes':'no')})")
+          if [ "$exists" = "no" ]; then
+            curl -fsS -X POST "https://api.render.com/v1/services/${service_id}/env-vars" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Content-Type: application/json" \
+              --data "$(node -e "console.log(JSON.stringify([{key:'DATABASE_URL',value:process.env.DATABASE_URL}]))")" > /dev/null
+          else
+            curl -fsS -X PUT "https://api.render.com/v1/services/${service_id}/env-vars/DATABASE_URL" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Content-Type: application/json" \
+              --data "$(node -e "console.log(JSON.stringify({value:process.env.DATABASE_URL}))")" > /dev/null
+          fi
+
+          # The free host wakes up slowly; give the first connection more time.
+          curl -fsS -X PUT "https://api.render.com/v1/services/${service_id}/env-vars/DATABASE_CONNECT_TIMEOUT_MS" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Content-Type: application/json" \
+            --data '{"value":"30000"}' > /dev/null || true
+
+          curl -fsS -X POST "https://api.render.com/v1/services/${service_id}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Content-Type: application/json" \
+            --data '{"clearCache":"do_not_clear"}' > /dev/null
+
+          echo "The deploy started. Check https://meety-985n.onrender.com/api/health?probe=1 in a few minutes."

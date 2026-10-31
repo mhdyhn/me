@@ -23,6 +23,23 @@ import { migrateAccountHistory } from './accountHistory.ts';
  */
 export type Row = Record<string, any>;
 
+/**
+ * A failure that comes from the database itself. The client shows it as a service notice
+ * instead of an empty screen, for every role.
+ */
+export class DatabaseError extends HttpError {
+  readonly database = true;
+  readonly detail?: string;
+
+  constructor(status: number, message: string, detail?: string) {
+    super(status, message);
+    this.detail = detail;
+  }
+}
+
+/** Failures that waiting cannot fix: a wrong address, a wrong password, a suspended plan. */
+const PERMANENT_FAILURES = new Set(['28P01', '53000', '3D000', 'ENOTFOUND', 'EAI_AGAIN']);
+
 export interface Db {
   query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<T[]>;
   exec(sql: string): Promise<void>;
@@ -87,12 +104,18 @@ export function lazyDatabase(open: Promise<Db>, waitMs = 20000, reportFailure?: 
   void open.then(() => { ready = true; }, (error: unknown) => { failure = describeFailure(error); });
   const wait = async (): Promise<Db> => {
     if (ready) return open;
+    // A wrong address, a wrong password or a suspended plan does not fix itself by waiting.
+    // Answer at once so no screen sits on a spinner for the whole timeout.
+    const known = reportFailure?.() ?? failure;
+    if (known && PERMANENT_FAILURES.has(known.code)) {
+      throw new DatabaseError(503, known.message, known.detail);
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
         open,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new HttpError(503, 'پایگاه داده در حال اتصال است؛ کمی بعد دوباره تلاش کنید.')), waitMs);
+          timer = setTimeout(() => reject(new DatabaseError(503, 'پایگاه داده در حال اتصال است؛ کمی بعد دوباره تلاش کنید.')), waitMs);
         }),
       ]);
     } finally {
@@ -132,7 +155,7 @@ function describeFailure(error: unknown): DatabaseFailure {
   if (code === '53P01') return { code, message: 'سرویس پایگاه داده در دسترس نیست.' };
   if (code === '57P03') return { code, message: 'پایگاه داده در دسترس نیست.' };
   if (code === '53300') return { code, message: 'ظرفیت پایگاه داده پر است.' };
-  if (code === '53000') return { code, message: 'دسترسی کاربر پایگاه داده کافی نیست یا سرویس پایگاه داده تعلیق شده است.', detail };
+  if (code === '53000') return { code, message: 'سرویس پایگاه داده از دسترس خارج است؛ دسترسی حساب یا سهمیهٔ آن بررسی شود.', detail };
   if (code === '3D000') return { code, message: 'پایگاه داده پیدا نشد.', detail };
   return { code: code || 'unknown', message: 'اتصال به پایگاه داده برقرار نشد.', detail };
 }
