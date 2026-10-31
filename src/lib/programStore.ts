@@ -13,6 +13,8 @@ export interface AssignedMeta {
   isTestPurchase?: boolean;
   testPurchaseAvailable?: boolean;
   testPurchaseExpiresAt?: string | null;
+  /** The student can pay by card transfer instead of the online gateway. */
+  cardTransferAvailable?: boolean;
 }
 
 export const defaultPersonalProgram = (): WorkoutTemplate[] => [];

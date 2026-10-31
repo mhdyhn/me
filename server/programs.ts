@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
 import { paidTransactionCondition } from './payments.ts';
+import { cardTransferConfig } from './cardTransfer.ts';
 import { studentTestPurchasesAvailable } from './testPurchases.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
 import { isValidReps, normalizeReps } from '../shared/repetitions.ts';
@@ -163,8 +164,11 @@ export async function studentProgrammeView(db: Db, user: StoredUser, now: Date):
   isTestPurchase?: boolean;
   testPurchaseAvailable?: boolean;
   testPurchaseExpiresAt?: string | null;
+  /** Whether the student can pay by card transfer instead of the online gateway. */
+  cardTransferAvailable?: boolean;
 }> {
-  if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true };
+  const cardTransferAvailable = cardTransferConfig() !== null;
+  if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true, cardTransferAvailable };
   const row = (await db.query<{
     coach_name: string | null;
     body: string | null;
@@ -193,7 +197,7 @@ export async function studentProgrammeView(db: Db, user: StoredUser, now: Date):
       AND s.personal_program_mode = 0 AND s.auth_version = $6 AND s.coach_access_version = $7
   `, [user.id, user.coachId, process.env.NODE_ENV === 'production' ? 1 : 0, now.toISOString(), studentTestPurchasesAvailable(), user.authVersion, user.coachAccessVersion]))[0];
   if (!row) throw new HttpError(409, 'حساب یا ارتباط با مربی تغییر کرده است؛ دوباره تلاش کنید.');
-  if (row.body === null) return { program: null, coachName: row.coach_name, isPaid: true };
+  if (row.body === null) return { program: null, coachName: row.coach_name, isPaid: true, cardTransferAvailable };
   const parsed = JSON.parse(row.body) as ProgrammeInput;
   const program: Programme = {
     ...parsed, id: row.programme_id!, version: Number(row.version), priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at!,
@@ -206,11 +210,13 @@ export async function studentProgrammeView(db: Db, user: StoredUser, now: Date):
       coachName: row.coach_name, isPaid: false,
       testPurchaseAvailable: row.test_status !== null || row.mode_expires_at !== null,
       testPurchaseExpiresAt: row.test_expires_at ?? row.mode_expires_at,
+      cardTransferAvailable,
     };
   }
   return {
     program, coachName: row.coach_name, isPaid, isTestPurchase,
     testPurchaseExpiresAt: isTestPurchase ? row.test_expires_at : null,
+    cardTransferAvailable,
   };
 }
 

@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Columns2, Info, Pause, Play, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Info, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { SectionHeading } from '../components/SectionHeading';
 import { ExerciseModelPanel } from '../components/ExerciseModelPanel';
+import { ExerciseGuidePlayer } from '../components/ExerciseGuidePlayer';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
-import { exercisePhotoIds, exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
+import { exercisePhotoIds, hasExerciseFigure } from '../data/exerciseFigures';
 import { getWorkoutTemplate, useProgram } from '../lib/programStore';
 import { getLastExercisePerformance, getProgressionAdvice } from '../lib/analytics';
 import { categoryLabels, difficultyLabels } from '../lib/labels';
@@ -20,14 +21,6 @@ export function ExerciseDetail() {
   const { sessions } = useGym();
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [replaying, setReplaying] = useState(false);
-
-  // Lyfta-style video loop player state
-  const [activeFrame, setActiveFrame] = useState<FigureState>('start');
-  const [isPlayingLoop, setIsPlayingLoop] = useState(true);
-  const [speed, setSpeed] = useState<1 | 0.5>(1);
-  const [viewMode, setViewMode] = useState<'loop' | 'compare'>('loop');
-  const [loopProgress, setLoopProgress] = useState(0);
-  const progressTimerRef = useRef<number | null>(null);
 
   const program = useProgram();
   const placements = program.flatMap((workout) => workout.exercises
@@ -56,32 +49,6 @@ export function ExerciseDetail() {
     }, 1500);
     return () => window.clearInterval(timer);
   }, [replaying, exercise?.movementPhases.length]);
-
-  // Lyfta-style animated visual loop player
-  useEffect(() => {
-    if (!isPlayingLoop || viewMode !== 'loop' || !exercise || !hasExerciseFigure(visualExerciseId)) {
-      setLoopProgress(0);
-      return;
-    }
-
-    const intervalMs = speed === 1 ? 1200 : 2000;
-    const stepMs = 50;
-    let elapsed = 0;
-
-    const interval = window.setInterval(() => {
-      elapsed += stepMs;
-      const pct = Math.min(100, Math.round((elapsed / intervalMs) * 100));
-      setLoopProgress(pct);
-
-      if (elapsed >= intervalMs) {
-        elapsed = 0;
-        setActiveFrame((prev) => (prev === 'start' ? 'main' : 'start'));
-      }
-    }, stepMs);
-
-    progressTimerRef.current = interval;
-    return () => window.clearInterval(interval);
-  }, [isPlayingLoop, viewMode, speed, exerciseId, visualExerciseId]);
 
   if (!exercise) {
     return <EmptyState title="حرکت پیدا نشد" detail="این حرکت در کتابخانهٔ فعلی وجود ندارد." action={<Link to="/exercises" className="button button--secondary">بازگشت به حرکت‌ها</Link>} />;
@@ -135,98 +102,8 @@ export function ExerciseDetail() {
 
           {exerciseId === 'push-up' && <ExerciseModelPanel />}
 
-          {/* Existing two-frame guide remains available alongside the optional model. */}
-          {hasFigure && (
-            <section className="lyfta-player" aria-label="آموزش تصویری حرکت">
-              {viewMode === 'loop' ? (
-                <div className="lyfta-player__screen">
-                  <div className="lyfta-player__badge">
-                    <span
-                      className={`lyfta-player__badge-dot ${
-                        activeFrame === 'start' ? 'lyfta-player__badge-dot--start' : 'lyfta-player__badge-dot--main'
-                      }`}
-                    />
-                    <span>{activeFrame === 'start' ? 'وضعیت ۱: آماده‌سازی و شروع' : 'وضعیت ۲: اوج انقباض و اجرا'}</span>
-                  </div>
-                  <img
-                    src={exerciseFigureSrc(visualExerciseId, 'start')}
-                    alt={`${exercise.name}: وضعیت شروع`}
-                    className="lyfta-player__img lyfta-player__img--start"
-                    style={{ opacity: activeFrame === 'start' ? 1 - loopProgress / 100 : loopProgress / 100 }}
-                    loading="eager"
-                    decoding="async"
-                  />
-                  <img
-                    src={exerciseFigureSrc(visualExerciseId, 'main')}
-                    alt={`${exercise.name}: وضعیت انقباض`}
-                    className="lyfta-player__img lyfta-player__img--main"
-                    style={{ opacity: activeFrame === 'start' ? loopProgress / 100 : 1 - loopProgress / 100 }}
-                    loading="eager"
-                    decoding="async"
-                  />
-                  <div className="lyfta-player__progress">
-                    <div className="lyfta-player__progress-bar" style={{ width: `${loopProgress}%` }} />
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding: '14px 14px 0' }}>
-                  <figure className="exercise-figures" style={{ margin: 0 }}>
-                    <div>
-                      <img src={exerciseFigureSrc(visualExerciseId, 'start')} alt={`${exercise.name}: وضعیت شروع`} loading="lazy" decoding="async" />
-                      <figcaption>شروع</figcaption>
-                    </div>
-                    <div>
-                      <img src={exerciseFigureSrc(visualExerciseId, 'main')} alt={`${exercise.name}: وضعیت اجرا`} loading="lazy" decoding="async" />
-                      <figcaption>اجرا</figcaption>
-                    </div>
-                  </figure>
-                </div>
-              )}
-
-              <div className="lyfta-player__controls">
-                <div className="lyfta-player__buttons">
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    style={{ padding: '6px 12px', fontSize: 13, height: 'auto' }}
-                    onClick={() => setIsPlayingLoop(!isPlayingLoop)}
-                    title={isPlayingLoop ? 'توقف انیمیشن' : 'پخش لوپ متحرک'}
-                  >
-                    {isPlayingLoop ? <><Pause size={15} /> توقف</> : <><Play size={15} /> پخش لوپ</>}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    style={{ padding: '6px 12px', fontSize: 13, height: 'auto' }}
-                    onClick={() => {
-                      setViewMode(viewMode === 'loop' ? 'compare' : 'loop');
-                      setIsPlayingLoop(false);
-                    }}
-                  >
-                    <Columns2 size={15} /> {viewMode === 'loop' ? 'مقایسه دو فاز' : 'نمایش لوپ'}
-                  </button>
-                </div>
-
-                <div className="lyfta-player__buttons">
-                  <span className="account-muted" style={{ fontSize: 12 }}>سرعت:</span>
-                  <button
-                    type="button"
-                    className={`lyfta-player__speed-btn${speed === 1 ? ' is-active' : ''}`}
-                    onClick={() => setSpeed(1)}
-                  >
-                    ۱x
-                  </button>
-                  <button
-                    type="button"
-                    className={`lyfta-player__speed-btn${speed === 0.5 ? ' is-active' : ''}`}
-                    onClick={() => setSpeed(0.5)}
-                  >
-                    ۰٫۵x
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
+          {/* The visual guide: an animated figure when the movement has one, two phases otherwise. */}
+          {hasFigure && <ExerciseGuidePlayer name={exercise.name} visualId={visualExerciseId} hasFigure={hasFigure} />}
 
           <section className="panel-card movement-card">
             <div className="movement-card__heading"><div><span className="eyebrow">مرور مراحل حرکت</span><h3>شروع، حرکت، پایان.</h3></div><button className="button button--quiet button--small" onClick={replaySteps}><RotateCcw size={14} /> پخش دوبارهٔ مراحل</button></div>

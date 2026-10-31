@@ -10,6 +10,7 @@ import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLi
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
+import { cardTransferConfig, createCardTransferRequest, reviewCardTransfer, submitCardTransferReceipt } from './cardTransfer.ts';
 import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
@@ -108,6 +109,31 @@ export function createApp(options: AppOptions) {
   const failures = new Map<string, { count: number; lockedUntil: number; lastFailure: number }>();
   const allowedOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
   const clientAddress = makeClientAddressResolver(options.trustedProxyRanges ?? (process.env.MEETY_TRUSTED_PROXIES ?? '').split(','));
+  // A hosted database that is asked too often never scales down and uses up the plan's
+  // compute hours. The health check reuses its last answer instead of waking the database.
+  const healthProbeIntervalMs = (() => {
+    const configured = Number(process.env.HEALTH_DB_PROBE_INTERVAL_MS ?? '');
+    if (Number.isFinite(configured) && configured >= 0) return configured;
+    return process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 0;
+  })();
+  let healthProbe: { at: number; result: { status: number; body: unknown } } | null = null;
+
+  async function probeDatabase(): Promise<{ status: number; body: unknown }> {
+    try {
+      // While the hosted database is still waking up the process is up and must say so.
+      // Waiting for the database here would make the host restart the instance again.
+      if (db.isReady && !db.isReady()) {
+        const failure = db.startupFailure?.() ?? null;
+        return { status: 200, body: { ok: true, database: false, starting: true, ...(failure ? { error: failure } : {}) } };
+      }
+      const started = performance.now();
+      await db.query('SELECT 1');
+      const databaseMs = Math.round(performance.now() - started);
+      return { status: 200, body: { ok: true, database: true, databaseMs } };
+    } catch {
+      return { status: 503, body: { ok: false, database: false } };
+    }
+  }
 
   function cleanExpiredFailures(): void {
     const current = now().getTime();
@@ -172,21 +198,18 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/health$/,
       auth: 'public',
       // A simple DB check; its timing is not an end-to-end or authenticated benchmark.
-      handler: async () => {
-        try {
-          // While the hosted database is still waking up the process is up and must say so.
-          // Waiting for the database here would make the host restart the instance again.
-          if (db.isReady && !db.isReady()) {
-            const failure = db.startupFailure?.() ?? null;
-            return { status: 200, body: { ok: true, database: false, starting: true, ...(failure ? { error: failure } : {}) } };
-          }
-          const started = performance.now();
-          await db.query('SELECT 1');
-          const databaseMs = Math.round(performance.now() - started);
-          return { status: 200, body: { ok: true, database: true, databaseMs } };
-        } catch {
-          return { status: 503, body: { ok: false, database: false } };
+      handler: async ({ url }) => {
+        // The host asks for this path repeatedly. Every answer that touches the database keeps
+        // the hosted database awake, and an always awake database burns the plan's compute
+        // hours until the project is suspended. The probe result is therefore reused for a
+        // while; `?probe=1` asks for a fresh answer.
+        const fresh = healthProbe && (now().getTime() - healthProbe.at < healthProbeIntervalMs) && !url.searchParams.has('probe');
+        if (fresh) {
+          return { ...healthProbe!.result, headers: { 'Cache-Control': 'no-store' } };
         }
+        const result = await probeDatabase();
+        healthProbe = { at: now().getTime(), result };
+        return { ...result, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -1067,10 +1090,72 @@ export function createApp(options: AppOptions) {
 
     {
       method: 'POST',
+      pattern: /^\/api\/pay\/card-transfer\/start$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
+        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
+          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
+        }
+        const details = await createCardTransferRequest(db, user!.id, { id: expectedId, version: input.expectedVersion as number }, now());
+        return { status: 201, body: details, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/pay\/card-transfer\/receipt$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ درخواست پرداخت');
+        const trackingNumber = requireText(input, 'trackingNumber', 4, 32, 'شمارهٔ پیگیری رسید');
+        const senderCardLast4 = typeof input.senderCardLast4 === 'string' ? input.senderCardLast4 : undefined;
+        const amountTomans = typeof input.amountTomans === 'number' ? input.amountTomans : undefined;
+        const result = await submitCardTransferReceipt(
+          db,
+          user!.id,
+          { authority, trackingNumber, ...(senderCardLast4 !== undefined ? { senderCardLast4 } : {}), ...(amountTomans !== undefined ? { amountTomans } : {}) },
+          now()
+        );
+        return { status: 200, body: result, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/pay\/card-transfer\/availability$/,
+      auth: 'signed-in',
+      handler: async () => {
+        const config = cardTransferConfig();
+        return {
+          status: 200,
+          body: { available: Boolean(config), cardHolder: config?.cardHolder ?? null },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/admin\/card-transfer\/review$/,
+      auth: ['admin'],
+      handler: async ({ body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ تراکنش');
+        const action = input.action === 'confirm' ? 'confirm' : input.action === 'reject' ? 'reject' : null;
+        if (!action) throw new HttpError(400, 'عملیات بررسی رسید معتبر نیست.');
+        const result = await reviewCardTransfer(db, authority, action, now());
+        return { status: 200, body: result, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
       pattern: /^\/api\/pay\/verify$/,
       auth: 'signed-in',
-      handler: async ({ body, user }) => {
-        const input = requireObject(body);
+      handler: async ({ body, user }) => {        const input = requireObject(body);
         const authority = requireText(input, 'authority', 5, 100, 'شناسه ارجاع پرداخت');
         const transaction = await getTransactionByAuthority(db, authority);
         if (!transaction || !canViewTransaction(user!, transaction)) throw new HttpError(404, 'تراکنش یافت نشد.');

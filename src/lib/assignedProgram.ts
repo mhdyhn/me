@@ -63,6 +63,7 @@ export async function loadAssignedProgram(): Promise<void> {
     const result = await api<{
       program: Programme | null; coachName?: string | null; isPaid?: boolean;
       isTestPurchase?: boolean; testPurchaseAvailable?: boolean; testPurchaseExpiresAt?: string | null;
+      cardTransferAvailable?: boolean;
     }>('GET', '/me/program');
     if (!stillCurrent()) return;
     if (!result || typeof result !== 'object' || !('program' in result) || typeof result.isPaid !== 'boolean') {
@@ -88,6 +89,7 @@ export async function loadAssignedProgram(): Promise<void> {
         isTestPurchase,
         testPurchaseAvailable: result.testPurchaseAvailable === true,
         testPurchaseExpiresAt: result.testPurchaseExpiresAt ?? null,
+        cardTransferAvailable: result.cardTransferAvailable === true,
       });
       setAssignedProgram(templates);
     } else {

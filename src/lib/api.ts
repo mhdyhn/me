@@ -67,6 +67,12 @@ export interface PaymentTransaction {
   cardPan: string | null;
   createdAt: string;
   verifiedAt: string | null;
+  /** How the money was paid: online gateway, card transfer, or an older record. */
+  method?: 'online' | 'card_transfer' | 'sandbox' | 'legacy';
+  cardTransferAmountTomans?: number | null;
+  cardTransferReference?: string | null;
+  cardTransferSenderLast4?: string | null;
+  cardTransferConfirmedBy?: string | null;
 }
 
 export interface TestPaymentTransaction extends PaymentTransaction {

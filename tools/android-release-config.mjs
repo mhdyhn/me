@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 const OWNER_REPOSITORY = 'mhdyhn/me';
 const OWNER_API_ORIGIN = 'https://meety-985n.onrender.com';
 // Certificate of the latest previously published APK, not its private key.
+// It is only used to warn about an upgrade that needs a fresh installation.
 const OWNER_PREVIOUS_CERT_SHA256 = 'df86d3816998ca9dde52768ad0444ac85d2d45992f855c27bdab4554156557ca';
 
 export function normalizeCertificateSha256(value) {
@@ -36,9 +37,15 @@ export function resolveAndroidReleaseConfig({ repository, apiBase, signingCertif
     throw new Error('ANDROID_API_BASE must be a public HTTPS hostname without credentials, a path, query or fragment.');
   }
 
-  const certificate = signingCertificate || (isOwnerRepository ? OWNER_PREVIOUS_CERT_SHA256 : '');
-  if (!certificate) throw new Error('ANDROID_SIGNING_CERT_SHA256 is required outside the original repository.');
-  return { apiOrigin: url.origin, certificateSha256: normalizeCertificateSha256(certificate) };
+  // The certificate is optional: without a pinned value the release uses the keystore the
+  // owner stored in the secrets, so a new key does not block the build. A pinned value is
+  // still enforced and blocks a release signed by a different key.
+  const certificate = signingCertificate?.trim() ?? '';
+  return {
+    apiOrigin: url.origin,
+    certificateSha256: certificate ? normalizeCertificateSha256(certificate) : '',
+    previousCertificateSha256: isOwnerRepository ? OWNER_PREVIOUS_CERT_SHA256 : '',
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
@@ -49,10 +56,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
       signingCertificate: process.env.ANDROID_SIGNING_CERT_SHA256,
     });
     if (!process.env.GITHUB_ENV) throw new Error('GITHUB_ENV is required to configure the Android build.');
-    appendFileSync(process.env.GITHUB_ENV, `VITE_API_BASE=${config.apiOrigin}\nANDROID_EXPECTED_CERT_SHA256=${config.certificateSha256}\n`);
+    appendFileSync(process.env.GITHUB_ENV,
+      `VITE_API_BASE=${config.apiOrigin}\n` +
+      `ANDROID_EXPECTED_CERT_SHA256=${config.certificateSha256}\n` +
+      `ANDROID_PREVIOUS_CERT_SHA256=${config.previousCertificateSha256}\n`);
     console.log('Android API origin and expected signing certificate are configured.');
-    if (!process.env.ANDROID_SIGNING_CERT_SHA256) {
-      console.log('::warning title=Android upgrade compatibility::The default matches the latest historical APK only; earlier installations may use a different signing key.');
+    if (!config.certificateSha256) {
+      console.log('::notice title=Android release signing::No certificate is pinned. The release is signed with the keystore from the repository secrets.');
     }
   } catch (error) {
     console.error(`::error title=Android release configuration::${error.message}`);

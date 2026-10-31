@@ -3,6 +3,11 @@ name: Build Android APK
 # A release uses a persistent signing key stored in GitHub Actions secrets.
 on:
   workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: 'Optional release tag (for example v1.0.1). The signed APK is published to this GitHub release.'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -49,7 +54,10 @@ jobs:
               missing=1
             fi
           done
-          exit "$missing"
+          if [ "$missing" -ne 0 ]; then
+            echo "::error title=Android release signing::Create the keystore with 'node tools/create-android-keystore.mjs' and store the four values in the repository secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). See README, section 'Building a signed Android APK'."
+            exit 1
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -114,9 +122,16 @@ jobs:
           keytool -exportcert -keystore "$RUNNER_TEMP/meety-release.keystore" -alias "$KEY_ALIAS" \
             -storepass:env KEYSTORE_PASSWORD -file "$RUNNER_TEMP/meety-signing-cert.der" > /dev/null
           actual="$(sha256sum "$RUNNER_TEMP/meety-signing-cert.der" | cut -d ' ' -f 1)"
-          if [ "$actual" != "$ANDROID_EXPECTED_CERT_SHA256" ]; then
-            echo "::error title=Android release signing::The keystore certificate does not match the expected signing certificate; release blocked."
-            exit 1
+          if [ -n "$ANDROID_EXPECTED_CERT_SHA256" ]; then
+            if [ "$actual" != "$ANDROID_EXPECTED_CERT_SHA256" ]; then
+              echo "::error title=Android release signing::The keystore certificate does not match the pinned signing certificate; release blocked."
+              exit 1
+            fi
+          else
+            echo "::notice title=Android release signing::The release is signed with the stored keystore. Certificate SHA-256: $actual"
+            if [ -n "$ANDROID_PREVIOUS_CERT_SHA256" ] && [ "$actual" != "$ANDROID_PREVIOUS_CERT_SHA256" ]; then
+              echo "::warning title=Android upgrade compatibility::This key differs from the last published APK. Installed apps cannot be updated with it and must be installed again."
+            fi
           fi
 
       - name: Build and verify the signed release APK
@@ -142,17 +157,17 @@ jobs:
           retention-days: 30
 
       - name: Publish a tagged APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.publish_tag }}
         run: |
           set -euo pipefail
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/meety.apk"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/meety.apk" --clobber
           else
-            gh release create "$RELEASE_TAG" "$RUNNER_TEMP/meety.apk" --verify-tag --title "میتی $RELEASE_TAG" --notes "نسخهٔ امضاشدهٔ اندروید میتی"
+            gh release create "$RELEASE_TAG" "$RUNNER_TEMP/meety.apk" --target "${{ github.sha }}" --title "میتی $RELEASE_TAG" --notes "نسخهٔ امضاشدهٔ اندروید میتی"
           fi
 
       - name: Remove temporary signing material

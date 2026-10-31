@@ -231,20 +231,64 @@ function equipment(items, fig) {
 /** Equipment drawn beneath the figure; everything else (bars, cables) is drawn on top of the hands. */
 const UNDER = new Set(["bench", "benchEnd", "box", "post", "pullbar"]);
 
+/** The smallest box that holds every drawn point of the figure, in model units. */
+function modelBounds(inner) {
+  const numbers = [];
+  const points = [...inner.matchAll(/points="([^"]+)"/g)].flatMap((match) => match[1].trim().split(/\s+/));
+  for (const pair of points) {
+    const [x, y] = pair.split(',').map(Number);
+    if (!Number.isNaN(x) && !Number.isNaN(y)) numbers.push([x, y]);
+  }
+  for (const match of inner.matchAll(/\b(cx|cy|x|y|x1|y1|x2|y2)="(-?[\d.]+)"/g)) {
+    const value = Number(match[2]);
+    if (!Number.isNaN(value)) numbers.push(match[1] === 'cx' || match[1] === 'x' || match[1] === 'x1' || match[1] === 'x2' ? [value, 0] : [0, value]);
+  }
+  for (const match of inner.matchAll(/<rect[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"/g)) {
+    numbers.push([Number(match[1]), Number(match[2])]);
+  }
+  if (!numbers.length) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  return {
+    minX: Math.min(...numbers.map((point) => point[0])),
+    maxX: Math.max(...numbers.map((point) => point[0])),
+    minY: Math.min(...numbers.map((point) => point[1])),
+    maxY: Math.max(...numbers.map((point) => point[1])),
+  };
+}
+
+/** The margin kept between the figure and the edge of the canvas. */
+const MARGIN = 8;
+
+/**
+ * The transform of one pose. The scale never changes, so every figure keeps the same size;
+ * the figure is only shifted when it would otherwise fall out of the canvas (a dip or a
+ * hanging movement hangs below the floor line).
+ */
+export function poseTransform(pose, inner) {
+  const tx = W / 2 - 240 * S;
+  let ty = GROUND_CANVAS - GROUND * S;
+  const bounds = modelBounds(inner);
+  const top = bounds.minY * S + ty;
+  const bottom = bounds.maxY * S + ty;
+  if (bottom > H - MARGIN) ty -= bottom - (H - MARGIN);
+  if (bounds.minY * S + ty < MARGIN) ty += MARGIN - (bounds.minY * S + ty);
+  return { tx, ty, transform: `translate(${f(tx)} ${f(ty)}) scale(${S})` };
+}
+
 /** Build one SVG from a pose. pose.view: 'side' (default) or 'end'. */
 export function renderPose(pose, meta = {}) {
   const fig = pose.view === 'end' ? endFigure(pose) : sideFigure(pose);
-  const tx = W / 2 - 240 * S;
-  const ty = GROUND_CANVAS - GROUND * S;
+  const under = equipment((pose.equip ?? []).filter((e) => UNDER.has(e.t)), fig);
+  const over = equipment((pose.equip ?? []).filter((e) => !UNDER.has(e.t)), fig);
+  const { transform } = poseTransform(pose, under + fig.svgBody + over);
   const floor = `<line x1="0" y1="${GROUND_CANVAS}" x2="${W}" y2="${GROUND_CANVAS}" stroke="${PALETTE.ground}" stroke-width="2"/>`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${meta.label ?? ''}">` +
     `<rect width="${W}" height="${H}" fill="${PALETTE.bg}"/>` +
     floor +
-    `<g transform="translate(${f(tx)} ${f(ty)}) scale(${S})">` +
-    equipment((pose.equip ?? []).filter((e) => UNDER.has(e.t)), fig) +
+    `<g transform="${transform}">` +
+    under +
     fig.svgBody +
-    equipment((pose.equip ?? []).filter((e) => !UNDER.has(e.t)), fig) +
+    over +
     `</g>` +
     `</svg>`
   );
