@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { DatabaseError, type Db } from './db.ts';
+import { DatabaseError, describeConnection, type ConnectionSummary, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
@@ -125,7 +125,7 @@ export function createApp(options: AppOptions) {
       // Waiting for the database here would make the host restart the instance again.
       if (db.isReady && !db.isReady()) {
         const failure = db.startupFailure?.() ?? null;
-        return { status: 200, body: { ok: true, database: false, starting: true, ...(failure ? { error: failure } : {}) } };
+        return { status: 200, body: { ok: true, database: false, starting: true, ...(failure ? { error: failure } : {}), connection: connectionSummary() } };
       }
       const started = performance.now();
       await db.query('SELECT 1');
@@ -137,7 +137,7 @@ export function createApp(options: AppOptions) {
     } catch {
       // The reason travels with the answer so the app can explain itself to the user.
       const failure = db.startupFailure?.() ?? null;
-      return { status: 503, body: { ok: false, database: false, ...(failure ? { error: failure } : {}) } };
+      return { status: 503, body: { ok: false, database: false, ...(failure ? { error: failure } : {}), connection: connectionSummary() } };
     }
   }
 
@@ -1549,6 +1549,17 @@ async function hasAdminAccount(db: Db): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * The shape of the configured connection, without the password and without the name of the
+ * user. It is only in the answer while the database is unreachable, and it shows which
+ * spelling of the string is in use.
+ */
+function connectionSummary(): ConnectionSummary | undefined {
+  const url = process.env.DATABASE_URL;
+  if (!url) return undefined;
+  return describeConnection(url);
 }
 
 function sendHtml(response: ServerResponse, html: string): void {

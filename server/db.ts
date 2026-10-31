@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { createHash } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { migrateChat } from './chat.ts';
 import { HttpError } from './http.ts';
@@ -74,7 +75,7 @@ export async function openDatabase(target: string): Promise<Db> {
       await database.close().catch(() => {});
       if (!canRepairWithAnotherSpelling(error)) throw error;
       // The pooler counts failed logins and blocks new connections for a while.
-      if (index < candidates.length - 1) await new Promise((resolve) => setTimeout(resolve, 12000));
+      if (index < candidates.length - 1) await new Promise((resolve) => setTimeout(resolve, repairDelayMs()));
     }
   }
   throw failure;
@@ -86,6 +87,46 @@ function canRepairWithAnotherSpelling(error: unknown): boolean {
   const message = String((error as { message?: string })?.message ?? '');
   // A raw character in the password can make the string unreadable for the driver.
   return /invalid url|malformed/i.test(message);
+}
+
+/** The pause between two tries. The pooler counts the failed logins of a user. */
+function repairDelayMs(): number {
+  const configured = Number(process.env.DATABASE_REPAIR_DELAY_MS ?? '');
+  return Number.isFinite(configured) && configured >= 0 ? configured : 12000;
+}
+
+/**
+ * A safe description of the configured connection. It never contains the password or the name
+ * of the user: the name is hashed (the project id of a hosted database cannot be guessed) and
+ * only the length of the password is given. It shows which spelling of the string is in use,
+ * so a wrong address, a wrong user and a truncated password can be told apart.
+ */
+export interface ConnectionSummary {
+  host: string;
+  userHash: string;
+  passwordLength: number;
+}
+
+export function describeConnection(rawUrl: string): ConnectionSummary {
+  const url = withoutSslParameters(tidyConnectionString(rawUrl));
+  const schemeEnd = url.indexOf('://');
+  if (schemeEnd < 0) return { host: '', userHash: '', passwordLength: 0 };
+  const authorityStart = schemeEnd + 3;
+  const pathStart = url.indexOf('/', authorityStart);
+  const authorityEnd = pathStart < 0 ? url.length : pathStart;
+  const authority = url.slice(authorityStart, authorityEnd);
+  const separator = authority.lastIndexOf('@');
+  if (separator < 0) return { host: authority, userHash: '', passwordLength: 0 };
+  const userInfo = authority.slice(0, separator);
+  const host = authority.slice(separator + 1);
+  const colon = userInfo.indexOf(':');
+  const user = colon < 0 ? userInfo : userInfo.slice(0, colon);
+  const password = colon < 0 ? '' : userInfo.slice(colon + 1);
+  return {
+    host: host.replace(/:\d+$/, ''),
+    userHash: createHash('sha256').update(user).digest('hex').slice(0, 12),
+    passwordLength: password.length,
+  };
 }
 
 /**
