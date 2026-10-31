@@ -200,6 +200,25 @@ export function withoutSslParameters(url: string): string {
   return kept.length ? `${base}?${kept.join('&')}` : base;
 }
 
+/**
+ * Removes the spaces around the connection string and around the password in it. A copy and
+ * paste often brings a newline or a space along, and the server then reads a wrong password.
+ */
+export function tidyConnectionString(url: string): string {
+  const trimmed = url.trim();
+  const scheme = trimmed.indexOf('://');
+  if (scheme < 0) return trimmed;
+  const authorityStart = scheme + 3;
+  const at = trimmed.indexOf('@', authorityStart);
+  if (at < 0) return trimmed;
+  const userInfo = trimmed.slice(authorityStart, at);
+  const colon = userInfo.indexOf(':');
+  if (colon < 0) return trimmed;
+  const user = userInfo.slice(0, colon);
+  const password = userInfo.slice(colon + 1).trim();
+  return `${trimmed.slice(0, authorityStart)}${user}:${password}${trimmed.slice(at)}`;
+}
+
 export interface PoolOptions {
   connectionString: string;
   ssl?: { rejectUnauthorized: boolean };
@@ -211,7 +230,7 @@ export interface PoolOptions {
  * DATABASE_SSL_REJECT_UNAUTHORIZED is set to true.
  */
 export function poolOptions(rawUrl: string): PoolOptions {
-  const url = withoutSslParameters(rawUrl);
+  const url = withoutSslParameters(tidyConnectionString(rawUrl));
   let hostname = '';
   try {
     hostname = new URL(url).hostname;

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { poolOptions, withoutSslParameters } from './db.ts';
+import { poolOptions, tidyConnectionString, withoutSslParameters } from './db.ts';
 
 const supabase = 'postgresql://postgres.yvngvwhjavjzpxewblug:secret@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
 
@@ -45,6 +45,13 @@ describe('the TLS options of the database connection', () => {
   it('can check the certificate when it is asked for', () => {
     vi.stubEnv('DATABASE_SSL_REJECT_UNAUTHORIZED', 'true');
     expect(poolOptions(supabase).ssl).toEqual({ rejectUnauthorized: true });
+  });
+
+  it('drops the spaces a copy and paste leaves behind', () => {
+    // A password with a space around it is a wrong password for the server.
+    expect(tidyConnectionString(`${supabase}\n`)).toBe(supabase);
+    expect(tidyConnectionString('postgresql://user: secret @host:5432/db')).toBe('postgresql://user:secret@host:5432/db');
+    expect(tidyConnectionString('postgresql://user@host:5432/db')).toBe('postgresql://user@host:5432/db');
   });
 
   it('does not use TLS for a database on the same machine', () => {
