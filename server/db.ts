@@ -52,9 +52,40 @@ export interface Db {
 
 /** Opens the database. `target` is a postgres:// URL, 'memory', or a folder path for local use. */
 export async function openDatabase(target: string): Promise<Db> {
-  const db = target.startsWith('postgres') ? fromPool(target) : fromPGlite(target === 'memory' ? new PGlite() : new PGlite(target));
-  await migrate(db);
-  return db;
+  if (!target.startsWith('postgres')) {
+    const db = fromPGlite(target === 'memory' ? new PGlite() : new PGlite(target));
+    await migrate(db);
+    return db;
+  }
+  // A pasted password can lose a character that the URL syntax eats. The server then refuses
+  // the login, so the other spellings of the same connection are tried before giving up.
+  const candidates = connectionCandidates(target);
+  let failure: unknown = null;
+  for (const [index, candidate] of candidates.entries()) {
+    const database = fromPool(candidate);
+    try {
+      await migrate(database);
+      if (index > 0) {
+        console.warn('The database connection string was repaired: the password had lost a character that the URL syntax eats. Percent-encode the password (for example %40 for @) in DATABASE_URL.');
+      }
+      return database;
+    } catch (error) {
+      failure = error;
+      await database.close().catch(() => {});
+      if (!canRepairWithAnotherSpelling(error)) throw error;
+      // The pooler counts failed logins and blocks new connections for a while.
+      if (index < candidates.length - 1) await new Promise((resolve) => setTimeout(resolve, 12000));
+    }
+  }
+  throw failure;
+}
+
+/** True when another spelling of the same connection string could still work. */
+function canRepairWithAnotherSpelling(error: unknown): boolean {
+  if (describeFailure(error).code === '28P01') return true;
+  const message = String((error as { message?: string })?.message ?? '');
+  // A raw character in the password can make the string unreadable for the driver.
+  return /invalid url|malformed/i.test(message);
 }
 
 /**
@@ -222,6 +253,58 @@ export function tidyConnectionString(url: string): string {
 export interface PoolOptions {
   connectionString: string;
   ssl?: { rejectUnauthorized: boolean };
+}
+
+/**
+ * The characters that a connection string eats at the end of a password. A password that ends
+ * with `@` arrives as `postgresql://user:secret@host`, and the URL syntax reads `secret` as the
+ * password and `host` as the host: the password is one character short and the server refuses
+ * the login with 28P01.
+ */
+const LOST_PASSWORD_CHARACTERS = ['@'];
+
+/**
+ * The connection strings to try for one configured string. The first one is the string itself.
+ * The others are the same connection with the password percent-encoded and with the character
+ * that the URL syntax may have eaten put back, so a copy and paste does not have to be perfect.
+ */
+export function connectionCandidates(rawUrl: string): string[] {
+  const url = withoutSslParameters(tidyConnectionString(rawUrl));
+  const schemeEnd = url.indexOf('://');
+  if (schemeEnd < 0) return [url];
+  const authorityStart = schemeEnd + 3;
+  const pathStart = url.indexOf('/', authorityStart);
+  const authorityEnd = pathStart < 0 ? url.length : pathStart;
+  const authority = url.slice(authorityStart, authorityEnd);
+  // The last `@` separates the password from the host; an `@` inside the password belongs to it.
+  const separator = authority.lastIndexOf('@');
+  if (separator < 0) return [url];
+  const userInfo = authority.slice(0, separator);
+  const host = authority.slice(separator + 1);
+  const colon = userInfo.indexOf(':');
+  if (colon < 0) return [url];
+  const user = userInfo.slice(0, colon);
+  const password = userInfo.slice(colon + 1);
+  let decoded = password;
+  try {
+    decoded = decodeURIComponent(password);
+  } catch {
+    decoded = password;
+  }
+  const build = (value: string): string => `${url.slice(0, authorityStart)}${user}:${encodeURIComponent(value)}@${host}${url.slice(authorityEnd)}`;
+  const candidates = [url];
+  const add = (value: string): void => {
+    const built = build(value);
+    if (built !== url && !candidates.includes(built)) candidates.push(built);
+  };
+  // The password as it was meant, with the characters that the URL syntax eats encoded.
+  add(decoded);
+  for (const character of LOST_PASSWORD_CHARACTERS) {
+    // The password already has the character; nothing was lost.
+    if (decoded.endsWith(character)) continue;
+    add(`${decoded}${character}`);
+  }
+  return candidates;
 }
 
 /**

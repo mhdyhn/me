@@ -6,11 +6,14 @@
  *   node tools/check-database.mjs "postgresql://user:pass@host/postgres"
  *
  * The password is encoded the way a connection string needs it, so a password with a special
- * character (`@`, `:`, `/`, `#`, `%`) cannot break the string. Nothing is written to the
- * database. The connection string is printed on purpose: it has to be pasted into Render.
+ * character (`@`, `:`, `/`, `#`, `%`) cannot break the string. A string that lost a character
+ * is tried in its repaired spelling as well, and the string that works is the one that is
+ * printed. Nothing is written to the database. The connection string is printed on purpose:
+ * it has to be pasted into Render.
  */
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
+import { connectionCandidates, normalizeDatabaseUrl } from './normalize-database-url.mjs';
 
 const FLAGS = new Set(['ref', 'password', 'region', 'host', 'port', 'db', 'user']);
 
@@ -58,9 +61,32 @@ export function readOptions(argv) {
   return { options, positional };
 }
 
+/** Connects once and reports what the server answered. */
+async function tryConnection(url) {
+  const pool = new pg.Pool({
+    connectionString: withoutSslParameters(url),
+    max: 1,
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 30000),
+    ssl: { rejectUnauthorized: false },
+  });
+  const started = Date.now();
+  try {
+    const rows = await pool.query('SELECT current_database() AS name, version() AS version');
+    const info = rows[0] ?? {};
+    return { ok: true, ms: Date.now() - started, name: info.name ?? 'unknown', version: String(info.version ?? '').split(' on ')[0] };
+  } catch (error) {
+    return { ok: false, error };
+  } finally {
+    await pool.end();
+  }
+}
+
 export async function main(argv) {
+  // `--quiet` prints only the connection string that works; the rest of the answer goes away.
+  const quiet = argv.includes('--quiet');
   const { options, positional } = readOptions(argv);
-  const target = positional[0] ?? (options.ref && options.password
+  const given = positional[0] ?? '';
+  const target = given || (options.ref && options.password
     ? buildConnectionString({ user: options.user, password: options.password, host: options.host, port: options.port, database: options.database })
     : '');
 
@@ -79,43 +105,46 @@ export async function main(argv) {
     return 1;
   }
 
-  const pool = new pg.Pool({
-    connectionString: withoutSslParameters(target.trim()),
-    max: 1,
-    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 30000),
-    ssl: { rejectUnauthorized: false },
-  });
-
-  const started = Date.now();
-  try {
-    const rows = await pool.query('SELECT current_database() AS name, version() AS version');
-    const info = rows[0] ?? {};
-    console.log(`Connected in ${Date.now() - started} ms.`);
-    console.log(`Database: ${info.name ?? 'unknown'}`);
-    console.log(`Server:  ${String(info.version ?? '').split(' on ')[0]}`);
-    console.log('');
-    console.log('Paste this as DATABASE_URL in Render (Environment), then deploy:');
-    console.log(target.trim());
-    return 0;
-  } catch (error) {
-    const message = String(error?.message ?? '');
-    console.error(`Connection failed: ${message}`);
-    if (/password authentication failed|authentication failed/i.test(message)) {
-      console.error('The password or the user is wrong. For Supabase the user is postgres.<project> and the password is the database password of the project.');
-    } else if (/ECIRCUITBREAKER|too many authentication failures/i.test(message)) {
-      console.error('The host blocked new connections after failed logins. Fix the password first and wait a few minutes.');
-    } else if (/self-signed|certificate/i.test(message)) {
-      console.error('The certificate of the host could not be verified. Remove sslmode=... from the connection string; the app sets TLS itself.');
-    } else {
-      console.error('Check the host, the user, the password, the database name and the port.');
+  // A password that lost a character in the string is tried in its repaired spelling as well.
+  const candidates = connectionCandidates(target);
+  let failure = null;
+  for (const [index, candidate] of candidates.entries()) {
+    // The pooler counts failed logins; a short pause keeps the next try out of its way.
+    if (index > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+    const result = await tryConnection(candidate);
+    if (result.ok) {
+      if (quiet) {
+        process.stdout.write(`${candidate}\n`);
+        return 0;
+      }
+      console.log(`Connected in ${result.ms} ms.`);
+      console.log(`Database: ${result.name}`);
+      console.log(`Server:  ${result.version}`);
+      console.log('');
+      console.log('Paste this as DATABASE_URL in Render (Environment), then deploy:');
+      console.log(candidate);
+      return 0;
     }
+    failure = result.error;
+  }
+
+  const message = String(failure?.message ?? '');
+  console.error(`Connection failed: ${message}`);
+  if (/password authentication failed|authentication failed/i.test(message)) {
+    console.error('The password or the user is wrong. For Supabase the user is postgres.<project> and the password is the database password of the project.');
+  } else if (/ECIRCUITBREAKER|too many authentication failures/i.test(message)) {
+    console.error('The host blocked new connections after failed logins. Fix the password first and wait a few minutes.');
+  } else if (/self-signed|certificate/i.test(message)) {
+    console.error('The certificate of the host could not be verified. Remove sslmode=... from the connection string; the app sets TLS itself.');
+  } else {
+    console.error('Check the host, the user, the password, the database name and the port.');
+  }
+  if (!quiet) {
     console.error('');
     console.error('The connection string to paste into Render (Environment):');
-    console.error(target.trim());
-    return 1;
-  } finally {
-    await pool.end();
+    console.error(normalizeDatabaseUrl(target));
   }
+  return 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
