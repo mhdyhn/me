@@ -1,8 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { buildMotion, interpolatePose, parseElements } from './motion.mjs';
 import { POSES } from './poses.mjs';
 import { renderPose } from './render.mjs';
+
+/** The movements of the catalogue the student can browse. */
+const catalogueIds = () => {
+  const source = readFileSync(resolve('src/data/exercises.ts'), 'utf8');
+  return [...source.matchAll(/id:\s*'([a-z0-9-]+)'/g)].map((match) => match[1]);
+};
 
 const segmentLengths = (points) => {
   const pairs = points.split(' ').map((pair) => pair.split(',').map(Number));
@@ -19,6 +27,13 @@ describe('the animated exercise guide', () => {
       expect(motion, id).not.toBeNull();
       expect(motion.elements.length, id).toBeGreaterThan(4);
       expect(motion.duration, id).toBeGreaterThan(0);
+    }
+  });
+
+  it('covers every catalogue movement with a pose and an animated guide', () => {
+    for (const id of catalogueIds()) {
+      expect(Object.hasOwn(POSES, id), `pose for ${id}`).toBe(true);
+      expect(existsSync(resolve('public/exercise-motion', `${id}.json`)), `motion for ${id}`).toBe(true);
     }
   });
 

@@ -153,6 +153,29 @@ function equipment(items, fig) {
         );
         break;
       }
+      case 'benchTilt': {
+        // side-view bench with an inclined pad: the head end is higher. The pad turns around
+        // its middle, and one leg holds the lower end.
+        const { x, y, w, angle = 0 } = item;
+        const rad = (angle * Math.PI) / 180;
+        const half = (w / 2) * Math.cos(rad);
+        const rise = (w / 2) * Math.sin(rad);
+        const lowerX = angle < 0 ? x - half : x + half;
+        const lowerY = angle < 0 ? y - rise : y + rise;
+        out.push(
+          `<rect x="${f(x - w / 2)}" y="${f(y - 6)}" width="${f(w)}" height="13" rx="5" fill="${dark}" transform="rotate(${f(angle)} ${f(x)} ${f(y)})"/>`,
+        );
+        out.push(`<rect x="${f(lowerX - 5)}" y="${f(lowerY)}" width="10" height="${f(Math.max(6, GROUND - lowerY))}" fill="${dark}"/>`);
+        break;
+      }
+      case 'handle': {
+        // a short grip bar under each hand (machine handles)
+        const hands = Array.isArray(at[0]) ? at : [at];
+        for (const [hx, hy] of hands) {
+          out.push(`<rect x="${f(hx - 9)}" y="${f(hy - 4)}" width="18" height="8" rx="3" fill="${eq}"/>`);
+        }
+        break;
+      }
       case 'benchEnd': {
         // end-view flat bench: pad seen end-on + two legs
         const { x, y } = item;
