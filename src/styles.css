@@ -2538,3 +2538,10 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .smart-report__cell small { font-size: 11px; color: var(--muted); }
 .smart-report__locked { display: flex; flex-direction: column; gap: 10px; }
 .smart-report__locked > p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 13px; line-height: 1.7; color: var(--text-soft); }
+
+/* The paywall for the smart features of an independent student. */
+.premium-gate { display: flex; flex-direction: column; gap: 10px; padding: 22px 18px; border-radius: var(--radius-lg, 16px); border: 1px solid rgba(217,246,111,.22); background: linear-gradient(165deg, rgba(217,246,111,.08), rgba(20,24,22,.72)); }
+.premium-gate__icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(217,246,111,.14); color: var(--accent); }
+.premium-gate h2 { margin: 0; font-size: 17px; }
+.premium-gate p { margin: 0; font-size: 13px; line-height: 1.8; color: var(--text-soft); }
+.premium-gate__note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
