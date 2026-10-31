@@ -157,7 +157,8 @@ function fromPool(url: string): Db {
     max: 5,
     // The hosted database scales down when it is idle. Without a limit a connection attempt can
     // wait forever, and then nothing retries. A failed attempt is retried by the caller.
-    connectionTimeoutMillis: 15000,
+    // A cold start on a free host can take longer than the usual limit, so it is configurable.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 15000),
     ssl: isCloud ? { rejectUnauthorized: false } : undefined,
   });
   // The hosted database closes idle connections (free tier pauses after inactivity). Without this listener
