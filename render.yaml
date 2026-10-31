@@ -5,8 +5,8 @@
 # The build needs them, so the build command forces them with --include=dev.
 #
 # This uses the FREE plan (no card needed). The data is stored in a hosted PostgreSQL database
-# (Neon, free), not in the service, so accounts and coach data survive restarts, redeploys and
-# idle spin-down. Set DATABASE_URL in the Render dashboard (Environment) to the Neon connection string.
+# (Supabase, free), not in the service, so accounts and coach data survive restarts, redeploys and
+# idle spin-down. Set DATABASE_URL in the Render dashboard (Environment) to the database connection string.
 services:
   - type: web
     name: meety

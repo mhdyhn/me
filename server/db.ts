@@ -15,7 +15,7 @@ import { migrateRegistration } from './registration.ts';
 import { migrateAccountHistory } from './accountHistory.ts';
 
 /**
- * Storage for the server, PostgreSQL. Production uses a hosted database (Neon) through
+ * Storage for the server, PostgreSQL. Production uses a hosted database through
  * DATABASE_URL. Tests use an in-process PostgreSQL ('memory'). Local development without a
  * DATABASE_URL keeps its data in a folder on disk. The schema is created with IF NOT EXISTS
  * so a new and an existing database both work. Later phases add tables here, never edit
@@ -151,7 +151,9 @@ function safeDetail(message: string): string | undefined {
 }
 
 function fromPool(url: string): Db {
-  const isCloud = url.includes('neon.tech') || url.includes('sslmode=require') || url.includes('render.com') || process.env.NODE_ENV === 'production';
+  // A hosted database (Supabase, Aiven, ...) speaks TLS. The connection string says so with
+  // sslmode=require, and in production the database is always remote.
+  const isCloud = url.includes('sslmode=require') || process.env.NODE_ENV === 'production';
   const pool = new pg.Pool({
     connectionString: url,
     max: 5,
