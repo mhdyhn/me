@@ -130,7 +130,10 @@ export function createApp(options: AppOptions) {
       const started = performance.now();
       await db.query('SELECT 1');
       const databaseMs = Math.round(performance.now() - started);
-      return { status: 200, body: { ok: true, database: true, databaseMs } };
+      // The admin account is created from ADMIN_USERNAME on the first start. The answer says
+      // whether it exists, so a fresh database can be checked without reading the logs.
+      const adminAccount = await hasAdminAccount(db);
+      return { status: 200, body: { ok: true, database: true, databaseMs, adminAccount } };
     } catch {
       // The reason travels with the answer so the app can explain itself to the user.
       const failure = db.startupFailure?.() ?? null;
@@ -1534,6 +1537,19 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Permissions-Policy': 'geolocation=(), microphone=(self), camera=(self)',
 };
+
+/**
+ * True when the admin account exists. The check is only a hint for the health answer, so a
+ * failure never turns a healthy database into a broken one.
+ */
+async function hasAdminAccount(db: Db): Promise<boolean> {
+  try {
+    const rows = await db.query<{ count: number }>("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
+    return Number(rows[0]?.count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
 
 function sendHtml(response: ServerResponse, html: string): void {
   response.writeHead(200, {
