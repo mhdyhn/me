@@ -76,6 +76,13 @@ describe('a database outage is explained instead of hanging', () => {
     }
   });
 
+  it('names a wrong password, also when the host blocked the connections', async () => {
+    const blocked = Object.assign(new Error('(ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked'), { code: 'XX000' });
+    const db = lazyDatabase(Promise.reject(blocked));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(db.startupFailure!()!.message).toContain('رمز عبور');
+  });
+
   it('names no provider in the reason', async () => {
     const db = lazyDatabase(Promise.reject(Object.assign(new Error('too many connections'), { code: '53000' })));
     await new Promise((resolve) => setTimeout(resolve, 20));
