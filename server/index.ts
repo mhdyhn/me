@@ -15,7 +15,7 @@ const port = Number(process.env.PORT ?? 8787);
 // 0.0.0.0 so the sandbox preview can reach it. The root answers 200 so the preview is not an error page.
 // On a real host, put a reverse proxy in front and set HOST to the address it should reach.
 const host = process.env.HOST ?? '0.0.0.0';
-// Data lives in PostgreSQL. In production that is DATABASE_URL (Neon), which survives restarts and redeploys.
+// Data lives in PostgreSQL. In production that is DATABASE_URL (a hosted PostgreSQL), which survives restarts and redeploys.
 // Without DATABASE_URL, local development keeps a PostgreSQL folder under the data directory.
 const dataDir = resolve(process.env.DATA_DIR ?? 'server/data');
 const databaseUrl = process.env.DATABASE_URL;
