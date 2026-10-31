@@ -1310,12 +1310,16 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .lyfta-player__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 80ms linear; will-change: opacity; }
 .lyfta-player__img--start { z-index: 1; }
 .lyfta-player__img--main { z-index: 2; }
+.lyfta-player__motion { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .lyfta-player__badge { position: absolute; top: 12px; right: 12px; padding: 5px 12px; border-radius: 999px; background: rgba(14,18,16,.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.1); color: var(--text); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; z-index: 3; }
 .lyfta-player__badge-dot { width: 8px; height: 8px; border-radius: 50%; }
 .lyfta-player__badge-dot--start { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
 .lyfta-player__badge-dot--main { background: #ff5252; box-shadow: 0 0 8px #ff5252; }
 .lyfta-player__progress { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.08); z-index: 3; }
 .lyfta-player__progress-bar { height: 100%; background: var(--accent); transition: width .1s linear; }
+.lyfta-player__progress-bar--loop { width: 0; animation-name: lyfta-loop-progress; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes lyfta-loop-progress { from { width: 0; } to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .lyfta-player__progress-bar--loop { animation: none; width: 100%; } }
 .lyfta-player__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; background: var(--surface-soft); border-top: 1px solid var(--line); }
 .lyfta-player__buttons { display: flex; align-items: center; gap: 6px; }
 .lyfta-player__speed-btn { padding: 4px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: all .15s; }
@@ -2294,6 +2298,21 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .payment-practice__amount { max-width: 18rem; }
 .payment-practice__amount small { color: #a42929; }
 
+/* Card-to-card payment: the receipt is confirmed automatically, the money is real. */
+.card-transfer { width: 100%; min-width: 0; margin-top: 14px; display: grid; gap: 10px; justify-items: stretch; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); text-align: start; color: var(--text); font-size: 13px; line-height: 1.9; }
+.card-transfer p { margin: 0; }
+.card-transfer--active { border-color: rgba(217, 246, 111, .35); }
+.card-transfer__head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.card-transfer__grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.card-transfer__cell { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow-wrap: anywhere; }
+.card-transfer__cell span { color: var(--muted); font-size: 11px; }
+.card-transfer__cell b { font-size: 15px; letter-spacing: .04em; }
+.card-transfer__cell small { color: var(--muted); font-size: 11px; }
+.card-transfer__steps { margin: 0; padding-inline-start: 20px; display: grid; gap: 4px; color: var(--text); }
+.card-transfer__copy { display: inline-flex; align-items: center; gap: 6px; justify-self: start; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.card-transfer__form { display: grid; gap: 10px; }
+.card-transfer__note { color: var(--muted); font-size: 11px; }
+
 /* Student test access is never presented as a real purchase. */
 .student-test-purchase { width: 100%; min-width: 0; display: grid; justify-items: center; gap: 10px; color: var(--text); font-size: 13px; line-height: 1.9; }
 .student-test-purchase p { margin: 0; }
@@ -2506,3 +2525,23 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .program-file-select input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .program-file-review { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .program-file-review ol { padding-inline-start: 22px; overflow-wrap: anywhere; }
+
+/* The optional student subscription: the smart progress report and its checkout. */
+.smart-report { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius-lg, 16px); border: 1px solid rgba(217,246,111,.18); background: linear-gradient(160deg, rgba(217,246,111,.07), rgba(20,24,22,.6)); }
+.smart-report__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.smart-report__head .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 12px; font-weight: 700; }
+.smart-report__badge { padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(217,246,111,.3); color: var(--accent); font-size: 12px; }
+.smart-report__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.smart-report__cell { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); }
+.smart-report__cell span { font-size: 12px; color: var(--muted); }
+.smart-report__cell b { display: inline-flex; align-items: center; gap: 5px; font-size: 17px; }
+.smart-report__cell small { font-size: 11px; color: var(--muted); }
+.smart-report__locked { display: flex; flex-direction: column; gap: 10px; }
+.smart-report__locked > p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 13px; line-height: 1.7; color: var(--text-soft); }
+
+/* The paywall for the smart features of an independent student. */
+.premium-gate { display: flex; flex-direction: column; gap: 10px; padding: 22px 18px; border-radius: var(--radius-lg, 16px); border: 1px solid rgba(217,246,111,.22); background: linear-gradient(165deg, rgba(217,246,111,.08), rgba(20,24,22,.72)); }
+.premium-gate__icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(217,246,111,.14); color: var(--accent); }
+.premium-gate h2 { margin: 0; font-size: 17px; }
+.premium-gate p { margin: 0; font-size: 13px; line-height: 1.8; color: var(--text-soft); }
+.premium-gate__note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }

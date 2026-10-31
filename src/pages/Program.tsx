@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
 import { StudentTestPurchase } from '../components/StudentTestPurchase';
+import { CardTransferCheckout } from '../components/CardTransferCheckout';
 import { ProgramFilePanel } from '../components/ProgramFilePanel';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { useGym } from '../context/GymProvider';
@@ -147,7 +148,7 @@ export function Program() {
           <p className="account-muted" style={{ margin: 0, maxWidth: 440 }}>
             {assignedMeta.testPurchaseAvailable
               ? 'این برنامه در حالت خرید آزمایشی است. تأیید خرید، برنامه را برای مدت محدود و بدون پرداخت بانکی باز می‌کند.'
-              : 'مربی شما این برنامه را اختصاصی برای شما آماده کرده است. با پرداخت هزینه از طریق درگاه امن شاپرک و زرین‌پال، تمام روزها و حرکت‌های برنامه برای شما بازگشایی می‌شوند.'}
+              : 'مربی شما این برنامه را اختصاصی برای شما آماده کرده است. هزینه را آنلاین از طریق درگاه امن شاپرک و زرین‌پال بپردازید یا کارت‌به‌کارت واریز کنید؛ در هر دو حالت تمام روزها و حرکت‌های برنامه برای شما بازگشایی می‌شود.'}
           </p>
           <div style={{ padding: '12px 24px', borderRadius: 12, background: 'var(--surface-soft)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
             <CreditCard size={20} className="account-muted" />
@@ -168,6 +169,7 @@ export function Program() {
               >
                 {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
               </button>
+              {assignedMeta.cardTransferAvailable && <CardTransferCheckout program={assignedMeta} />}
             </>
           )}
           <button type="button" className="button button--ghost" onClick={() => void loadAssignedProgram()}>بررسی دوبارهٔ وضعیت برنامه</button>

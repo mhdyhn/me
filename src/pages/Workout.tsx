@@ -11,6 +11,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useGym } from '../context/GymProvider';
 import { getExerciseGuide, getExerciseVisualId } from '../lib/exerciseGuide';
 import { exerciseFigureSrc, hasExerciseFigure, type FigureState } from '../data/exerciseFigures';
+import { ExerciseMotionFigure, useExerciseMotion } from '../components/ExerciseMotionFigure';
 import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly, useAssignedProgramLoadState, useProgram } from '../lib/programStore';
 import { workoutSessionTemplate } from '../lib/workoutSessionTemplate';
 import { getLastExercisePerformance, getRecentRecord, getSessionTotals } from '../lib/analytics';
@@ -102,6 +103,8 @@ export function Workout() {
   const currentWorkoutExercise = activeTemplate?.exercises[currentExerciseIndex];
   const exercise = currentWorkoutExercise ? getExerciseGuide(currentWorkoutExercise.exerciseId) : undefined;
   const visualExerciseId = currentWorkoutExercise ? getExerciseVisualId(currentWorkoutExercise.exerciseId) : '';
+  // The animated guide of the movement in view; movements without one keep the two static phases.
+  const motion = useExerciseMotion(visualExerciseId);
   const prescription = currentWorkoutExercise?.prescription;
   const sessionExercise = session?.exercises[currentExerciseIndex];
   const setNumber = (session?.currentSetIndex ?? 0) + 1;
@@ -466,21 +469,27 @@ export function Workout() {
           {exercise && hasExerciseFigure(visualExerciseId) && (
             <div className="workout-form-card">
               <div className="workout-form-card__visual">
-                <img
-                  src={exerciseFigureSrc(visualExerciseId, previewFrame)}
-                  alt={exercise.name}
-                  className="workout-form-card__img"
-                  loading="eager"
-                  decoding="async"
-                />
-                <button
-                  type="button"
-                  className="workout-form-card__toggle"
-                  onClick={() => setPreviewFrame((f) => (f === 'start' ? 'main' : 'start'))}
-                  title="تغییر وضعیت"
-                >
-                  {previewFrame === 'start' ? '۱: شروع' : '۲: اجرا'}
-                </button>
+                {motion ? (
+                  <ExerciseMotionFigure data={motion} name={exercise.name} className="workout-form-card__img" />
+                ) : (
+                  <>
+                    <img
+                      src={exerciseFigureSrc(visualExerciseId, previewFrame)}
+                      alt={exercise.name}
+                      className="workout-form-card__img"
+                      loading="eager"
+                      decoding="async"
+                    />
+                    <button
+                      type="button"
+                      className="workout-form-card__toggle"
+                      onClick={() => setPreviewFrame((f) => (f === 'start' ? 'main' : 'start'))}
+                      title="تغییر وضعیت"
+                    >
+                      {previewFrame === 'start' ? '۱: شروع' : '۲: اجرا'}
+                    </button>
+                  </>
+                )}
               </div>
               <div className="workout-form-card__info">
                 <span className="eyebrow">فرم و ایمنی کلیدی</span>

@@ -339,6 +339,7 @@ export async function listTestTransactions(db: Db, now: Date, coachId?: number):
       adminShareTomans: row.admin_share_tomans, authority: row.authority,
       status: expired ? 'expired' : row.status,
       refId: null, cardPan: null, createdAt: row.created_at, verifiedAt: row.verified_at, simulation: true as const,
+      method: 'sandbox' as const,
     };
   });
 }

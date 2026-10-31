@@ -9,6 +9,7 @@ import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
 import { CoachNutritionArchive, StudentNutritionPlan } from './account/StudentNutrition';
 import { MealDiary } from './account/MealDiary';
+import { PremiumGate } from '../components/PremiumGate';
 import { faNumber, getLocalDateKey } from '../lib/format';
 import type { Targets } from '../lib/nutrition';
 import type { NutritionGoals, NutritionDay } from '../types';
@@ -103,6 +104,11 @@ export function Nutrition() {
     <div className="page-stack nutrition-page">
       {user?.role === 'student' && user.coachId !== null && <StudentNutritionPlan key={`plan:${user.id}:${user.coachId}`} />}
       {user?.role === 'student' && user.coachId !== null && <CoachNutritionArchive key={`archive:${user.id}:${user.coachId}`} />}
+      <PremiumGate
+        feature="تغذیهٔ هوشمند"
+        title="تغذیهٔ هوشمند برای شاگرد مستقل"
+        description="با اشتراک ماهانه، هدف‌های تغذیه‌ای بر پایهٔ وزن و روند تمرین پیشنهاد می‌شود، دفتر تغذیه با هوش مصنوعی تحلیل می‌شود و برنامهٔ غذایی با برنامهٔ تمرینت هماهنگ می‌ماند."
+      >
       <SectionHeading eyebrow="سوخت تمرین" title="تغذیه را کاربردی نگه دار." description="وعده‌های روزانه‌ات را ثبت کن؛ کالری و درشت‌مغذی‌ها خودکار حساب می‌شوند و با هدف‌هایت مقایسه می‌شوند." />
       <div className="nutrition-context panel-card">
         <span className="nutrition-context__icon"><Leaf size={19} /></span>
@@ -141,6 +147,7 @@ export function Nutrition() {
           </fieldset>
         </form>
       </section>
+      </PremiumGate>
     </div>
   );
 }

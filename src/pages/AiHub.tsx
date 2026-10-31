@@ -56,6 +56,7 @@ import {
 } from '../lib/studentAiBiometrics';
 import { faNumber, formatDate } from '../lib/format';
 import { useProgram } from '../lib/programStore';
+import { PremiumGate } from '../components/PremiumGate';
 
 type ActiveTab = 'recovery' | 'muscles' | 'hinge' | 'noom' | 'biometrics';
 
@@ -236,6 +237,11 @@ export function AiHub() {
 
   return (
     <div className="page-stack ai-hub-page">
+      <PremiumGate
+        feature="مغز هوشمند"
+        title="مغز هوشمند برای شاگرد مستقل"
+        description="با اشتراک ماهانه، آمادگی و ریکاوری، نقشهٔ عضلات، مراقبت مفاصل، تحلیل تغذیه و برنامهٔ پیشنهادی هوش مصنوعی برایت باز می‌شود."
+      >
       {/* Header section */}
       <section className="welcome-row">
         <div>
@@ -1030,6 +1036,7 @@ export function AiHub() {
           </div>
         </div>
       )}
+      </PremiumGate>
     </div>
   );
 }

@@ -76,7 +76,8 @@ export async function acceptCoachInvitation(db: Db, key: SecretKey, student: Sto
         AND c.role = 'coach' AND c.is_active = 1
       FOR UPDATE OF i, c
     ), attached AS (
-      UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1, personal_program_mode = 0,
+      UPDATE users s SET coach_id = candidate.coach_id, referred_by_coach_id = candidate.coach_id,
+        coach_access = 1, personal_program_mode = 0,
         coach_access_version = s.coach_access_version + 1 FROM candidate
       WHERE s.id = $2 AND s.role = 'student' AND (s.self_registered = 1 OR s.coach_id = candidate.coach_id) AND s.is_active = 1 AND s.auth_version = $3
         AND s.coach_access_version = $5 AND s.session_guard_version = $6 AND (s.coach_id IS NULL OR s.coach_access = 0)
@@ -158,7 +159,8 @@ export async function acceptCoachRegistrationLink(db: Db, key: SecretKey, studen
       SELECT l.coach_id FROM coach_registration_links l JOIN users c ON c.id = l.coach_id
       WHERE l.token_hash = $1 AND c.role = 'coach' AND c.is_active = 1 FOR UPDATE OF l, c
     ), attached AS (
-      UPDATE users s SET coach_id = candidate.coach_id, coach_access = 1, personal_program_mode = 0,
+      UPDATE users s SET coach_id = candidate.coach_id, referred_by_coach_id = candidate.coach_id,
+        coach_access = 1, personal_program_mode = 0,
         coach_access_version = s.coach_access_version + 1 FROM candidate
       WHERE s.id = $2 AND s.role = 'student' AND s.self_registered = 1 AND s.is_active = 1 AND s.auth_version = $3
         AND s.coach_access_version = $4 AND s.session_guard_version = $5 AND (s.coach_id IS NULL OR s.coach_access = 0)

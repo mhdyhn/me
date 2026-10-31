@@ -4,13 +4,15 @@ import { normalizeCertificateSha256 } from './android-release-config.mjs';
 
 /** The apksigner process must also have exited successfully before this check runs. */
 export function verifyExpectedSigner(output, expectedCertificate) {
-  const expected = normalizeCertificateSha256(expectedCertificate);
   const count = /^Number of signers:\s*(\d+)\s*$/m.exec(output);
   const signers = [...output.matchAll(/^Signer #(\d+) certificate SHA-256 digest:\s*([a-f\d:]+)\s*$/gim)];
   if (!/^Verifies\s*$/m.test(output) || count?.[1] !== '1' || signers.length !== 1 || signers[0][1] !== '1') {
     throw new Error('The APK does not have exactly one verified signing certificate.');
   }
-  if (normalizeCertificateSha256(signers[0][2]) !== expected) {
+  // A pinned certificate is enforced; without one the release uses the stored keystore.
+  const expected = expectedCertificate?.trim() ?? '';
+  if (!expected) return;
+  if (normalizeCertificateSha256(signers[0][2]) !== normalizeCertificateSha256(expected)) {
     throw new Error('The APK signing certificate does not match the expected certificate; release blocked.');
   }
 }

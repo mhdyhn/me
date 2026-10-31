@@ -17,6 +17,16 @@ export interface PaymentTransaction {
   cardPan: string | null;
   createdAt: string;
   verifiedAt: string | null;
+  /** How the money was (or will be) paid. */
+  method: 'online' | 'card_transfer' | 'sandbox' | 'legacy';
+  /** The exact amount a card transfer has to use. */
+  cardTransferAmountTomans?: number | null;
+  /** Short reference the student wrote into the transfer description. */
+  cardTransferReference?: string | null;
+  /** Last four digits of the sending card, as declared by the student. */
+  cardTransferSenderLast4?: string | null;
+  /** `auto` for the automatic receipt check, `manual` for a support decision. */
+  cardTransferConfirmedBy?: string | null;
 }
 
 interface TransactionRow {
@@ -34,9 +44,13 @@ interface TransactionRow {
   card_pan: string | null;
   created_at: string;
   verified_at: string | null;
-  gateway_mode: 'sandbox' | 'live' | 'legacy';
+  gateway_mode: 'sandbox' | 'live' | 'legacy' | 'card_transfer';
   programme_id: string | null;
   programme_mapping: string;
+  card_transfer_amount_tomans?: number | null;
+  card_transfer_reference?: string | null;
+  card_transfer_sender_last4?: string | null;
+  card_transfer_confirmed_by?: string | null;
 }
 
 export async function migratePayments(db: Db): Promise<void> {
@@ -180,7 +194,14 @@ function liveMerchantId(): string {
   return merchant;
 }
 
-function toTransaction(row: TransactionRow): PaymentTransaction {
+function paymentMethod(gatewayMode: string): PaymentTransaction['method'] {
+  if (gatewayMode === 'card_transfer') return 'card_transfer';
+  if (gatewayMode === 'sandbox') return 'sandbox';
+  if (gatewayMode === 'live') return 'online';
+  return 'legacy';
+}
+
+export function toPaymentTransaction(row: TransactionRow): PaymentTransaction {
   return {
     id: row.id,
     studentId: row.student_id,
@@ -196,13 +217,19 @@ function toTransaction(row: TransactionRow): PaymentTransaction {
     cardPan: row.card_pan,
     createdAt: row.created_at,
     verifiedAt: row.verified_at,
+    method: paymentMethod(row.gateway_mode),
+    cardTransferAmountTomans: row.card_transfer_amount_tomans ?? null,
+    cardTransferReference: row.card_transfer_reference ?? null,
+    cardTransferSenderLast4: row.card_transfer_sender_last4 ?? null,
+    cardTransferConfirmedBy: row.card_transfer_confirmed_by ?? null,
   };
 }
 
 async function pendingCheckout(db: Db, studentId: number, programmeId: string, origin: string, expected: { amount: number; coachId: number }): Promise<{ authority: string; paymentUrl: string } | null> {
   const pending = (await db.query<{ authority: string; gateway_mode: string; amount_tomans: number; coach_id: number }>(`
     SELECT authority, gateway_mode, amount_tomans, coach_id FROM payment_transactions
-    WHERE student_id = $1 AND programme_id = $2 AND status = 'pending' ORDER BY id DESC LIMIT 1
+    WHERE student_id = $1 AND programme_id = $2 AND status = 'pending' AND gateway_mode <> 'card_transfer'
+    ORDER BY id DESC LIMIT 1
   `, [studentId, programmeId]))[0];
   if (!pending) return null;
   if (pending.amount_tomans !== expected.amount || pending.coach_id !== expected.coachId) {
@@ -318,7 +345,7 @@ export async function createPaymentRequest(
     }
   }
 
-  const inserted = await db.query<{ authority: string }>(
+  const insertPending = async (): Promise<{ authority: string }[]> => db.query<{ authority: string }>(
     `WITH current_offer AS MATERIALIZED (
        SELECT u.id FROM users u JOIN student_programs sp ON sp.student_id = u.id
        WHERE u.id = $1 AND u.coach_id = $2 AND u.personal_program_mode = 0 AND sp.coach_id = $2
@@ -332,6 +359,18 @@ export async function createPaymentRequest(
      ON CONFLICT DO NOTHING RETURNING authority`,
     [studentId, info.coach_id, amount, coachShare, adminShare, authority, now.toISOString(), sandbox ? 'sandbox' : 'live', info.programme_id, process.env.NODE_ENV === 'production' ? 1 : 0, expected.version]
   );
+  let inserted = await insertPending();
+  if (!inserted.length) {
+    // A pending card transfer for the same programme keeps the single pending slot.
+    // Switching to the online method cancels it so the student is never charged twice.
+    const cardTransfer = await db.query<{ id: number }>(
+      `UPDATE payment_transactions SET status = 'canceled'
+       WHERE student_id = $1 AND programme_id = $2 AND status = 'pending' AND gateway_mode = 'card_transfer'
+       RETURNING id`,
+      [studentId, info.programme_id]
+    );
+    if (cardTransfer.length) inserted = await insertPending();
+  }
   if (!inserted.length) {
     const raced = await pendingCheckout(db, studentId, info.programme_id, origin, { amount, coachId: info.coach_id });
     if (raced) return raced;
@@ -388,6 +427,11 @@ export async function verifyPayment(
     throw new HttpError(503, 'تراکنش آزمایشی در محیط واقعی قابل تأیید نیست.');
   }
 
+  // Card transfers are confirmed by the receipt check, never by the online gateway.
+  if (row.gateway_mode === 'card_transfer' && authority.toUpperCase().startsWith('CARD-')) {
+    throw new HttpError(409, 'این پرداخت کارت‌به‌کارت است و با ثبت رسید واریزی تأیید می‌شود.');
+  }
+
   if (process.env.NODE_ENV === 'production' && row.status === 'paid' && !validPaymentReference(row.ref_id)) {
     throw new HttpError(503, 'تراکنش قدیمی شناسهٔ تأیید معتبر ندارد؛ با پشتیبانی تماس بگیرید.');
   }
@@ -396,7 +440,7 @@ export async function verifyPayment(
   if (row.status === 'paid') {
     return {
       success: true,
-      transaction: toTransaction(row),
+      transaction: toPaymentTransaction(row),
       message: await successMessage(db, row, true),
     };
   }
@@ -407,7 +451,7 @@ export async function verifyPayment(
     row.status = 'canceled';
     return {
       success: false,
-      transaction: toTransaction(row),
+      transaction: toPaymentTransaction(row),
       message: 'پرداخت در درگاه بانکی لغو شد یا ناموفق بود.',
     };
   }
@@ -454,7 +498,7 @@ export async function verifyPayment(
         row.status = 'failed';
         return {
           success: false,
-          transaction: toTransaction(row),
+          transaction: toPaymentTransaction(row),
           message: 'تأیید تراکنش توسط زرین‌پال پذیرفته نشد.',
         };
       }
@@ -477,7 +521,7 @@ export async function verifyPayment(
 
   return {
     success: true,
-    transaction: toTransaction(row),
+    transaction: toPaymentTransaction(row),
     message: await successMessage(db, row, false),
   };
 }
@@ -492,7 +536,7 @@ export async function listCoachTransactions(db: Db, coachId: number): Promise<Pa
      ORDER BY t.id DESC`,
     [coachId]
   );
-  return rows.map(toTransaction);
+  return rows.map(toPaymentTransaction);
 }
 
 export async function listAllTransactions(db: Db): Promise<PaymentTransaction[]> {
@@ -503,7 +547,7 @@ export async function listAllTransactions(db: Db): Promise<PaymentTransaction[]>
      JOIN users c ON c.id = t.coach_id
      ORDER BY t.id DESC`
   );
-  return rows.map(toTransaction);
+  return rows.map(toPaymentTransaction);
 }
 
 export async function getTransactionByAuthority(db: Db, authority: string): Promise<PaymentTransaction | null> {
@@ -515,5 +559,5 @@ export async function getTransactionByAuthority(db: Db, authority: string): Prom
      WHERE t.authority = $1`,
     [authority]
   );
-  return rows[0] ? toTransaction(rows[0]) : null;
+  return rows[0] ? toPaymentTransaction(rows[0]) : null;
 }

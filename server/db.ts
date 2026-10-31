@@ -5,6 +5,8 @@ import { HttpError } from './http.ts';
 import { migrateNutrition } from './nutrition.ts';
 import { migrateSessions } from './sessions.ts';
 import { migratePayments } from './payments.ts';
+import { migrateCardTransfers } from './cardTransfer.ts';
+import { migrateSubscriptions } from './subscriptions.ts';
 import { migrateBiometrics } from './biometrics.ts';
 import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
@@ -155,7 +157,8 @@ function fromPool(url: string): Db {
     max: 5,
     // The hosted database scales down when it is idle. Without a limit a connection attempt can
     // wait forever, and then nothing retries. A failed attempt is retried by the caller.
-    connectionTimeoutMillis: 15000,
+    // A cold start on a free host can take longer than the usual limit, so it is configurable.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 15000),
     ssl: isCloud ? { rejectUnauthorized: false } : undefined,
   });
   // The hosted database closes idle connections (free tier pauses after inactivity). Without this listener
@@ -276,6 +279,8 @@ async function migrate(db: Db): Promise<void> {
   await migrateNutrition(db);
   await migrateSessions(db);
   await migratePayments(db);
+  await migrateCardTransfers(db);
+  await migrateSubscriptions(db);
   await migrateTestPurchases(db);
   await migrateBiometrics(db);
   await migrateStudentProfiles(db);

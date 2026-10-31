@@ -90,6 +90,33 @@ function CoachTransactionsView() {
       {report && <>
         <FinancialReport transactions={report.testTransactions ?? []} isCoach simulation />
         <FinancialReport transactions={report.transactions} isCoach />
+        {report.subscriptionShares && report.subscriptionShares.length > 0 && (
+          <section className="panel-card financial-report" aria-label="سهم اشتراک معرفی‌شده">
+            <h2>سهم اشتراک معرفی‌شده</h2>
+            <p className="account-muted">هر شاگردی که از لینک ثبت‌نام شما آمده و اشتراک هوشمند خریده، ۱۰٪ مبلغ اشتراک برای شماست.</p>
+            <div className="financial-report__stats">
+              <Metric label="سهم شما از اشتراک‌ها" value={`${faNumber(report.subscriptionShares.reduce((sum, share) => sum + share.coachShareTomans, 0))} تومان`} />
+              <Metric label="اشتراک‌های معرفی‌شده" value={`${faNumber(report.subscriptionShares.length)} عدد`} />
+            </div>
+            <div className="transaction-list">
+              {report.subscriptionShares.map((share) => (
+                <article key={share.id} className="panel-card" style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div className="transaction-card__identity">
+                    <div className="transaction-card__names"><span style={{ fontWeight: 600 }}>شاگرد: {share.studentName}</span></div>
+                    <div className="account-muted transaction-card__meta">
+                      <span>{new Date(share.createdAt).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                      <span>مبلغ اشتراک: {faNumber(share.amountTomans)} تومان</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'end', display: 'grid', gap: 4 }}>
+                    <strong style={{ fontSize: 16, color: '#4ade80' }}>{faNumber(share.coachShareTomans)} تومان</strong>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>سهم ثبت‌شده شما</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
       </>}
 
       <section className="panel-card" style={{ marginBottom: 20 }}>

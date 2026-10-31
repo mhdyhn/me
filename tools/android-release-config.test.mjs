@@ -15,18 +15,22 @@ let tempDirectory;
 afterEach(() => { if (tempDirectory) rmSync(tempDirectory, { recursive: true, force: true }); tempDirectory = undefined; });
 
 describe('Android release configuration', () => {
-  it('uses the known public origin and latest historical signer only for the owner repository', () => {
+  it('uses the known public origin and leaves the certificate unpinned by default', () => {
+    // Without a pinned certificate the release uses the keystore from the secrets, so a new
+    // key does not block the build.
     expect(resolveAndroidReleaseConfig(baseConfig)).toEqual({
-      apiOrigin: 'https://meety-985n.onrender.com', certificateSha256: latestCertificate,
+      apiOrigin: 'https://meety-985n.onrender.com', certificateSha256: '', previousCertificateSha256: latestCertificate,
     });
     expect(() => resolveAndroidReleaseConfig({ ...baseConfig, repository: 'someone/fork' })).toThrow('ANDROID_API_BASE is required');
-    expect(() => resolveAndroidReleaseConfig({ ...baseConfig, repository: 'someone/fork', apiBase: 'https://api.example.com' })).toThrow('ANDROID_SIGNING_CERT_SHA256 is required');
+    expect(resolveAndroidReleaseConfig({ ...baseConfig, repository: 'someone/fork', apiBase: 'https://api.example.com' })).toEqual({
+      apiOrigin: 'https://api.example.com', certificateSha256: '', previousCertificateSha256: '',
+    });
   });
 
   it('honours an explicitly configured origin and signer without falling back on invalid values', () => {
     const fingerprint = olderCertificate.toUpperCase().match(/../g).join(':');
     expect(resolveAndroidReleaseConfig({ repository: 'someone/fork', apiBase: 'https://api.example.com:8443/', signingCertificate: fingerprint })).toEqual({
-      apiOrigin: 'https://api.example.com:8443', certificateSha256: olderCertificate,
+      apiOrigin: 'https://api.example.com:8443', certificateSha256: olderCertificate, previousCertificateSha256: '',
     });
     expect(() => resolveAndroidReleaseConfig({ ...baseConfig, signingCertificate: 'not-a-fingerprint' })).toThrow('ANDROID_SIGNING_CERT_SHA256');
   });
@@ -58,11 +62,12 @@ describe('Android release configuration', () => {
     const file = join(tempDirectory, 'github-env');
     const env = { ...process.env, GITHUB_REPOSITORY: 'mhdyhn/me', GITHUB_ENV: file, ANDROID_API_BASE: '', ANDROID_SIGNING_CERT_SHA256: '' };
     execFileSync(process.execPath, ['tools/android-release-config.mjs'], { env });
-    expect(readFileSync(file, 'utf8')).toBe(`VITE_API_BASE=https://meety-985n.onrender.com\nANDROID_EXPECTED_CERT_SHA256=${latestCertificate}\n`);
+    expect(readFileSync(file, 'utf8')).toBe(
+      `VITE_API_BASE=https://meety-985n.onrender.com\nANDROID_EXPECTED_CERT_SHA256=\nANDROID_PREVIOUS_CERT_SHA256=${latestCertificate}\n`);
     const result = spawnSync(process.execPath, ['tools/android-release-config.mjs'], { env: { ...env, ANDROID_API_BASE: 'https://u:secret@example.com' }, encoding: 'utf8' });
     expect(result.status).toBe(1);
     expect(result.stderr).not.toContain('secret');
-    expect(readFileSync(file, 'utf8').split('\n')).toHaveLength(3);
+    expect(readFileSync(file, 'utf8').split('\n')).toHaveLength(4);
   });
 
   it('requires a precisely formatted certificate fingerprint', () => {
@@ -76,6 +81,10 @@ describe('Android release configuration', () => {
 describe('APK signer check', () => {
   it('accepts the configured certificate after successful verification', () => {
     expect(() => verifyExpectedSigner(verifierOutput(), latestCertificate)).not.toThrow();
+  });
+  it('accepts a new certificate when none is pinned, but still requires one verified signer', () => {
+    expect(() => verifyExpectedSigner(verifierOutput(olderCertificate), '')).not.toThrow();
+    expect(() => verifyExpectedSigner(verifierOutput().replace('Verifies\n', ''), '')).toThrow('exactly one verified');
   });
   it('runs the verifier even when the executable is reached through a symlink', () => {
     tempDirectory = mkdtempSync(join(tmpdir(), 'meety-android-signer-'));

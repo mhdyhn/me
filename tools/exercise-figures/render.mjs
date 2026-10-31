@@ -153,6 +153,29 @@ function equipment(items, fig) {
         );
         break;
       }
+      case 'benchTilt': {
+        // side-view bench with an inclined pad: the head end is higher. The pad turns around
+        // its middle, and one leg holds the lower end.
+        const { x, y, w, angle = 0 } = item;
+        const rad = (angle * Math.PI) / 180;
+        const half = (w / 2) * Math.cos(rad);
+        const rise = (w / 2) * Math.sin(rad);
+        const lowerX = angle < 0 ? x - half : x + half;
+        const lowerY = angle < 0 ? y - rise : y + rise;
+        out.push(
+          `<rect x="${f(x - w / 2)}" y="${f(y - 6)}" width="${f(w)}" height="13" rx="5" fill="${dark}" transform="rotate(${f(angle)} ${f(x)} ${f(y)})"/>`,
+        );
+        out.push(`<rect x="${f(lowerX - 5)}" y="${f(lowerY)}" width="10" height="${f(Math.max(6, GROUND - lowerY))}" fill="${dark}"/>`);
+        break;
+      }
+      case 'handle': {
+        // a short grip bar under each hand (machine handles)
+        const hands = Array.isArray(at[0]) ? at : [at];
+        for (const [hx, hy] of hands) {
+          out.push(`<rect x="${f(hx - 9)}" y="${f(hy - 4)}" width="18" height="8" rx="3" fill="${eq}"/>`);
+        }
+        break;
+      }
       case 'benchEnd': {
         // end-view flat bench: pad seen end-on + two legs
         const { x, y } = item;
@@ -231,20 +254,64 @@ function equipment(items, fig) {
 /** Equipment drawn beneath the figure; everything else (bars, cables) is drawn on top of the hands. */
 const UNDER = new Set(["bench", "benchEnd", "box", "post", "pullbar"]);
 
+/** The smallest box that holds every drawn point of the figure, in model units. */
+function modelBounds(inner) {
+  const numbers = [];
+  const points = [...inner.matchAll(/points="([^"]+)"/g)].flatMap((match) => match[1].trim().split(/\s+/));
+  for (const pair of points) {
+    const [x, y] = pair.split(',').map(Number);
+    if (!Number.isNaN(x) && !Number.isNaN(y)) numbers.push([x, y]);
+  }
+  for (const match of inner.matchAll(/\b(cx|cy|x|y|x1|y1|x2|y2)="(-?[\d.]+)"/g)) {
+    const value = Number(match[2]);
+    if (!Number.isNaN(value)) numbers.push(match[1] === 'cx' || match[1] === 'x' || match[1] === 'x1' || match[1] === 'x2' ? [value, 0] : [0, value]);
+  }
+  for (const match of inner.matchAll(/<rect[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"/g)) {
+    numbers.push([Number(match[1]), Number(match[2])]);
+  }
+  if (!numbers.length) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  return {
+    minX: Math.min(...numbers.map((point) => point[0])),
+    maxX: Math.max(...numbers.map((point) => point[0])),
+    minY: Math.min(...numbers.map((point) => point[1])),
+    maxY: Math.max(...numbers.map((point) => point[1])),
+  };
+}
+
+/** The margin kept between the figure and the edge of the canvas. */
+const MARGIN = 8;
+
+/**
+ * The transform of one pose. The scale never changes, so every figure keeps the same size;
+ * the figure is only shifted when it would otherwise fall out of the canvas (a dip or a
+ * hanging movement hangs below the floor line).
+ */
+export function poseTransform(pose, inner) {
+  const tx = W / 2 - 240 * S;
+  let ty = GROUND_CANVAS - GROUND * S;
+  const bounds = modelBounds(inner);
+  const top = bounds.minY * S + ty;
+  const bottom = bounds.maxY * S + ty;
+  if (bottom > H - MARGIN) ty -= bottom - (H - MARGIN);
+  if (bounds.minY * S + ty < MARGIN) ty += MARGIN - (bounds.minY * S + ty);
+  return { tx, ty, transform: `translate(${f(tx)} ${f(ty)}) scale(${S})` };
+}
+
 /** Build one SVG from a pose. pose.view: 'side' (default) or 'end'. */
 export function renderPose(pose, meta = {}) {
   const fig = pose.view === 'end' ? endFigure(pose) : sideFigure(pose);
-  const tx = W / 2 - 240 * S;
-  const ty = GROUND_CANVAS - GROUND * S;
+  const under = equipment((pose.equip ?? []).filter((e) => UNDER.has(e.t)), fig);
+  const over = equipment((pose.equip ?? []).filter((e) => !UNDER.has(e.t)), fig);
+  const { transform } = poseTransform(pose, under + fig.svgBody + over);
   const floor = `<line x1="0" y1="${GROUND_CANVAS}" x2="${W}" y2="${GROUND_CANVAS}" stroke="${PALETTE.ground}" stroke-width="2"/>`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${meta.label ?? ''}">` +
     `<rect width="${W}" height="${H}" fill="${PALETTE.bg}"/>` +
     floor +
-    `<g transform="translate(${f(tx)} ${f(ty)}) scale(${S})">` +
-    equipment((pose.equip ?? []).filter((e) => UNDER.has(e.t)), fig) +
+    `<g transform="${transform}">` +
+    under +
     fig.svgBody +
-    equipment((pose.equip ?? []).filter((e) => !UNDER.has(e.t)), fig) +
+    over +
     `</g>` +
     `</svg>`
   );

@@ -67,6 +67,12 @@ export interface PaymentTransaction {
   cardPan: string | null;
   createdAt: string;
   verifiedAt: string | null;
+  /** How the money was paid: online gateway, card transfer, or an older record. */
+  method?: 'online' | 'card_transfer' | 'sandbox' | 'legacy';
+  cardTransferAmountTomans?: number | null;
+  cardTransferReference?: string | null;
+  cardTransferSenderLast4?: string | null;
+  cardTransferConfirmedBy?: string | null;
 }
 
 export interface TestPaymentTransaction extends PaymentTransaction {
@@ -75,9 +81,20 @@ export interface TestPaymentTransaction extends PaymentTransaction {
   programmeVersion: number;
 }
 
+export interface SubscriptionShare {
+  id: number;
+  studentName: string;
+  amountTomans: number;
+  coachShareTomans: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface TransactionsResponse {
   transactions: PaymentTransaction[];
   testTransactions?: TestPaymentTransaction[];
+  /** The referral shares of the subscriptions of the students this coach referred. */
+  subscriptionShares?: SubscriptionShare[];
 }
 
 export interface Credentials {
