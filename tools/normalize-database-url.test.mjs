@@ -36,6 +36,13 @@ describe('the connection string of the database', () => {
     expect(candidates).toContain('postgresql://postgres.abc:Mhdy2020x%40@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
   });
 
+  it('offers the password without a doubled @ as well', () => {
+    // The string has the @ twice, so the password may be the shorter one.
+    const url = 'postgresql://postgres.abc:Mhdy2020x@@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+    const candidates = connectionCandidates(url);
+    expect(candidates).toContain('postgresql://postgres.abc:Mhdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
+  });
+
   it('offers only one spelling when the password has its @', () => {
     const url = 'postgresql://postgres.abc:Mhdy2020x%40@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
     expect(connectionCandidates(url)).toEqual([url]);

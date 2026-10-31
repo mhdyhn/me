@@ -79,7 +79,11 @@ export function connectionCandidates(rawUrl) {
       } catch {
         decoded = password;
       }
-      if (!decoded.endsWith('@')) {
+      if (password.endsWith('@')) {
+        // The string has the character twice: the password may be the one without it.
+        add(`${url.slice(0, authorityStart)}${user}:${encodeURIComponent(decoded.slice(0, -1))}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`);
+      } else if (!decoded.endsWith('@')) {
+        // The character was eaten by the URL syntax: it belongs to the password.
         add(`${url.slice(0, authorityStart)}${user}:${encodeURIComponent(`${decoded}@`)}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`);
       }
     }

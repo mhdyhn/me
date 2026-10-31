@@ -341,8 +341,14 @@ export function connectionCandidates(rawUrl: string): string[] {
   // The password as it was meant, with the characters that the URL syntax eats encoded.
   add(decoded);
   for (const character of LOST_PASSWORD_CHARACTERS) {
-    // The password already has the character; nothing was lost.
+    if (password.endsWith(character)) {
+      // The string has the character twice: the password may be the one without it.
+      add(decoded.slice(0, -character.length));
+      continue;
+    }
+    // The password already has the character (encoded); nothing was lost.
     if (decoded.endsWith(character)) continue;
+    // The character was eaten by the URL syntax: it belongs to the password.
     add(`${decoded}${character}`);
   }
   return candidates;
