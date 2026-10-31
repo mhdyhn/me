@@ -103,27 +103,33 @@ function repairDelayMs(): number {
  */
 export interface ConnectionSummary {
   host: string;
+  port: string;
+  database: string;
   userHash: string;
   passwordLength: number;
 }
 
 export function describeConnection(rawUrl: string): ConnectionSummary {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
+  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0 };
   const schemeEnd = url.indexOf('://');
-  if (schemeEnd < 0) return { host: '', userHash: '', passwordLength: 0 };
+  if (schemeEnd < 0) return empty;
   const authorityStart = schemeEnd + 3;
   const pathStart = url.indexOf('/', authorityStart);
   const authorityEnd = pathStart < 0 ? url.length : pathStart;
   const authority = url.slice(authorityStart, authorityEnd);
   const separator = authority.lastIndexOf('@');
-  if (separator < 0) return { host: authority, userHash: '', passwordLength: 0 };
+  if (separator < 0) return { ...empty, host: authority };
   const userInfo = authority.slice(0, separator);
   const host = authority.slice(separator + 1);
   const colon = userInfo.indexOf(':');
   const user = colon < 0 ? userInfo : userInfo.slice(0, colon);
   const password = colon < 0 ? '' : userInfo.slice(colon + 1);
+  const port = /:(\d+)$/.exec(host)?.[1] ?? '';
   return {
     host: host.replace(/:\d+$/, ''),
+    port,
+    database: pathStart < 0 ? '' : (url.slice(pathStart + 1).split('?')[0] ?? ''),
     userHash: createHash('sha256').update(user).digest('hex').slice(0, 12),
     passwordLength: password.length,
   };
@@ -341,13 +347,14 @@ export function connectionCandidates(rawUrl: string): string[] {
   // The password as it was meant, with the characters that the URL syntax eats encoded.
   add(decoded);
   for (const character of LOST_PASSWORD_CHARACTERS) {
-    if (password.endsWith(character)) {
-      // The string has the character twice: the password may be the one without it.
-      add(decoded.slice(0, -character.length));
+    // The string has the character twice: the password may be the one without it.
+    if (password.endsWith(character)) add(decoded.slice(0, -character.length));
+    // The password already has the character (encoded); nothing was lost.
+    if (decoded.endsWith(character)) {
+      // The string may have lost one of them.
+      add(`${decoded}${character}`);
       continue;
     }
-    // The password already has the character (encoded); nothing was lost.
-    if (decoded.endsWith(character)) continue;
     // The character was eaten by the URL syntax: it belongs to the password.
     add(`${decoded}${character}`);
   }

@@ -79,13 +79,13 @@ export function connectionCandidates(rawUrl) {
       } catch {
         decoded = password;
       }
+      const build = (value) => `${url.slice(0, authorityStart)}${user}:${encodeURIComponent(value)}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`;
       if (password.endsWith('@')) {
         // The string has the character twice: the password may be the one without it.
-        add(`${url.slice(0, authorityStart)}${user}:${encodeURIComponent(decoded.slice(0, -1))}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`);
-      } else if (!decoded.endsWith('@')) {
-        // The character was eaten by the URL syntax: it belongs to the password.
-        add(`${url.slice(0, authorityStart)}${user}:${encodeURIComponent(`${decoded}@`)}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`);
+        add(build(decoded.slice(0, -1)));
       }
+      // The character was eaten by the URL syntax, or one of them was lost: it belongs to the password.
+      add(build(`${decoded}@`));
     }
   }
   return candidates;

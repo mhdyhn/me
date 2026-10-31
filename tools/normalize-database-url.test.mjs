@@ -43,8 +43,8 @@ describe('the connection string of the database', () => {
     expect(candidates).toContain('postgresql://postgres.abc:Mhdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
   });
 
-  it('offers only one spelling when the password has its @', () => {
+  it('keeps the string itself when the password has its @', () => {
     const url = 'postgresql://postgres.abc:Mhdy2020x%40@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
-    expect(connectionCandidates(url)).toEqual([url]);
+    expect(connectionCandidates(url)[0]).toBe(url);
   });
 });

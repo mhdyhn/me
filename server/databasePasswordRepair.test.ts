@@ -62,9 +62,9 @@ describe('a password that lost a character in the connection string', () => {
     expect(parse(candidates[1]).password).toBe('Mhdy2020x@');
   });
 
-  it('leaves a password that already has its @ alone', () => {
+  it('keeps a password that already has its @', () => {
     const url = `postgresql://${user}:Mhdy2020x%40@${host}/postgres`;
-    expect(connectionCandidates(url)).toEqual([url]);
+    expect(connectionCandidates(url)[0]).toBe(url);
     expect(parse(url).password).toBe('Mhdy2020x@');
   });
 
@@ -75,7 +75,7 @@ describe('a password that lost a character in the connection string', () => {
     const candidates = connectionCandidates(url);
     expect(candidates).toContain(`postgresql://${user}:Mhdy2020x@${host}/postgres`);
     // Every candidate carries a password the server can be asked with.
-    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x@', 'Mhdy2020x']);
+    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x@', 'Mhdy2020x', 'Mhdy2020x@@']);
   });
 
   it('keeps an @ that belongs to the password', () => {
@@ -105,6 +105,8 @@ describe('a password that lost a character in the connection string', () => {
   it('describes the configured connection without the secret', () => {
     const summary = describeConnection(`postgresql://${user}:Mhdy2020x@${host}/postgres`);
     expect(summary.host).toBe('aws-0-eu-north-1.pooler.supabase.com');
+    expect(summary.port).toBe('5432');
+    expect(summary.database).toBe('postgres');
     // The name of the user is hashed; the project id of a hosted database cannot be guessed.
     expect(summary.userHash).toBe(createHash('sha256').update(user).digest('hex').slice(0, 12));
     expect(summary.userHash).not.toContain(user);
