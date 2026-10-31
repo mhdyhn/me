@@ -80,7 +80,10 @@ export function connectDatabase(target: string, waitMs = 20000): Db {
           // The full message stays in the server log; the health check only shows a short reason.
           console.error(`Database not ready (attempt ${attempt}); retrying in 5 seconds.`, (error as Error)?.message ?? failure.code);
         }
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        // A wrong password will not become right by trying again, and a host that blocks
+        // connections after failed logins punishes a fast retry loop.
+        const delay = PERMANENT_FAILURES.has(failure.code) ? 60000 : 5000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   })();
@@ -151,7 +154,11 @@ function describeFailure(error: unknown): DatabaseFailure {
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { code: code || 'ENOTFOUND', message: 'نشانی پایگاه داده پیدا نشد.', detail };
   if (code === 'ECONNREFUSED') return { code, message: 'پایگاه داده اتصال را نپذیرفت.', detail };
   if (code === 'ETIMEDOUT' || message.includes('timeout')) return { code: code || 'ETIMEDOUT', message: 'اتصال به پایگاه داده به وقت گذشت.', detail };
-  if (code === '28P01') return { code, message: 'اطلاعات دسترسی پایگاه داده درست نیست.' };
+  if (code === '28P01') return { code, message: 'اطلاعات دسترسی پایگاه داده درست نیست (رمز عبور یا نام کاربری).', detail };
+  // The host answers with a generic code when it blocked new connections after failed logins.
+  if (/password authentication failed|authentication failed|ECIRCUITBREAKER|too many authentication failures/i.test(message)) {
+    return { code: code || '28P01', message: 'اطلاعات دسترسی پایگاه داده درست نیست (رمز عبور یا نام کاربری).', detail };
+  }
   if (code === '53P01') return { code, message: 'سرویس پایگاه داده در دسترس نیست.' };
   if (code === '57P03') return { code, message: 'پایگاه داده در دسترس نیست.' };
   if (code === '53300') return { code, message: 'ظرفیت پایگاه داده پر است.' };
