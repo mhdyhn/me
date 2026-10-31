@@ -49,6 +49,7 @@ server.listen(port, host, () => {
   void waitForDatabase(db).then(async (database) => {
     const adminState = await ensureAdmin(database, process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD, new Date());
     if (adminState === 'created') console.log('Admin account created from ADMIN_USERNAME.');
+    if (adminState === 'fallback') console.log('Admin account created without ADMIN_USERNAME; its password is in the log above.');
     // The owner's personal profile may never stay inside another account; a leftover copy is removed.
     // A slow or failing cleanup must never keep the site offline, and the admin panel can still
     // scan and remove the copies on demand.
