@@ -311,7 +311,7 @@ function normalizeSenderLast4(value: unknown): string | null {
   return cleaned;
 }
 
-async function verifyWithProvider(config: CardTransferConfig, payload: {
+export async function verifyWithProvider(config: CardTransferConfig, payload: {
   authority: string;
   trackingNumber: string;
   amountTomans: number;

@@ -81,9 +81,20 @@ export interface TestPaymentTransaction extends PaymentTransaction {
   programmeVersion: number;
 }
 
+export interface SubscriptionShare {
+  id: number;
+  studentName: string;
+  amountTomans: number;
+  coachShareTomans: number;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface TransactionsResponse {
   transactions: PaymentTransaction[];
   testTransactions?: TestPaymentTransaction[];
+  /** The referral shares of the subscriptions of the students this coach referred. */
+  subscriptionShares?: SubscriptionShare[];
 }
 
 export interface Credentials {

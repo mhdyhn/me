@@ -11,6 +11,7 @@ import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProg
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
 import { cardTransferConfig, createCardTransferRequest, reviewCardTransfer, submitCardTransferReceipt } from './cardTransfer.ts';
+import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
@@ -1089,6 +1090,46 @@ export function createApp(options: AppOptions) {
     },
 
     {
+      method: 'GET',
+      pattern: /^\/api\/me\/subscription$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        const state = await subscriptionState(db, user!.id, now());
+        return { status: 200, body: state, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/me\/subscription\/checkout$/,
+      auth: ['student'],
+      handler: async ({ user }) => {
+        const details = await createSubscriptionCheckout(db, user!.id, now());
+        return { status: 201, body: details, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/me\/subscription\/receipt$/,
+      auth: ['student'],
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ درخواست پرداخت');
+        const trackingNumber = requireText(input, 'trackingNumber', 4, 32, 'شمارهٔ پیگیری رسید');
+        const senderCardLast4 = typeof input.senderCardLast4 === 'string' ? input.senderCardLast4 : undefined;
+        const amountTomans = typeof input.amountTomans === 'number' ? input.amountTomans : undefined;
+        const result = await submitSubscriptionReceipt(
+          db,
+          user!.id,
+          { authority, trackingNumber, ...(senderCardLast4 !== undefined ? { senderCardLast4 } : {}), ...(amountTomans !== undefined ? { amountTomans } : {}) },
+          now()
+        );
+        return { status: 200, body: result, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
       method: 'POST',
       pattern: /^\/api\/pay\/card-transfer\/start$/,
       auth: ['student'],
@@ -1200,7 +1241,15 @@ export function createApp(options: AppOptions) {
       pattern: /^\/api\/coach\/transactions$/,
       auth: ['coach'],
       handler: async ({ user }) => {
-        return { status: 200, body: { transactions: await listCoachTransactions(db, user!.id), testTransactions: await listTestTransactions(db, now(), user!.id) }, headers: { 'Cache-Control': 'no-store' } };
+        return {
+          status: 200,
+          body: {
+            transactions: await listCoachTransactions(db, user!.id),
+            testTransactions: await listTestTransactions(db, now(), user!.id),
+            subscriptionShares: await listCoachSubscriptionShares(db, user!.id),
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
       },
     },
 

@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
 import { PersianDateInput } from '../components/PersianDateInput';
 import { SectionHeading } from '../components/SectionHeading';
+import { SmartProgressReport } from '../components/SmartProgressReport';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
 import { exercises } from '../data/exercises';
@@ -177,6 +178,8 @@ export function Progress() {
           </div>
         </section>
       )}
+
+      <SmartProgressReport />
 
       <div className="progress-summary-cards">
         <div className="progress-summary-card panel-card"><span className="summary-card-icon"><CalendarDays size={17} /></span><span className="eyebrow">جلسه‌های ثبت‌شده</span><strong>{faNumber(completedSessions.length)}</strong><small>جلسهٔ کامل‌شده</small></div>
