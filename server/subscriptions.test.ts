@@ -160,6 +160,54 @@ describe('the optional student subscription', () => {
     expect(report.json.subscriptionShares[0]).toMatchObject({ studentName: 'referred-student', coachShareTomans: 9900, amountTomans: 99000 });
   });
 
+  it('opens one month when the same receipt arrives twice at the same moment', async () => {
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/receipt');
+    const student = await account('double-receipt', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+
+    // The first request waits inside the verification service until the second one has read
+    // the pending payment, so both of them see the same state.
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let verifications = 0;
+    const nativeFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://verify.example.com/')) {
+        verifications += 1;
+        if (verifications === 1) await gate;
+        return new Response(JSON.stringify({ valid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (!String(input).startsWith(base + '/')) throw new Error('Unexpected external request');
+      return nativeFetch(input, init);
+    });
+
+    const first = call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '55667788',
+    }, student);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const second = call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '55667788',
+    }, student);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(verifications).toBe(2);
+    release();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.status).toBe(200);
+    expect(secondResult.status).toBe(200);
+
+    // One transfer buys one month: the subscription is not written twice and the coach is
+    // not paid twice.
+    const rows = await db.query<{ coach_share_tomans: number }>(
+      'SELECT coach_share_tomans FROM subscriptions WHERE user_id = $1', [student.id]
+    );
+    expect(rows.length).toBe(1);
+    const payments = await db.query<{ status: string }>(
+      "SELECT status FROM subscription_payments WHERE user_id = $1 AND status = 'paid'", [student.id]
+    );
+    expect(payments.length).toBe(1);
+    vi.restoreAllMocks();
+  });
+
   it('does not let a coach or an admin buy the student subscription', async () => {
     const coach = await account('coach-plain', 'coach');
     const admin = await account('admin-plain', 'admin');
