@@ -83,7 +83,15 @@ export function usLayoutSpellings(password) {
       if (!spellings.includes(spelled)) spellings.push(spelled);
     }
   }
-  return spellings;
+  // The Persian keyboard has no upper case, so the case of the letters is unknown: the first
+  // letter may have been capital.
+  const withCase = [];
+  for (const spelled of spellings) {
+    const capitalized = spelled.replace(/[a-z]/, (letter) => letter.toUpperCase());
+    if (capitalized !== spelled) withCase.push(capitalized);
+    withCase.push(spelled);
+  }
+  return withCase;
 }
 
 /**
@@ -125,8 +133,9 @@ export function connectionCandidates(rawUrl) {
         // The string has the character twice: the password may be the one without it.
         add(build(decoded.slice(0, -1)));
       }
-      // The character was eaten by the URL syntax, or one of them was lost: it belongs to the password.
-      add(build(`${decoded}@`));
+      // The character was eaten by the URL syntax: it belongs to the password. That can only
+      // have happened when the password holds no such character at all.
+      if (!password.includes('@')) add(build(`${decoded}@`));
     }
   }
   return candidates;

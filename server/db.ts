@@ -382,14 +382,22 @@ export function usLayoutSpellings(password: string): string[] {
   const characters = [...password];
   const primary = characters.map((character) => PERSIAN_TO_US[character] ?? character).join('');
   if (primary === password) return [];
-  const spellings = [primary];
+  const variants = [primary];
   for (const [index, character] of characters.entries()) {
     for (const alternative of PERSIAN_AMBIGUOUS[character] ?? []) {
       const spelled = characters
         .map((current, position) => (position === index ? alternative : (PERSIAN_TO_US[current] ?? current)))
         .join('');
-      if (!spellings.includes(spelled)) spellings.push(spelled);
+      if (!variants.includes(spelled)) variants.push(spelled);
     }
+  }
+  // The Persian keyboard has no upper case, so the case of the letters is unknown: the first
+  // letter may have been capital.
+  const spellings: string[] = [];
+  for (const variant of variants) {
+    const capitalized = variant.replace(/[a-z]/, (letter) => letter.toUpperCase());
+    if (capitalized !== variant) spellings.push(capitalized);
+    spellings.push(variant);
   }
   return spellings;
 }
@@ -426,7 +434,7 @@ export function connectionCandidates(rawUrl: string): string[] {
   // A password that was typed while the keyboard was in Persian holds the Persian letters.
   for (const spelling of usLayoutSpellings(decoded)) add(spelling);
   // The password as it was meant, with the characters that the URL syntax eats encoded.
-  add(decoded);
+  if (/[#?/%]/.test(password)) add(decoded);
   for (const character of LOST_PASSWORD_CHARACTERS) {
     // The string has the character twice: the password may be the one without it.
     if (password.endsWith(character)) add(decoded.slice(0, -character.length));
@@ -436,8 +444,9 @@ export function connectionCandidates(rawUrl: string): string[] {
       add(`${decoded}${character}`);
       continue;
     }
-    // The character was eaten by the URL syntax: it belongs to the password.
-    add(`${decoded}${character}`);
+    // The character was eaten by the URL syntax: it belongs to the password. That can only
+    // have happened when the password holds no such character at all.
+    if (!password.includes(character)) add(`${decoded}${character}`);
   }
   return candidates;
 }

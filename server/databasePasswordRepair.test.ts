@@ -75,7 +75,7 @@ describe('a password that lost a character in the connection string', () => {
     const candidates = connectionCandidates(url);
     expect(candidates).toContain(`postgresql://${user}:Mhdy2020x@${host}/postgres`);
     // Every candidate carries a password the server can be asked with.
-    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x@', 'Mhdy2020x', 'Mhdy2020x@@']);
+    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x', 'Mhdy2020x@@']);
   });
 
   it('keeps an @ that belongs to the password', () => {
@@ -135,17 +135,23 @@ describe('a password that lost a character in the connection string', () => {
   it('spells a password that was typed with a Persian keyboard on a US keyboard', () => {
     // The password "@Mhdy2020x" typed while the keyboard was in Persian.
     const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
-    expect(usLayoutSpellings(persian)).toEqual(['@mhdy2020x', '@m,dy2020x']);
+    expect(usLayoutSpellings(persian)).toEqual([
+      // The Persian keyboard has no upper case, so the case is tried as well.
+      '@Mhdy2020x',
+      '@mhdy2020x',
+      '@M,dy2020x',
+      '@m,dy2020x',
+    ]);
     // A password that is already on a US keyboard has no other spelling.
     expect(usLayoutSpellings('@Mhdy2020x')).toEqual([]);
   });
 
   it('connects with a password that was typed with a Persian keyboard', async () => {
     const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
-    state.password = '@mhdy2020x';
+    state.password = '@Mhdy2020x';
     const url = `postgresql://${user}:${encodeURIComponent(persian)}@${host}/postgres`;
     const db = await openDatabase(url);
-    expect(parse(state.attempts[1]).password).toBe('@mhdy2020x');
+    expect(parse(state.attempts[1]).password).toBe('@Mhdy2020x');
     await db.close();
   });
 
