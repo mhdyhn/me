@@ -26,9 +26,11 @@ describe('the SSL of a connection', () => {
 describe('the endpoint of a connection string', () => {
   it('names the host, the port and the database without the secret', () => {
     expect(endpointOf('postgresql://postgres:secret@aws-0-eu-north-1.pooler.supabase.com:5432/postgres'))
-      .toBe('aws-0-eu-north-1.pooler.supabase.com:5432');
-    expect(endpointOf('postgresql://user@host:5432/db')).toBe('host:5432');
+      .toBe('aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
+    expect(endpointOf('postgresql://user@host:5432/db')).toBe('host:5432/db');
     expect(endpointOf('not a url')).toBe('not a url');
+    // Two databases on one server are not the same database.
+    expect(endpointOf('postgresql://user@host:5432/one')).not.toBe(endpointOf('postgresql://user@host:5432/two'));
   });
 });
 
