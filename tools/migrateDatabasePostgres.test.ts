@@ -2,16 +2,16 @@
 /**
  * The copy of the rows between two real PostgreSQL databases.
  *
- * The suite runs only when TEST_DATABASE_URL points at a PostgreSQL that may be emptied
- * (the CI workflow starts one for it). The test creates a source and a target database,
- * fills the source and copies it, the same way the migration workflow does.
+ * The suite runs only when TEST_MIGRATION_DATABASE_URL points at a PostgreSQL that may be
+ * emptied (the CI workflow starts one for it). The test creates a source and a target
+ * database, fills the source and copies it, the same way the migration workflow does.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { openDatabase, type Db } from '../server/db';
 import { copyDatabases } from './migrate-database.mjs';
 
-const baseUrl = process.env.TEST_DATABASE_URL ?? '';
+const baseUrl = process.env.TEST_MIGRATION_DATABASE_URL ?? '';
 const sourceName = 'meety_migration_source';
 const targetName = 'meety_migration_target';
 
