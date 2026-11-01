@@ -1,3 +1,4 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { join } from 'node:path';
 import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -10,6 +11,10 @@ import { quarantineOwnerProfileCopies } from './personalData.ts';
 import { keyFromSecret } from './secrets.ts';
 import { isFile, resolveStaticDir, serveStatic } from './static.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
+
+// The hosted database answers on IPv4 and on IPv6. A server without a route for IPv6 must
+// not pick the IPv6 address, or the connection fails before it starts.
+setDefaultResultOrder('ipv4first');
 
 const port = Number(process.env.PORT ?? 8787);
 // 0.0.0.0 so the sandbox preview can reach it. The root answers 200 so the preview is not an error page.

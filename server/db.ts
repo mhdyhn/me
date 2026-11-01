@@ -91,9 +91,11 @@ function canRepairWithAnotherSpelling(error: unknown): boolean {
   // A raw character in the password can make the string unreadable for the driver.
   if (/invalid url|malformed/i.test(message)) return true;
   // The host may be the wrong one: the direct connection of a hosted database speaks IPv6
-  // only, and a server without IPv6 cannot reach it.
+  // only, and a server without IPv6 cannot reach it. The same goes for a host that has no
+  // route for the address the name resolved to.
   const code = String((error as { code?: string })?.code ?? '');
-  return code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message);
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || code === 'ENETUNREACH' || code === 'EHOSTUNREACH') return true;
+  return /ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|getaddrinfo/i.test(message);
 }
 
 /** The pause between two tries. The pooler counts the failed logins of a user. */
@@ -278,6 +280,7 @@ function describeFailure(error: unknown): DatabaseFailure {
   const code = String(raw?.code ?? '').trim();
   const detail = safeDetail(message);
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { code: code || 'ENOTFOUND', message: 'نشانی پایگاه داده پیدا نشد.', detail };
+  if (code === 'ENETUNREACH' || code === 'EHOSTUNREACH') return { code, message: 'میزبان به نشانی پایگاه داده راه ندارد (IPv6 در دسترس نیست).', detail };
   if (code === 'ECONNREFUSED') return { code, message: 'پایگاه داده اتصال را نپذیرفت.', detail };
   if (code === 'ETIMEDOUT' || message.includes('timeout')) return { code: code || 'ETIMEDOUT', message: 'اتصال به پایگاه داده به وقت گذشت.', detail };
   if (code === '28P01') return { code, message: 'اطلاعات دسترسی پایگاه داده درست نیست (رمز عبور یا نام کاربری).', detail };
