@@ -114,6 +114,22 @@ mkdirSync(dirname(notesPath), { recursive: true });
 writeFileSync(notesPath, notes, { mode: 0o600 });
 chmodSync(notesPath, 0o600);
 
+// Each value in a file of its own: opening it and copying the content is easier than
+// finding one long line inside the notes.
+const secretsDirectory = resolve(dirname(notesPath), 'android-secrets');
+mkdirSync(secretsDirectory, { recursive: true });
+const secretFiles = {
+  ANDROID_KEYSTORE_BASE64: base64,
+  ANDROID_KEYSTORE_PASSWORD: storePassword,
+  ANDROID_KEY_ALIAS: alias,
+  ANDROID_KEY_PASSWORD: keyPassword,
+};
+for (const [name, value] of Object.entries(secretFiles)) {
+  const file = resolve(secretsDirectory, `${name}.txt`);
+  writeFileSync(file, `${value}\n`, { mode: 0o600 });
+  chmodSync(file, 0o600);
+}
+
 console.log('');
 console.log(`Alias:              ${alias}`);
 console.log(`Keystore password:  ${storePassword}`);
@@ -121,4 +137,9 @@ console.log(`Key password:       ${keyPassword}`);
 console.log(`Certificate SHA-256: ${fingerprint}`);
 console.log('');
 console.log(`The four secret values were written to ${notesPath} (mode 600).`);
-console.log('Copy them into the repository secrets by hand; the file itself must never be committed.');
+console.log('Each one also stands in a file of its own:');
+for (const name of Object.keys(secretFiles)) {
+  console.log(`  ${name} -> ${resolve(secretsDirectory, `${name}.txt`)}`);
+}
+console.log('Open a file, copy its content and paste it into the repository secret of the same name.');
+console.log('These files must never be committed and never pasted into a chat.');
