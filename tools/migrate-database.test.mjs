@@ -47,7 +47,7 @@ describe('the database copy tool', () => {
   });
 
   it('builds an insert with one placeholder per column', () => {
-    expect(buildInsert('users', ['id', 'username'])).toBe('INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT DO NOTHING');
+    expect(buildInsert('users', ['id', 'username'])).toBe('INSERT INTO users (id, username) OVERRIDING SYSTEM VALUE VALUES ($1, $2) ON CONFLICT DO NOTHING');
   });
 
   it('splits the rows into batches', () => {

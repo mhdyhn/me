@@ -56,7 +56,9 @@ export function chunk(items, size = BATCH_SIZE) {
 /** The INSERT statement for one row, with the column names of the source table. */
 export function buildInsert(table, columns) {
   const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
-  return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`;
+  // The ids have to keep their numbers, because the rows that refer to them keep theirs too.
+  // An identity column refuses an explicit value unless the statement says it may.
+  return `INSERT INTO ${table} (${columns.join(', ')}) OVERRIDING SYSTEM VALUE VALUES (${placeholders}) ON CONFLICT DO NOTHING`;
 }
 
 /** The tables of the `public` schema that hold rows. */
