@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Apple, Ban, CheckCircle, KeyRound, ListChecks, MessageCircle, MoreHorizontal, Receipt, Sparkles, TrendingUp, Trash2, UserPlus, UserRound } from 'lucide-react';
 import { confirmModal } from '../../components/ConfirmModal';
 import { CoachInvitations } from '../../components/CoachInvitations';
+import { CoachInactiveStudents } from '../../components/CoachInactiveStudents';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 import { useSession } from '../../context/SessionContext';
@@ -147,6 +148,7 @@ function CoachStudents() {
           <div className="coach-welcome__count"><strong>{students ? faNumber(students.filter((student) => student.isActive !== false).length) : '—'}</strong><span>حساب فعال</span></div>
         </div>
       </section>
+      <CoachInactiveStudents />
       <CoachInvitations />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: '12px', flexWrap: 'wrap' }}>
         <Link to="/coach/transactions" className="button button--ghost">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, PlusCircle, Sparkles, Trash2, X, CalendarPlus, ChevronLeft, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, PlusCircle, Sparkles, Trash2, Wand2, X, CalendarPlus, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
@@ -153,6 +153,9 @@ export function Program() {
             <Sparkles size={15} /> <span>نسخهٔ مدیریت برنامه</span>
           </div>
           <div className="program-manager-actions">
+            <Link to="/program/suggested" className="button button--secondary button--small">
+              <Wand2 size={14} /> برنامهٔ پیشنهادی
+            </Link>
             <button
               type="button"
               className="button button--primary button--small"
@@ -233,6 +236,9 @@ export function Program() {
               >
                 <PlusCircle size={16} /> تعریف برنامه جدید از الگوها
               </button>
+              <Link to="/program/suggested" className="button button--ghost">
+                <Wand2 size={16} /> پیشنهاد برنامه برای من
+              </Link>
               <Link to="/program/edit" className="button button--secondary">
                 <Pencil size={16} /> ساخت در ویرایشگر
               </Link>

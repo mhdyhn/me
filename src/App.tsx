@@ -23,6 +23,7 @@ const ExerciseLibrary = lazy(() => import('./pages/ExerciseLibrary').then((modul
 const Nutrition = lazy(() => import('./pages/Nutrition').then((module) => ({ default: module.Nutrition })));
 const Program = lazy(() => import('./pages/Program').then((module) => ({ default: module.Program })));
 const ProgramEditor = lazy(() => import('./pages/ProgramEditor').then((module) => ({ default: module.ProgramEditor })));
+const ProgramSuggested = lazy(() => import('./pages/ProgramSuggested').then((module) => ({ default: module.ProgramSuggested })));
 const Progress = lazy(() => import('./pages/Progress').then((module) => ({ default: module.Progress })));
 const AiHub = lazy(() => import('./pages/AiHub').then((module) => ({ default: module.AiHub })));
 const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
@@ -109,6 +110,7 @@ export function App() {
               <Route path="my-program" element={<Navigate to="/program" replace />} />
               <Route path="program" element={<Program />} />
               <Route path="program/edit" element={<ProgramEditorRoute />} />
+              <Route path="program/suggested" element={<ProgramSuggested />} />
               <Route path="exercises" element={<ExerciseLibrary />} />
               <Route path="exercise/:exerciseId" element={<ExerciseRoute />} />
               <Route path="workout/:templateId" element={<Workout />} />
