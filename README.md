@@ -363,6 +363,7 @@ PGSERVICE=meety_disposable_restore pg_restore --exit-on-error --no-owner --no-ac
 گردش‌کار `.github/workflows/android-apk.yml` کلید جدید تولید نمی‌کند و انتشار را بدون کلید و امضای موردانتظار متوقف می‌کند:
 
 - در مخزن اصلی `mhdyhn/me`، مبدأ HTTPS موجود `https://meety-985n.onrender.com` به‌صورت پیش‌فرض استفاده می‌شود؛ متغیر مخزن `ANDROID_API_BASE` می‌تواند آن را با یک مبدأ HTTPS عمومی **دارای نام میزبان و بدون مسیر** جایگزین کند. در مخزن fork این متغیر اجباری است و نشانی مخزن اصلی خودکار استفاده نمی‌شود.
+- keystore از نوع **PKCS12** است ⇒ رمزِ keystore و رمزِ کلید یکی است (`keytool` مقدار `-keypass` جدا را نادیده می‌گیرد) ⇒ `ANDROID_KEY_PASSWORD` باید همان `ANDROID_KEYSTORE_PASSWORD` باشد؛ ابزارِ ساخت، کلیدِ خصوصی را با همان رمز می‌آزماید و اگر باز نشود، همان‌جا متوقف می‌شود.
 - رازهای GitHub Actions: `ANDROID_KEYSTORE_BASE64`، `ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS` و `ANDROID_KEY_PASSWORD`؛ فایل keystore پایدار باید تحت کنترل مالک باشد و محتوای Base64 آن فقط در secret تنظیم شود. این رازها را در گفتگو، Git یا فایل‌های خروجی قرار ندهید. اگر رازها در دسترس نباشند، گردش‌کار می‌تواند صرفاً کامپایل debug را برای تشخیص امتحان کند؛ آن فایل منتشر یا برای نصب عرضه نمی‌شود و کار انتشار شکست می‌خورد.
 - اثرانگشت SHA-256 گواهی دیگر **به‌صورت پیش‌فرض قفل نیست**: اگر متغیر مخزن `ANDROID_SIGNING_CERT_SHA256` تنظیم نشده باشد، انتشار با همان keystore‌ای انجام می‌شود که در secretها گذاشته‌اید و ساخت با کلید تازه هم شکست نمی‌خورد. اگر این متغیر را تنظیم کنید، اثرانگشت قفل می‌شود و هر کلید دیگری انتشار را متوقف می‌کند. اثرانگشت آخرین APK قدیمی `df86d3816998ca9dde52768ad0444ac85d2d45992f855c27bdab4554156557ca` فقط برای هشدار «کاربران باید برنامه را دوباره نصب کنند» به‌کار می‌رود. این اثرانگشت عمومی است و کلید خصوصی نیست.
 - اجرای دستی یا push روی `main` خروجی امضاشده را به‌صورت artifact می‌سازد؛ push یک tag با پیشوند `v` پس از بررسی امضا آن را به GitHub Release همان tag اضافه می‌کند. گردش‌کار دیگر APK را خودکار به شاخه commit نمی‌کند. `versionCode` بعدی به ۲ رسیده است؛ برای انتشارهای بعدی باید شمارهٔ نسخه طبق سیاست انتشار افزایش یابد.
@@ -379,7 +380,11 @@ PGSERVICE=meety_disposable_restore pg_restore --exit-on-error --no-owner --no-ac
 node tools/create-android-keystore.mjs
 ```
 
+این فرمان به `git` نیازی ندارد (فقط Node و JDK لازم است). اگر `git` روی رایانه نصب نیست، کد مخزن را از **https://github.com/mhdyhn/me/archive/refs/heads/main.zip** بگیرید، باز کنید و فرمان را در همان پوشه اجرا کنید.
+
 این فرمان یک keystore پایدار می‌سازد (`private-backups/meety-release.keystore`) و مقادیر لازم را در `private-backups/android-signing.txt` (با دسترسی محدود) می‌نویسد: alias، رمز keystore، رمز کلید، محتوای Base64 کلید و اثرانگشت گواهی. **این فایل‌ها را در Git، چت یا پیام‌رسان نفرستید.** اگر کلید خصوصی گم شود، برنامهٔ نصب‌شده را فقط با نصب دوباره می‌توان به‌روز کرد.
+
+**نکتهٔ رمز:** فایل keystore از نوع **PKCS12** است و در این نوع، رمزِ keystore و رمزِ کلید **یکی** هستند؛ `keytool` مقدار `-keypass` جدا را بی‌صدا نادیده می‌گیرد ⇒ مقدار `ANDROID_KEY_PASSWORD` باید **دقیقاً همان** `ANDROID_KEYSTORE_PASSWORD` باشد، وگرنه ساختِ APK در گردش‌کار با خطای «کلید باز نشد» می‌ایستد. ابزار، درست بعد از ساخت، خودش بررسی می‌کند که کلیدِ خصوصی با همین رمز باز می‌شود.
 
 ۲. **چهار secret را در GitHub بگذارید:** مخزن `mhdyhn/me` → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**. برای هرکدام یک secret بسازید:
 
@@ -388,7 +393,7 @@ node tools/create-android-keystore.mjs
 | `ANDROID_KEYSTORE_BASE64` | خط `ANDROID_KEYSTORE_BASE64 = …` از فایل متنی |
 | `ANDROID_KEYSTORE_PASSWORD` | خط `ANDROID_KEYSTORE_PASSWORD = …` |
 | `ANDROID_KEY_ALIAS` | خط `ANDROID_KEY_ALIAS = …` (معمولاً `meety`) |
-| `ANDROID_KEY_PASSWORD` | خط `ANDROID_KEY_PASSWORD = …` |
+| `ANDROID_KEY_PASSWORD` | خط `ANDROID_KEY_PASSWORD = …` (همان رمزِ `ANDROID_KEYSTORE_PASSWORD`) |
 
 اختیاری: در همان صفحه، بخش **Variables**، متغیر `ANDROID_SIGNING_CERT_SHA256` را با اثرانگشت گواهی خودتان (بدون دونقطه، حروف کوچک) بسازید تا کلید قفل شود. اگر آن را نگذارید، انتشار با کلید ذخیره‌شده انجام می‌شود و اگر کلید با نسخهٔ قبلی فرق کند، فقط هشدار داده می‌شود.
 
