@@ -141,7 +141,7 @@ export function sslFor(url) {
   return { rejectUnauthorized: false };
 }
 
-/** The host, the port and the database of a connection string, without the secret. */
+/** The host, the port and the name of the database of a connection string, without the secret. */
 export function endpointOf(url) {
   const text = String(url ?? '');
   const schemeEnd = text.indexOf('://');
@@ -150,7 +150,10 @@ export function endpointOf(url) {
   const pathStart = text.indexOf('/', authorityStart);
   const authority = text.slice(authorityStart, pathStart < 0 ? text.length : pathStart);
   const separator = authority.lastIndexOf('@');
-  return separator < 0 ? authority : authority.slice(separator + 1);
+  const host = separator < 0 ? authority : authority.slice(separator + 1);
+  // The name of the database belongs to it: two databases on one server are not the same.
+  const database = pathStart < 0 ? '' : text.slice(pathStart + 1).replace(/\?.*$/, '');
+  return database ? `${host}/${database}` : host;
 }
 
 /** Copies the rows of the source into the target and reports the count per table. */
