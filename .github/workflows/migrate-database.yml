@@ -7,10 +7,10 @@ name: Copy the data of the old database
 #   SOURCE_DATABASE_URL  the connection string of the OLD database, for example the Neon one.
 #                        When it is missing, the secret DATABASE_URL is used, which holds the
 #                        connection string of the old database as long as it was not replaced.
+#   TARGET_DATABASE_URL  the connection string of the CURRENT database. When it is missing, the
+#                        value of DATABASE_URL in the Render service is read with RENDER_API_KEY.
 #   RENDER_API_KEY       an API key from render.com → Account Settings → API Keys; only needed
 #                        when the target is not given
-#   TARGET_DATABASE_URL  optional; the connection string of the CURRENT database. When it is
-#                        missing, the value of DATABASE_URL in the Render service is used.
 #
 # Nothing is deleted: only the rows that are missing are inserted, so a second run is safe.
 # The log holds the number of rows per table, never a password.
@@ -23,7 +23,7 @@ on:
       dry_run:
         description: 'Only count the rows, write nothing'
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -51,42 +51,64 @@ jobs:
           TARGET_DATABASE_URL: ${{ secrets.TARGET_DATABASE_URL }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           SERVICE_NAME: meety
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          set -euo pipefail
-          # The old database: the secret of its own, or the one that held it before.
-          source_url="${SOURCE_DATABASE_URL:-$OLD_DATABASE_URL}"
-          if [ -z "$source_url" ]; then
-            echo "SOURCE_DATABASE_URL is missing in the repository secrets."
+          set -uo pipefail
+
+          fail() {
+            echo "::error title=Cannot copy the data::$1"
             exit 1
+          }
+
+          # The kind of a host, without the name of the project: neon.tech or supabase.com.
+          kind_of() {
+            case "$1" in
+              *neon.tech*) echo "neon.tech" ;;
+              *supabase.com*) echo "supabase.com" ;;
+              *) echo "another host" ;;
+            esac
+          }
+
+          # The old database: the secret of its own, or the one that held it before.
+          if [ -n "${SOURCE_DATABASE_URL:-}" ]; then
+            source_url="$SOURCE_DATABASE_URL"
+            echo "The source is the secret SOURCE_DATABASE_URL."
+          elif [ -n "${OLD_DATABASE_URL:-}" ]; then
+            source_url="$OLD_DATABASE_URL"
+            echo "The source is the secret DATABASE_URL."
+          else
+            fail "SOURCE_DATABASE_URL is missing in the repository secrets."
           fi
-          export SOURCE_DATABASE_URL="$source_url"
 
           target="${TARGET_DATABASE_URL:-}"
           if [ -z "$target" ] && [ -n "${RENDER_API_KEY:-}" ]; then
             # The current connection string of the service is the target.
             service_id=$(curl -fsS "https://api.render.com/v1/services?limit=100" \
               -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.service&&x.service.name===process.env.SERVICE_NAME);if(!hit){console.error('Service not found: '+process.env.SERVICE_NAME);process.exit(1)}console.log(hit.service.id)})")
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.service&&x.service.name===process.env.SERVICE_NAME);if(!hit){console.error('Service not found: '+process.env.SERVICE_NAME);process.exit(1)}console.log(hit.service.id)})") || fail "The Render service could not be read; the RENDER_API_KEY is probably not valid."
             target=$(curl -fsS "https://api.render.com/v1/services/${service_id}/env-vars?limit=100" \
               -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.envVar&&x.envVar.key==='DATABASE_URL');if(!hit)process.exit(1);process.stdout.write(hit.envVar.value)})")
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.envVar&&x.envVar.key==='DATABASE_URL');if(!hit)process.exit(1);process.stdout.write(hit.envVar.value)})") || fail "The Render service was read, but it has no DATABASE_URL."
           fi
           if [ -z "$target" ]; then
-            # The last resort: the secret that holds the connection string of the service.
-            target="$OLD_DATABASE_URL"
-            echo "The Render service could not be read; the secret DATABASE_URL is used as the target."
-          fi
-          if [ -z "$target" ]; then
-            echo "TARGET_DATABASE_URL is missing and the Render service could not be read."
-            exit 1
+            fail "TARGET_DATABASE_URL is missing and the Render service could not be read. Add the secret TARGET_DATABASE_URL with the connection string of the current database."
           fi
 
+          echo "The source is a database on $(kind_of "$source_url") and the target is a database on $(kind_of "$target")."
+          export SOURCE_DATABASE_URL="$source_url"
           export TARGET_DATABASE_URL="$target"
-          echo "The source and the target are different databases (the host names are compared)."
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            node tools/migrate-database.mjs --dry-run
+
+          if [ "$DRY_RUN" = "true" ]; then
+            output=$(node tools/migrate-database.mjs --dry-run 2>&1)
+            status=$?
           else
-            node tools/migrate-database.mjs
+            output=$(node tools/migrate-database.mjs 2>&1)
+            status=$?
+          fi
+          echo "$output"
+          if [ "$status" -ne 0 ]; then
+            last_line=$(printf '%s\n' "$output" | grep -v '^\s*$' | tail -n 1)
+            fail "The copy failed: ${last_line}"
           fi
 
       - name: Show the health of the service
