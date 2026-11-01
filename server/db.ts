@@ -83,7 +83,10 @@ export async function openDatabase(target: string): Promise<Db> {
 
 /** True when another spelling of the same connection string could still work. */
 function canRepairWithAnotherSpelling(error: unknown): boolean {
-  if (describeFailure(error).code === '28P01') return true;
+  const failure = describeFailure(error);
+  if (failure.code === '28P01') return true;
+  // The host blocked the connections after failed logins: another spelling may still work.
+  if (failure.code === 'ECIRCUITBREAKER') return true;
   const message = String((error as { message?: string })?.message ?? '');
   // A raw character in the password can make the string unreadable for the driver.
   if (/invalid url|malformed/i.test(message)) return true;
@@ -203,8 +206,9 @@ export function connectDatabase(target: string, waitMs = 20000): Db {
           console.error(`Database not ready (attempt ${attempt}); retrying in 5 seconds.`, (error as Error)?.message ?? failure.code);
         }
         // A wrong password will not become right by trying again, and a host that blocks
-        // connections after failed logins punishes a fast retry loop.
-        const delay = PERMANENT_FAILURES.has(failure.code) ? 60000 : 5000;
+        // connections after failed logins punishes a fast retry loop. A block passes, but it
+        // needs more than a moment.
+        const delay = PERMANENT_FAILURES.has(failure.code) || failure.code === 'ECIRCUITBREAKER' ? 60000 : 5000;
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -278,7 +282,11 @@ function describeFailure(error: unknown): DatabaseFailure {
   if (code === 'ETIMEDOUT' || message.includes('timeout')) return { code: code || 'ETIMEDOUT', message: 'اتصال به پایگاه داده به وقت گذشت.', detail };
   if (code === '28P01') return { code, message: 'اطلاعات دسترسی پایگاه داده درست نیست (رمز عبور یا نام کاربری).', detail };
   // The host answers with a generic code when it blocked new connections after failed logins.
-  if (/password authentication failed|authentication failed|ECIRCUITBREAKER|too many authentication failures/i.test(message)) {
+  // That says nothing about the password: the block passes, and then the next try tells.
+  if (/ECIRCUITBREAKER|too many authentication failures/i.test(message)) {
+    return { code: 'ECIRCUITBREAKER', message: 'استخرِ اتصال به‌خاطر ورودهای ناموفق موقتاً اتصال‌های تازه را بسته است؛ کمی بعد دوباره تلاش می‌شود.', detail };
+  }
+  if (/password authentication failed|authentication failed/i.test(message)) {
     return { code: code || '28P01', message: 'اطلاعات دسترسی پایگاه داده درست نیست (رمز عبور یا نام کاربری).', detail };
   }
   if (code === '53P01') return { code, message: 'سرویس پایگاه داده در دسترس نیست.' };
