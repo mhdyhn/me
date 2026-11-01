@@ -4,6 +4,8 @@ name: Live check of the app
 # the animations and the 3D model. It runs on demand and once a week.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     # Every Sunday at 06:10 UTC.
