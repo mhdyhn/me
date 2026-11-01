@@ -101,8 +101,10 @@ export async function copyTable(source, target, table, { dryRun = false } = {}) 
     for (const group of chunk(rows)) {
       for (const row of group) {
         const values = usable.map((column) => row[column] ?? null);
-        await target.query(buildInsert(table, usable), values);
-        copied += 1;
+        // The count is the number of inserted rows: a row that is already there is not
+        // written again, so a second run reports nothing instead of a false success.
+        const result = await target.query(buildInsert(table, usable), values);
+        copied += result.rowCount ?? 1;
       }
     }
     offset += rows.length;

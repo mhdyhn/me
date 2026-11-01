@@ -45,4 +45,20 @@ jobs:
         run: npm ci
 
       - name: Run the tests
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.txt
+
+      - name: Show the result in the summary of the run
+        if: always()
+        run: |
+          {
+            echo '### The result of the tests'
+            echo
+            echo '```'
+            tail -n 120 test-output.txt || echo 'The tests did not write anything.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^ (FAIL|✓|×)|Tests  |Test Files ' test-output.txt | head -n 40 | while read -r line; do
+            echo "::error title=Tests::$line"
+          done || true
