@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 
 /**
@@ -44,6 +45,18 @@ export function signingValues(env = process.env, path = SIGNING_NOTES_PATH) {
 /** The names of the four repository secrets, in the order they are asked for. */
 export function secretNames() {
   return [...SECRET_NAMES];
+}
+
+/**
+ * The password of the keystore and of the private key.
+ *
+ * A PKCS12 keystore keeps one password for both: keytool prints "Different store and
+ * key passwords not supported for PKCS12 KeyStores" and ignores a separate -keypass,
+ * so a second random value would never open the key.
+ */
+export function keystorePasswords(bytes = randomBytes) {
+  const storePassword = bytes(24).toString('base64url');
+  return { storePassword, keyPassword: storePassword };
 }
 
 /** The path of the keystore file, from the notes file. */
