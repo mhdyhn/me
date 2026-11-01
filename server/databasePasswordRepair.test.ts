@@ -8,7 +8,7 @@ import { parse } from 'pg-connection-string';
  * the same error code (28P01) and a right one is accepted. The rest of the code is the real
  * one, so the whole path from the connection string to the accepted login is covered.
  */
-const state = vi.hoisted(() => ({ attempts: [] as string[], password: 'Mhdy2020x@' }));
+const state = vi.hoisted(() => ({ attempts: [] as string[], password: 'Mhdy2020x@', blocked: false }));
 
 vi.mock('pg', async () => {
   const { parse } = await import('pg-connection-string');
@@ -19,6 +19,12 @@ vi.mock('pg', async () => {
     on() { return this; }
     async end() { return undefined; }
     async query() {
+      if (state.blocked) {
+        throw Object.assign(
+          new Error('(ECIRCUITBREAKER) too many authentication failures, new connections are temporarily blocked'),
+          { code: 'XX000' },
+        );
+      }
       const password = parse(state.attempts[state.attempts.length - 1]).password;
       if (password !== state.password) {
         throw Object.assign(new Error('password authentication failed for user "postgres.abc"'), { code: '28P01' });
@@ -29,7 +35,7 @@ vi.mock('pg', async () => {
   return { default: { Pool }, Pool };
 });
 
-const { connectionCandidates, connectionForm, describeConnection, openDatabase, usLayoutSpellings } = await import('./db.ts');
+const { connectionCandidates, connectionForm, describeConnection, describeFailure, openDatabase, usLayoutSpellings } = await import('./db.ts');
 
 const host = 'aws-0-eu-north-1.pooler.supabase.com:5432';
 const user = 'postgres.yvngvwhjavjzpxewblug';
@@ -39,6 +45,7 @@ describe('a password that lost a character in the connection string', () => {
   beforeEach(() => {
     state.attempts = [];
     state.password = 'Mhdy2020x@';
+    state.blocked = false;
     vi.stubEnv('DATABASE_REPAIR_DELAY_MS', '0');
   });
 
@@ -194,6 +201,15 @@ describe('a password that lost a character in the connection string', () => {
       'postgresql://postgres:Cc2r3ddKTILbIFhU@db.yvngvwhjavjzpxewblug.supabase.co:5432/postgres',
     );
     expect(connectionForm(url)).toBe('pooler');
+  });
+
+  it('stops at one try when the host blocked the connections', async () => {
+    // The host counts the failed logins of a user and blocks the new connections for a while.
+    // Trying the other spellings now would only count more failed logins.
+    state.blocked = true;
+    const failure = await openDatabase(raw).catch((error: unknown) => error);
+    expect(describeFailure(failure).code).toBe('ECIRCUITBREAKER');
+    expect(state.attempts).toHaveLength(1);
   });
 
   it('connects with the raw string although the password lost its @', async () => {
