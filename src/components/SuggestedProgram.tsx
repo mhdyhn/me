@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Sparkles, Wand2 } from 'lucide-react';
 import { saveProgram } from '../lib/programPersistence';
+import { useProgram } from '../lib/programStore';
 import {
   defaultSuggestionAnswers,
   suggestionQuestions,
@@ -16,6 +17,7 @@ import { faNumber } from '../lib/format';
  * and the joints the student wants to protect.
  */
 export function SuggestedProgram() {
+  const currentProgram = useProgram();
   const [answers, setAnswers] = useState<SuggestionAnswers>(defaultSuggestionAnswers);
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function SuggestedProgram() {
     setBusy(true);
     setError(null);
     try {
-      await saveProgram(suggestion.days);
+      await saveProgram(suggestion.days, currentProgram);
       setApplied(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'برنامه فعال نشد.');
