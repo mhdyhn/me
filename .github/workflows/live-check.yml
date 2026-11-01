@@ -1,0 +1,44 @@
+name: Live check of the app
+
+# Checks the app that is online: the API, the database, the pages, the illustrations,
+# the animations and the 3D model. It runs on demand and once a week.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every Sunday at 06:10 UTC.
+    - cron: '10 6 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Check the app that is online
+        run: |
+          set -o pipefail
+          node tools/check-live-app.mjs 2>&1 | tee live-check.txt
+
+      - name: Show the result in the summary of the run
+        if: always()
+        run: |
+          {
+            echo '### The result of the live check'
+            echo
+            echo '```'
+            cat live-check.txt 2>/dev/null || echo 'The check did not write anything.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep '^FAIL' live-check.txt 2>/dev/null | while read -r line; do
+            echo "::error title=Live check::$line"
+          done || true
