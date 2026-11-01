@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildInsert, chunk, endpointOf, TABLES } from './migrate-database.mjs';
+import { buildInsert, chunk, endpointOf, sslFor, TABLES } from './migrate-database.mjs';
 
 /** Every table the server creates. */
 const schemaTables = () => {
@@ -14,6 +14,14 @@ const schemaTables = () => {
   }
   return [...found].sort();
 };
+
+describe('the SSL of a connection', () => {
+  it('is off for a database on this machine and on for a hosted one', () => {
+    expect(sslFor('postgresql://postgres:secret@localhost:5432/postgres')).toBeUndefined();
+    expect(sslFor('postgresql://postgres:secret@127.0.0.1:5432/postgres')).toBeUndefined();
+    expect(sslFor('postgresql://postgres:secret@db.example.com:5432/postgres')).toEqual({ rejectUnauthorized: false });
+  });
+});
 
 describe('the endpoint of a connection string', () => {
   it('names the host, the port and the database without the secret', () => {

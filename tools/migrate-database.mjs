@@ -127,6 +127,18 @@ const targetUrl = process.env.TARGET_DATABASE_URL ?? '';
 const dryRun = process.argv.includes('--dry-run');
 const only = process.argv.find((argument) => argument.startsWith('--tables='))?.split('=')[1];
 
+/** The pools use SSL only when the database is not on the machine itself. */
+export function sslFor(url) {
+  let host = '';
+  try {
+    host = new URL(String(url)).hostname;
+  } catch {
+    host = '';
+  }
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return undefined;
+  return { rejectUnauthorized: false };
+}
+
 /** The host, the port and the database of a connection string, without the secret. */
 export function endpointOf(url) {
   const text = String(url ?? '');
@@ -146,12 +158,16 @@ export async function copyDatabases(sourceUrl, targetUrl, { dryRun = false, only
     console.log('The source and the target are the same database; nothing is copied.');
     return [];
   }
-  const source = new pg.Pool({ connectionString: sourceUrl, max: 2, connectionTimeoutMillis: 30000, ssl: { rejectUnauthorized: false } });
-  const target = new pg.Pool({ connectionString: targetUrl, max: 2, connectionTimeoutMillis: 30000, ssl: { rejectUnauthorized: false } });
+  const source = new pg.Pool({ connectionString: sourceUrl, max: 2, connectionTimeoutMillis: 30000, ...(sslFor(sourceUrl) ? { ssl: sslFor(sourceUrl) } : {}) });
+  const target = new pg.Pool({ connectionString: targetUrl, max: 2, connectionTimeoutMillis: 30000, ...(sslFor(targetUrl) ? { ssl: sslFor(targetUrl) } : {}) });
   const results = [];
   try {
     const available = await listTables(source);
-    const wanted = only ? only.split(',').map((name) => name.trim()) : available;
+    // The order of TABLES keeps the accounts before the rows that refer to them; a table
+    // that is not listed comes last so that nothing is silently skipped.
+    const listed = only ? only.split(',').map((name) => name.trim()) : TABLES;
+    const extra = available.filter((table) => !listed.includes(table)).sort();
+    const wanted = [...listed, ...extra];
     const tables = wanted.filter((table) => available.includes(table));
     const missing = wanted.filter((table) => !available.includes(table));
     if (missing.length) console.log(`Not in the source: ${missing.join(', ')}`);
