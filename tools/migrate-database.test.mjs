@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildInsert, chunk, TABLES } from './migrate-database.mjs';
+import { buildInsert, chunk, endpointOf, TABLES } from './migrate-database.mjs';
 
 /** Every table the server creates. */
 const schemaTables = () => {
@@ -14,6 +14,15 @@ const schemaTables = () => {
   }
   return [...found].sort();
 };
+
+describe('the endpoint of a connection string', () => {
+  it('names the host, the port and the database without the secret', () => {
+    expect(endpointOf('postgresql://postgres:secret@aws-0-eu-north-1.pooler.supabase.com:5432/postgres'))
+      .toBe('aws-0-eu-north-1.pooler.supabase.com:5432');
+    expect(endpointOf('postgresql://user@host:5432/db')).toBe('host:5432');
+    expect(endpointOf('not a url')).toBe('not a url');
+  });
+});
 
 describe('the database copy tool', () => {
   it('covers every table the server creates', () => {
