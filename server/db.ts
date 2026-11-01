@@ -446,7 +446,16 @@ export function connectionCandidates(rawUrl: string): string[] {
     }
     // The character was eaten by the URL syntax: it belongs to the password. That can only
     // have happened when the password holds no such character at all.
-    if (!password.includes(character)) add(`${decoded}${character}`);
+    if (!password.includes(character)) {
+      add(`${decoded}${character}`);
+      continue;
+    }
+    // The character is at the start of the password: it may belong at the end of it, or it
+    // may not be part of the password at all.
+    if (decoded.startsWith(character)) {
+      add(`${decoded.slice(character.length)}${character}`);
+      add(decoded.slice(character.length));
+    }
   }
   return candidates;
 }
