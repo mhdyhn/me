@@ -75,6 +75,9 @@ export async function openDatabase(target: string): Promise<Db> {
       // it and say less about the problem.
       if (!failure) failure = error;
       await database.close().catch(() => {});
+      // The host blocks the connections after failed logins. Trying the other spellings now
+      // would only count more failed logins, so it waits for the block to pass instead.
+      if (describeFailure(error).code === 'ECIRCUITBREAKER') throw error;
       if (!canRepairWithAnotherSpelling(error)) throw error;
       // The pooler counts failed logins and blocks new connections for a while.
       if (index < candidates.length - 1) await new Promise((resolve) => setTimeout(resolve, repairDelayMs()));
@@ -85,10 +88,7 @@ export async function openDatabase(target: string): Promise<Db> {
 
 /** True when another spelling of the same connection string could still work. */
 function canRepairWithAnotherSpelling(error: unknown): boolean {
-  const failure = describeFailure(error);
-  if (failure.code === '28P01') return true;
-  // The host blocked the connections after failed logins: another spelling may still work.
-  if (failure.code === 'ECIRCUITBREAKER') return true;
+  if (describeFailure(error).code === '28P01') return true;
   const message = String((error as { message?: string })?.message ?? '');
   // A raw character in the password can make the string unreadable for the driver.
   if (/invalid url|malformed/i.test(message)) return true;
@@ -276,7 +276,7 @@ export function lazyDatabase(open: Promise<Db>, waitMs = 20000, reportFailure?: 
 /** A short, safe description of why the database is not reachable. No address or secret is included. */
 export interface DatabaseFailure { code: string; message: string; detail?: string }
 
-function describeFailure(error: unknown): DatabaseFailure {
+export function describeFailure(error: unknown): DatabaseFailure {
   const raw = error as { code?: string; message?: string };
   const message = String(raw?.message ?? '');
   const code = String(raw?.code ?? '').trim();
