@@ -67,7 +67,7 @@ export async function openDatabase(target: string): Promise<Db> {
     try {
       await migrate(database);
       if (index > 0) {
-        console.warn('The database connection string was repaired: the password had lost a character that the URL syntax eats. Percent-encode the password (for example %40 for @) in DATABASE_URL.');
+        console.warn('The database connection string was repaired: the password was read in another way than it was meant. Percent-encode the password (for example %40 for @) in DATABASE_URL.');
       }
       return database;
     } catch (error) {
@@ -109,6 +109,8 @@ export interface ConnectionSummary {
   passwordLength: number;
   /** The kinds of characters of the password, without the characters themselves. */
   passwordShape: string;
+  /** How many characters of the password are of each kind, for example "arabic:7,symbol:3". */
+  passwordKinds: string;
 }
 
 /** The kind of a character: a lowercase letter, an uppercase letter, a digit or something else. */
@@ -119,9 +121,20 @@ function characterKind(character: string): string {
   return 's';
 }
 
+/** The group a character belongs to: a Latin letter, a digit, a symbol, an Arabic letter or other. */
+function characterGroup(character: string): string {
+  if (character >= 'a' && character <= 'z') return 'letter';
+  if (character >= 'A' && character <= 'Z') return 'letter';
+  if (character >= '0' && character <= '9') return 'digit';
+  if (character >= '!' && character <= '~') return 'symbol';
+  const code = character.codePointAt(0) ?? 0;
+  if (code >= 0x0600 && code <= 0x06ff) return 'arabic';
+  return 'other';
+}
+
 export function describeConnection(rawUrl: string): ConnectionSummary {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
-  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0, passwordShape: '' };
+  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0, passwordShape: '', passwordKinds: '' };
   const schemeEnd = url.indexOf('://');
   if (schemeEnd < 0) return empty;
   const authorityStart = schemeEnd + 3;
@@ -134,8 +147,20 @@ export function describeConnection(rawUrl: string): ConnectionSummary {
   const host = authority.slice(separator + 1);
   const colon = userInfo.indexOf(':');
   const user = colon < 0 ? userInfo : userInfo.slice(0, colon);
-  const password = colon < 0 ? '' : userInfo.slice(colon + 1);
+  const rawPassword = colon < 0 ? '' : userInfo.slice(colon + 1);
+  // The password as the driver sends it: the characters that the URL syntax eats are encoded.
+  let password = rawPassword;
+  try {
+    password = decodeURIComponent(rawPassword);
+  } catch {
+    password = rawPassword;
+  }
   const port = /:(\d+)$/.exec(host)?.[1] ?? '';
+  const groups = new Map<string, number>();
+  for (const character of password) {
+    const group = characterGroup(character);
+    groups.set(group, (groups.get(group) ?? 0) + 1);
+  }
   return {
     host: host.replace(/:\d+$/, ''),
     port,
@@ -143,6 +168,7 @@ export function describeConnection(rawUrl: string): ConnectionSummary {
     userHash: createHash('sha256').update(user).digest('hex').slice(0, 12),
     passwordLength: password.length,
     passwordShape: [...password].map(characterKind).join(''),
+    passwordKinds: [...groups.entries()].map(([group, count]) => `${group}:${count}`).join(','),
   };
 }
 
@@ -326,6 +352,46 @@ const LOST_PASSWORD_CHARACTERS = ['@'];
  * The others are the same connection with the password percent-encoded and with the character
  * that the URL syntax may have eaten put back, so a copy and paste does not have to be perfect.
  */
+/**
+ * The US letters that sit on the same key as the Persian ones. A password that was typed
+ * while the keyboard was in Persian comes out with the Persian letters and digits, and the
+ * US spelling is the one that was meant.
+ */
+const PERSIAN_TO_US: Record<string, string> = {
+  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ف': 'r', 'ق': 't', 'ع': 'y', 'ه': 'u', 'خ': 'i', 'ح': 'o', 'ج': 'p', 'د': '[', 'چ': ']',
+  'ش': 'a', 'س': 's', 'ی': 'd', 'ي': 'd', 'ب': 'f', 'ل': 'g', 'ك': 'l', '،': 'h', 'ؤ': 'j', 'ئ': 'k', '؛': 'l',
+  'ظ': 'z', 'ط': 'x', 'ز': 'c', 'غ': 'v', 'ر': 'b', 'ن': 'n', 'م': 'm', 'و': '.', 'ة': 'h', 'أ': 'a', 'إ': 'i', 'آ': 'a',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '«': '@',
+};
+
+/** Keys that give the same Persian character, so the US letter behind them is not certain. */
+const PERSIAN_AMBIGUOUS: Record<string, string[]> = {
+  '،': [','],
+};
+
+/**
+ * The password as it looks on a US keyboard. A password that was typed while the keyboard
+ * was in Persian holds the Persian letters, and the server would read them as the password.
+ * The same password, typed on a US keyboard, is the one that was meant. The list is empty
+ * when the password holds no Persian character.
+ */
+export function usLayoutSpellings(password: string): string[] {
+  const characters = [...password];
+  const primary = characters.map((character) => PERSIAN_TO_US[character] ?? character).join('');
+  if (primary === password) return [];
+  const spellings = [primary];
+  for (const [index, character] of characters.entries()) {
+    for (const alternative of PERSIAN_AMBIGUOUS[character] ?? []) {
+      const spelled = characters
+        .map((current, position) => (position === index ? alternative : (PERSIAN_TO_US[current] ?? current)))
+        .join('');
+      if (!spellings.includes(spelled)) spellings.push(spelled);
+    }
+  }
+  return spellings;
+}
+
 export function connectionCandidates(rawUrl: string): string[] {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
   const schemeEnd = url.indexOf('://');
@@ -355,6 +421,8 @@ export function connectionCandidates(rawUrl: string): string[] {
     const built = build(value);
     if (built !== url && !candidates.includes(built)) candidates.push(built);
   };
+  // A password that was typed while the keyboard was in Persian holds the Persian letters.
+  for (const spelling of usLayoutSpellings(decoded)) add(spelling);
   // The password as it was meant, with the characters that the URL syntax eats encoded.
   add(decoded);
   for (const character of LOST_PASSWORD_CHARACTERS) {

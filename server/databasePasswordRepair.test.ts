@@ -29,7 +29,7 @@ vi.mock('pg', async () => {
   return { default: { Pool }, Pool };
 });
 
-const { connectionCandidates, describeConnection, openDatabase } = await import('./db.ts');
+const { connectionCandidates, describeConnection, openDatabase, usLayoutSpellings } = await import('./db.ts');
 
 const host = 'aws-0-eu-north-1.pooler.supabase.com:5432';
 const user = 'postgres.yvngvwhjavjzpxewblug';
@@ -120,6 +120,33 @@ describe('a password that lost a character in the connection string', () => {
     const summary = describeConnection(`postgresql://${user}:@Mhdy2020x@${host}/postgres`);
     expect(summary.passwordLength).toBe(10);
     expect(summary.passwordShape).toBe('sUlllddddl');
+  });
+
+  it('counts the kinds of characters of the password', () => {
+    const summary = describeConnection(`postgresql://${user}:@Mhdy2020x@${host}/postgres`);
+    expect(summary.passwordKinds).toBe('symbol:1,letter:5,digit:4');
+    // A password that was typed with a Persian keyboard holds the Persian letters.
+    const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
+    const persianSummary = describeConnection(`postgresql://${user}:${encodeURIComponent(persian)}@${host}/postgres`);
+    expect(persianSummary.passwordKinds).toBe('symbol:1,arabic:9');
+    expect(persianSummary.passwordShape).toBe('ssssssssss');
+  });
+
+  it('spells a password that was typed with a Persian keyboard on a US keyboard', () => {
+    // The password "@Mhdy2020x" typed while the keyboard was in Persian.
+    const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
+    expect(usLayoutSpellings(persian)).toEqual(['@mhdy2020x', '@m,dy2020x']);
+    // A password that is already on a US keyboard has no other spelling.
+    expect(usLayoutSpellings('@Mhdy2020x')).toEqual([]);
+  });
+
+  it('connects with a password that was typed with a Persian keyboard', async () => {
+    const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
+    state.password = '@mhdy2020x';
+    const url = `postgresql://${user}:${encodeURIComponent(persian)}@${host}/postgres`;
+    const db = await openDatabase(url);
+    expect(parse(state.attempts[1]).password).toBe('@mhdy2020x');
+    await db.close();
   });
 
   it('connects with the raw string although the password lost its @', async () => {
