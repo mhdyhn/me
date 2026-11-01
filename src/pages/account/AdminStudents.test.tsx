@@ -18,7 +18,7 @@ describe('admin support for independent students', () => {
     render(<MemoryRouter><AdminStudents /></MemoryRouter>);
     expect(screen.getByRole('heading', { name: 'همهٔ شاگردها' })).toBeInTheDocument();
     expect(await screen.findByText('سارا')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('نام کاربری دقیق'), { target: { value: 'sara.fit' } });
+    fireEvent.change(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), { target: { value: 'sara.fit' } });
     fireEvent.click(screen.getByRole('button', { name: /جست‌وجو/ }));
     await waitFor(() => expect(mocks.api).toHaveBeenCalledWith('GET', '/admin/students?username=sara.fit'));
     fireEvent.click(screen.getByRole('button', { name: /رمز تازه/ }));

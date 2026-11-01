@@ -34,7 +34,8 @@ jobs:
       - name: Configure the Android API and expected signer
         env:
           ANDROID_API_BASE: ${{ vars.ANDROID_API_BASE }}
-          ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+          # The fingerprint is not a secret, but it may be stored as one.
+          ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 || secrets.ANDROID_SIGNING_CERT_SHA256 }}
         run: node tools/android-release-config.mjs
 
       - name: Check release signing secrets
