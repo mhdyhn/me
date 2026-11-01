@@ -71,7 +71,9 @@ export async function openDatabase(target: string): Promise<Db> {
       }
       return database;
     } catch (error) {
-      failure = error;
+      // The first failure belongs to the configured string; the later ones are spellings of
+      // it and say less about the problem.
+      if (!failure) failure = error;
       await database.close().catch(() => {});
       if (!canRepairWithAnotherSpelling(error)) throw error;
       // The pooler counts failed logins and blocks new connections for a while.
