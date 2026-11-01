@@ -11,9 +11,14 @@
  * printed. Nothing is written to the database. The connection string is printed on purpose:
  * it has to be pasted into Render.
  */
+import { setDefaultResultOrder } from 'node:dns';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 import { connectionCandidates, normalizeDatabaseUrl } from './normalize-database-url.mjs';
+
+// The hosted database answers on IPv4 and on IPv6. A network without a route for IPv6 must
+// not pick the IPv6 address, or the connection fails before it starts.
+setDefaultResultOrder('ipv4first');
 
 const FLAGS = new Set(['ref', 'password', 'region', 'host', 'port', 'db', 'user']);
 
