@@ -43,6 +43,15 @@ describe('the connection string of the database', () => {
     expect(candidates).toContain('postgresql://postgres.abc:Mhdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
   });
 
+  it('offers the password on a US keyboard when it was typed with a Persian one', () => {
+    // The password "@Mhdy2020x" typed while the keyboard was in Persian.
+    const persian = ['@', 'م', '،', 'ی', 'ع', '۲', '۰', '۲', '۰', 'ط'].join('');
+    const url = `postgresql://postgres.abc:${encodeURIComponent(persian)}@aws-0-eu-north-1.pooler.supabase.com:5432/postgres`;
+    const candidates = connectionCandidates(url);
+    expect(candidates).toContain('postgresql://postgres.abc:%40mhdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
+    expect(candidates).toContain('postgresql://postgres.abc:%40m%2Cdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
+  });
+
   it('keeps the string itself when the password has its @', () => {
     const url = 'postgresql://postgres.abc:Mhdy2020x%40@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
     expect(connectionCandidates(url)[0]).toBe(url);
