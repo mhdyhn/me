@@ -107,11 +107,21 @@ export interface ConnectionSummary {
   database: string;
   userHash: string;
   passwordLength: number;
+  /** The kinds of characters of the password, without the characters themselves. */
+  passwordShape: string;
+}
+
+/** The kind of a character: a lowercase letter, an uppercase letter, a digit or something else. */
+function characterKind(character: string): string {
+  if (character >= 'a' && character <= 'z') return 'l';
+  if (character >= 'A' && character <= 'Z') return 'U';
+  if (character >= '0' && character <= '9') return 'd';
+  return 's';
 }
 
 export function describeConnection(rawUrl: string): ConnectionSummary {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
-  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0 };
+  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0, passwordShape: '' };
   const schemeEnd = url.indexOf('://');
   if (schemeEnd < 0) return empty;
   const authorityStart = schemeEnd + 3;
@@ -132,6 +142,7 @@ export function describeConnection(rawUrl: string): ConnectionSummary {
     database: pathStart < 0 ? '' : (url.slice(pathStart + 1).split('?')[0] ?? ''),
     userHash: createHash('sha256').update(user).digest('hex').slice(0, 12),
     passwordLength: password.length,
+    passwordShape: [...password].map(characterKind).join(''),
   };
 }
 
