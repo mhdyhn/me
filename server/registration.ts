@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import type { Db } from './db.ts';
 import { hashPassword } from './auth.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
-import { insertUser } from './users.ts';
+import { assertPhoneAvailable, insertUser } from './users.ts';
 import { requireMobile } from './phone.ts';
 import type { SecretKey } from './secrets.ts';
 
@@ -59,6 +59,19 @@ export async function migrateRegistration(db: Db): Promise<void> {
       created_at TEXT NOT NULL
     );
   `);
+  // One account per mobile number. An older database may hold the same number twice; the
+  // account whose username is the number keeps it and the others keep their username only,
+  // so nobody loses the ability to sign in.
+  await db.exec(`
+    UPDATE users SET phone_number = NULL
+      WHERE phone_number IS NOT NULL
+        AND id NOT IN (
+          SELECT DISTINCT ON (phone_number) id FROM users
+          WHERE phone_number IS NOT NULL
+          ORDER BY phone_number, (username = phone_number) DESC, id
+        );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number) WHERE phone_number IS NOT NULL;
+  `);
 }
 
 /** Fixed-window limits live in PostgreSQL, so a restart or a second instance does not reset them. */
@@ -99,6 +112,7 @@ export async function registerAccount(db: Db, body: unknown, now: Date): Promise
   const displayName = requireText(input, 'displayName', 2, 60, 'نام');
   if (/[\u0000-\u001f\u007f]/.test(displayName)) throw new HttpError(400, 'نام شامل نویسهٔ نامعتبر است.');
   const phoneNumber = requireMobile(input.phoneNumber);
+  await assertPhoneAvailable(db, phoneNumber);
   const username = normalizeUsername(input.username);
   const password = requireText(input, 'password', 10, 128, 'رمز عبور');
   if (password.toLowerCase() === username) throw new HttpError(400, 'رمز عبور باید با نام کاربری متفاوت باشد.');
@@ -114,6 +128,8 @@ export async function registerAccount(db: Db, body: unknown, now: Date): Promise
     });
   } catch (error) {
     if ((error as { code?: string })?.code === '23505') {
+      // The unique index of the phone number can fire in a race with another registration.
+      await assertPhoneAvailable(db, phoneNumber);
       throw new HttpError(409, 'این نام کاربری قابل استفاده نیست. اگر قبلاً حساب ساخته‌اید، وارد شوید.');
     }
     throw error;

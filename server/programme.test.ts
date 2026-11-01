@@ -7,6 +7,14 @@ import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase, type Db } from './db.ts';
 
+/** A fresh mobile number for every account: one number belongs to one account only. */
+let phoneSequence = 0;
+function nextPhone(): string {
+  phoneSequence += 1;
+  return `0912${String(1230000 + phoneSequence)}`;
+}
+
+
 type Json = Record<string, any>;
 
 let db: Db;
@@ -45,7 +53,7 @@ async function signIn(username: string, password: string): Promise<string> {
 /** Admin creates a coach; the coach changes the temporary password and gets a usable session. */
 async function coach(): Promise<string> {
   const admin = await signIn('owner', 'owner-pass-123');
-  const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی یک' }, admin);
+  const created = await call('POST', '/api/coaches', { phoneNumber: nextPhone(), displayName: 'مربی یک' }, admin);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-new-pass-1' }, token);
   return token;
@@ -53,7 +61,7 @@ async function coach(): Promise<string> {
 
 /** Coach creates a student and the student changes the generated password. */
 async function student(coachToken: string): Promise<{ id: number; token: string }> {
-  const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد برنامه' }, coachToken);
+  const created = await call('POST', '/api/students', { phoneNumber: nextPhone(), displayName: 'شاگرد برنامه' }, coachToken);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'programme-pass-1' }, token);
   return { id: created.json.user.id as number, token };

@@ -12,6 +12,14 @@ import { openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
 import { findUserByUsername, insertUser } from './users.ts';
 
+/** A fresh mobile number for every account: one number belongs to one account only. */
+let phoneSequence = 0;
+function nextPhone(): string {
+  phoneSequence += 1;
+  return `0912${String(1230000 + phoneSequence)}`;
+}
+
+
 let db: Db;
 let server: Server;
 let base: string;
@@ -46,7 +54,7 @@ const register = (overrides: Record<string, unknown> = {}) => call('POST', '/api
 async function adminToken() { return (await login('owner', 'owner-pass-123')).json.token as string; }
 
 async function createCoach(admin: string) {
-  const made = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی ساخته‌شده' }, admin);
+  const made = await call('POST', '/api/coaches', { phoneNumber: nextPhone(), displayName: 'مربی ساخته‌شده' }, admin);
   const token = (await login(made.json.username, made.json.password)).json.token as string;
   await call('POST', '/api/me/password', { currentPassword: made.json.password, newPassword: 'coach-new-pass-123' }, token);
   return { token, id: made.json.user.id as number };
@@ -74,7 +82,7 @@ describe('direct registration and existing account paths', () => {
     expect(saved.json.results[0].status).toBe('saved');
     const list = await call('GET', `/api/me/personal-data?accountId=${stored.id}`, undefined, token);
     expect(list.json.records.find((item: { kind: string }) => item.kind === 'program').value).toEqual([day]);
-    const other = await register({ username: 'another.person' });
+    const other = await register({ username: 'another.person', phoneNumber: nextPhone() });
     expect(other.status).toBe(201);
     const otherSession = await login('another.person', valid.password);
     const otherToken = otherSession.json.token as string;
@@ -103,11 +111,11 @@ describe('direct registration and existing account paths', () => {
     expect(fromRegisteredCoach.status).toBe(201);
     expect(fromRegisteredCoach.json.user).toMatchObject({ coachId: pending.id, selfRegistered: false, mustChangePassword: true, phoneNumber: '09121234567' });
     const manualCoach = await createCoach(admin);
-    const manualStudent = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد دستی' }, manualCoach.token);
+    const manualStudent = await call('POST', '/api/students', { phoneNumber: nextPhone(), displayName: 'شاگرد دستی' }, manualCoach.token);
     expect(manualStudent.status).toBe(201);
     expect(manualStudent.json.user.coachId).toBe(manualCoach.id);
     expect((await call('GET', '/api/students', undefined, manualCoach.token)).json.students.map((student: { id: number }) => student.id)).not.toContain(fromRegisteredCoach.json.user.id);
-    expect((await register({ username: 'directory.personal' })).status).toBe(201);
+    expect((await register({ username: 'directory.personal', phoneNumber: nextPhone() })).status).toBe(201);
     const directory = (await call('GET', '/api/admin/students', undefined, admin)).json.students;
     expect(directory).toEqual(expect.arrayContaining([
       expect.objectContaining({ username: 'directory.personal', selfRegistered: true, coachId: null }),
@@ -125,7 +133,7 @@ describe('direct registration and existing account paths', () => {
     expect((await register({ phoneNumber: '1234' })).status).toBe(400);
     expect((await register({ role: 'student', coachId: 1, pendingApproval: false, isActive: true, selfRegistered: false })).status).toBe(201);
     expect((await findUserByUsername(db, valid.username))?.coachId).toBeNull();
-    expect((await register({ username: 'PERSONAL.ONE' })).status).toBe(409);
+    expect((await register({ username: 'PERSONAL.ONE', phoneNumber: nextPhone() })).status).toBe(409);
     expect((await call('POST', '/api/auth/register', { ...valid, username: 'from-elsewhere' }, undefined, { Origin: 'https://attacker.example' })).status).toBe(403);
     const text = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(valid) });
     expect(text.status).toBe(415);
@@ -154,7 +162,7 @@ describe('direct registration and existing account paths', () => {
   it('pages the unified directory without duplicates and lets admin search beyond the first page', async () => {
     const admin = await adminToken();
     const ids: number[] = [];
-    for (let n = 0; n < 35; n++) ids.push(await insertUser(db, { username: `directory.${n}`, passwordHash: 'not-used', role: 'student', displayName: `شاگرد ${n}`, phoneNumber: '09123456789', coachId: null, selfRegistered: true, mustChangePassword: false, now: clock }));
+    for (let n = 0; n < 35; n++) ids.push(await insertUser(db, { username: `directory.${n}`, passwordHash: 'not-used', role: 'student', displayName: `شاگرد ${n}`, phoneNumber: `0912${String(1400000 + n)}`, coachId: null, selfRegistered: true, mustChangePassword: false, now: clock }));
     const first = (await call('GET', '/api/admin/students', undefined, admin)).json;
     expect(first.students).toHaveLength(30);
     expect(first.nextCursor).toBeTruthy();

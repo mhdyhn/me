@@ -154,6 +154,18 @@ export async function insertUser(
   return Number(rows[0]!.id);
 }
 
+/**
+ * One account per mobile number: a number that already belongs to an account cannot open a
+ * second one, no matter which role the new account would have.
+ */
+export async function assertPhoneAvailable(db: Db, phoneNumber: string | null | undefined): Promise<void> {
+  if (!phoneNumber) return;
+  const rows = await db.query<{ id: number }>('SELECT id FROM users WHERE phone_number = $1 LIMIT 1', [phoneNumber]);
+  if (rows.length) {
+    throw new HttpError(409, 'این شمارهٔ موبایل قبلاً برای یک حساب ثبت شده است؛ همان حساب را وارد کنید یا شمارهٔ دیگری بزنید.');
+  }
+}
+
 /** Empty accounts may be removed; foreign keys keep financial and former-coach history intact. */
 export async function deleteUser(db: Db, id: number): Promise<void> {
   try {

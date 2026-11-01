@@ -7,6 +7,14 @@ import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
 
+/** A fresh mobile number for every account: one number belongs to one account only. */
+let phoneSequence = 0;
+function nextPhone(): string {
+  phoneSequence += 1;
+  return `0912${String(1230000 + phoneSequence)}`;
+}
+
+
 type Json = Record<string, any>;
 let db: Db;
 let server: Server;
@@ -50,14 +58,14 @@ async function signIn(username: string, password: string): Promise<string> {
 }
 
 async function createCoach(admin: string) {
-  const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی' }, admin);
+  const created = await call('POST', '/api/coaches', { phoneNumber: nextPhone(), displayName: 'مربی' }, admin);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-test-pass-1' }, token);
   return { id: created.json.user.id as number, token };
 }
 
 async function createStudent(coachToken: string) {
-  const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد' }, coachToken);
+  const created = await call('POST', '/api/students', { phoneNumber: nextPhone(), displayName: 'شاگرد' }, coachToken);
   const token = await signIn(created.json.username, created.json.password);
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-test-pass-1' }, token);
   return { id: created.json.user.id as number, token };
