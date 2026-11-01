@@ -108,11 +108,11 @@ export function Login() {
 
         <span className="auth-card-kicker">خوش آمدی به میتی</span>
         <h1>وارد حسابت شو</h1>
-        <p className="login-sub">با نام کاربری و رمز خودت، یا اطلاعاتی که مربی یا مدیر به تو داده وارد شو.</p>
+        <p className="login-sub">با نام کاربری و رمز خودت، یا اطلاعاتی که مربی یا مدیر به تو داده وارد شو. اگر شمارهٔ موبایلت را مربی یا مدیر نوشته، با همان شماره هم می‌توانی وارد شوی.</p>
 
         <form className="login-form" onSubmit={(event) => void submit(event)}>
           <label className="login-field" htmlFor="login-username">
-            <span>نام کاربری</span>
+            <span>نام کاربری یا شمارهٔ موبایل</span>
             <div className="login-input">
               <User size={18} aria-hidden="true" />
               <input
@@ -122,6 +122,7 @@ export function Login() {
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
+                placeholder="۰۹۱۲۳۴۵۶۷۸۹"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 required

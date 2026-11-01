@@ -59,7 +59,7 @@ describe('sign-in and role routing', () => {
     });
     renderAt('/login');
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('نام کاربری'), 'c100001');
+    await user.type(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), 'c100001');
     await user.type(screen.getByLabelText('رمز عبور'), 'secret-pass-1');
     await user.click(screen.getByRole('button', { name: 'ورود' }));
     expect(await screen.findByRole('heading', { name: 'شاگردهای من' })).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('sign-in and role routing', () => {
     });
     renderAt('/login');
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('نام کاربری'), 's200002');
+    await user.type(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), 's200002');
     await user.type(screen.getByLabelText('رمز عبور'), 'temp-pass-12');
     await user.click(screen.getByRole('button', { name: 'ورود' }));
     expect(await screen.findByRole('heading', { name: 'رمز تازهٔ خود را انتخاب کنید' })).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('sign-in and role routing', () => {
     });
     renderAt('/login');
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('نام کاربری'), 'c100001');
+    await user.type(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), 'c100001');
     await user.type(screen.getByLabelText('رمز عبور'), 'secret-pass-1');
     await user.click(screen.getByRole('button', { name: 'ورود' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('مرورگر نشست را نگه نداشت');
@@ -102,7 +102,7 @@ describe('sign-in and role routing', () => {
     mockApi(() => ({ status: 401, json: { error: 'نام کاربری یا رمز عبور اشتباه است.' } }));
     renderAt('/login');
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('نام کاربری'), 'x');
+    await user.type(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), 'x');
     await user.type(screen.getByLabelText('رمز عبور'), 'y');
     await user.click(screen.getByRole('button', { name: 'ورود' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('نام کاربری یا رمز عبور اشتباه است.');

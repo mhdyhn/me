@@ -30,6 +30,7 @@ function CoachStudents() {
   const [studentStatus, setStudentStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [username, setUsername] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -66,10 +67,11 @@ function CoachStudents() {
     setFormError(null);
     setBusy(true);
     try {
-      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/students', { displayName: name.trim(), phoneNumber });
+      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/students', { displayName: name.trim(), phoneNumber, username: username.trim() });
       setCredentials({ user: created.user, username: created.username, password: created.password });
       setName('');
       setPhoneNumber('');
+      setUsername('');
       void load();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'شاگرد ساخته نشد.');
@@ -170,7 +172,8 @@ function CoachStudents() {
             <span>نام شاگرد جدید</span>
             <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required />
           </label>
-          <label className="field" htmlFor="student-phone"><span id="student-phone-label">شماره موبایل شاگرد</span><input id="student-phone" aria-labelledby="student-phone-label" aria-describedby="student-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="student-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد.</small></label>
+          <label className="field" htmlFor="student-phone"><span id="student-phone-label">شماره موبایل شاگرد</span><input id="student-phone" aria-labelledby="student-phone-label" aria-describedby="student-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="student-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد. این شماره نام کاربریِ شاگرد می‌شود؛ خودِ شاگرد با همین شماره وارد می‌شود.</small></label>
+          <label className="field" htmlFor="student-username"><span id="student-username-label">نام کاربری (اختیاری)</span><input id="student-username" aria-labelledby="student-username-label" aria-describedby="student-username-help" dir="ltr" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={32} value={username} onChange={(event) => setUsername(event.target.value)} /><small id="student-username-help" className="field-hint">اگر خالی بماند، شمارهٔ موبایل نام کاربری می‌شود؛ مثلاً reza.</small></label>
           <button type="submit" className="button button--primary" disabled={busy}>
             <UserPlus size={16} /> {busy ? 'در حال ساخت…' : 'ساخت شاگرد'}
           </button>

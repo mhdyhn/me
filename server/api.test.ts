@@ -225,9 +225,32 @@ describe('roles and student provisioning', () => {
     const { token } = await coachSession();
     const res = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد الف' }, token);
     expect(res.status).toBe(201);
-    expect(res.json.username).toMatch(/^s\d{6}$/);
+    // The username is the phone number, so the student does not have to remember a random name.
+    expect(res.json.username).toMatch(/^09121234567(-\d+)?$/);
     expect(res.json.password).toMatch(/^[a-z2-9]{10}$/);
     expect(res.json.user).toMatchObject({ role: 'student', mustChangePassword: true });
+  });
+
+  it('the owner can write the username of a new account', async () => {
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const created = await call('POST', '/api/coaches', { phoneNumber: '09121234500', displayName: 'مربی با نام دلخواه', username: 'maryam' }, admin);
+    expect(created.status).toBe(201);
+    expect(created.json.username).toBe('maryam');
+    // A name that is taken is refused, and the phone number of the account still works.
+    const again = await call('POST', '/api/coaches', { phoneNumber: '09121234501', displayName: 'مربی دوم', username: 'maryam' }, admin);
+    expect(again.status).toBe(409);
+  });
+
+  it('an account signs in with its phone number', async () => {
+    const admin = (await login('owner', 'owner-pass-123')).json.token as string;
+    const created = await call('POST', '/api/coaches', { phoneNumber: '09121234666', displayName: 'مربی با شماره' }, admin);
+    expect(created.status).toBe(201);
+    const signedIn = await login('09121234666', created.json.password);
+    expect(signedIn.status).toBe(200);
+    expect(signedIn.json.user.role).toBe('coach');
+    // The same number with the country code is the same account.
+    expect((await login('+989121234666', created.json.password)).status).toBe(200);
+    expect((await login('09121234667', created.json.password)).status).toBe(401);
   });
 
   it('a student must change the generated password, and then reaches only its own data', async () => {

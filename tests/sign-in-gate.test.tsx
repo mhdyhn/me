@@ -31,7 +31,7 @@ describe('sign-in gate and credentials', () => {
     );
 
     render(<App />);
-    const usernameInput = await screen.findByLabelText('نام کاربری') as HTMLInputElement;
+    const usernameInput = await screen.findByLabelText('نام کاربری یا شمارهٔ موبایل') as HTMLInputElement;
     const passwordInput = screen.getByLabelText('رمز عبور') as HTMLInputElement;
 
     expect(usernameInput.value).toBe('alireza');

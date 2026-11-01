@@ -129,6 +129,9 @@ export function CredentialsCard({ credentials, onDone, action }: { credentials: 
         <div><dt>نام کاربری</dt><dd dir="ltr">{credentials.username}</dd></div>
         <div><dt>رمز عبور</dt><dd dir="ltr">{credentials.password}</dd></div>
       </dl>
+      {credentials.user.phoneNumber ? (
+        <p className="credentials-hint">با شمارهٔ موبایل خودش هم می‌تواند وارد شود؛ لازم نیست نام کاربری را حفظ کند.</p>
+      ) : null}
       <div className="credentials-actions">
         <button type="button" className="button button--ghost" onClick={() => void copy()}>
           <Copy size={16} /> {copied ? 'کپی شد' : 'کپی'}

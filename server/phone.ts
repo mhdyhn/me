@@ -1,6 +1,15 @@
 import { HttpError } from './http.ts';
 
 /** Iranian mobile numbers are stored consistently; possession is not verified by SMS. */
+/** The number in the standard form, or null when it is not a mobile number. */
+export function normalizeMobile(value: unknown): string | null {
+  try {
+    return requireMobile(value);
+  } catch {
+    return null;
+  }
+}
+
 export function requireMobile(value: unknown): string {
   if (typeof value !== 'string' || value.length > 32) throw new HttpError(400, 'شماره موبایل معتبر وارد کنید.');
   let number = value.trim().replace(/[۰-۹٠-٩]/g, (digit) => {

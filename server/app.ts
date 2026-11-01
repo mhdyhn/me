@@ -2,10 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DatabaseError, describeConnection, type ConnectionSummary, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
-import { limitRegistration, registerAccount } from './registration.ts';
+import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserByPhone, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { limitRegistration, normalizeUsername, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
-import { requireMobile } from './phone.ts';
+import { normalizeMobile, requireMobile } from './phone.ts';
 import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLink, makeCoachInvitation, previewCoachInvitation, previewCoachRegistrationLink, returnToPersonalProgram, revokeCoachInvitations, revokeCoachRegistrationLink, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
@@ -175,7 +175,23 @@ export function createApp(options: AppOptions) {
     failures.set(username, entry);
   }
 
-  /** The admin's view of a coach. Same answer for missing and non-coach ids. */
+  /**
+ * The username of an account that the admin or the coach creates: the name they wrote, or
+ * the phone number of the account, which the owner knows by heart.
+ */
+async function usernameForNewAccount(db: Db, input: Record<string, unknown>, prefix: 'c' | 's', phoneNumber: string): Promise<string> {
+  const asked = typeof input.username === 'string' ? input.username.trim() : '';
+  if (asked) {
+    const username = normalizeUsername(asked);
+    if ((await db.query('SELECT 1 FROM users WHERE lower(username) = $1 LIMIT 1', [username])).length) {
+      throw new HttpError(409, 'این نام کاربری قبلاً استفاده شده است؛ یک نام دیگر بنویسید.');
+    }
+    return username;
+  }
+  return generateUsername(db, prefix, phoneNumber);
+}
+
+/** The admin's view of a coach. Same answer for missing and non-coach ids. */
   async function ownCoach(coachId: number): Promise<StoredUser> {
     const coach = await findUserById(db, coachId);
     if (!coach || coach.role !== 'coach') throw new HttpError(404, 'مربی پیدا نشد.');
@@ -264,7 +280,8 @@ export function createApp(options: AppOptions) {
         const username = requireText(input, 'username', 1, 64, 'نام کاربری');
         const password = requireText(input, 'password', 1, PASSWORD_MAX, 'رمز عبور');
         assertNotLocked(username);
-        const user = await findUserByUsername(db, username);
+        // The account owner knows their own phone number; the name is not something to remember.
+        const user = await findUserByUsername(db, username) ?? await findUserByPhone(db, normalizeMobile(username) ?? '');
         const valid = user ? verifyPassword(password, user.passwordHash) : (verifyPassword(password, dummyHash), false);
         if (!user || !valid) {
           recordFailure(username);
@@ -401,7 +418,7 @@ export function createApp(options: AppOptions) {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام مربی');
         const phoneNumber = requireMobile(input.phoneNumber);
-        const username = await generateUsername(db, 'c');
+        const username = await usernameForNewAccount(db, input, 'c', phoneNumber);
         const password = generatePassword();
         const id = await insertUser(db, {
           username,
@@ -554,7 +571,7 @@ export function createApp(options: AppOptions) {
         const input = requireObject(body);
         const displayName = requireText(input, 'displayName', NAME_MIN, NAME_MAX, 'نام شاگرد');
         const phoneNumber = requireMobile(input.phoneNumber);
-        const username = await generateUsername(db, 's');
+        const username = await usernameForNewAccount(db, input, 's', phoneNumber);
         const password = generatePassword();
         const id = await insertUser(db, {
           username,

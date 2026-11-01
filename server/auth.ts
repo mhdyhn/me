@@ -27,8 +27,21 @@ export function generatePassword(length = 10): string {
   return result;
 }
 
-/** Short numeric usernames such as s482913 or c105577: easy to type on a phone. */
-export async function generateUsername(db: Db, prefix: 'c' | 's'): Promise<string> {
+/**
+ * A username that the owner knows without writing it down: the phone number of the account,
+ * with a number after it when that one is taken. The phone number is something everyone
+ * knows about themselves, so it does not have to be remembered from a paper.
+ * Without a phone number a short random name is used, as before.
+ */
+export async function generateUsername(db: Db, prefix: 'c' | 's', phoneNumber?: string | null): Promise<string> {
+  const digits = (phoneNumber ?? '').replace(/[^0-9]/g, '');
+  if (digits.length >= 3) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const candidate = attempt === 0 ? digits : `${digits}-${attempt + 1}`;
+      const found = await db.query('SELECT 1 FROM users WHERE username = $1', [candidate]);
+      if (found.length === 0) return candidate;
+    }
+  }
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const candidate = `${prefix}${randomInt(100000, 1000000)}`;
     const found = await db.query('SELECT 1 FROM users WHERE username = $1', [candidate]);
