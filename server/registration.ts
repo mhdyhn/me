@@ -80,6 +80,17 @@ export async function limitRegistration(db: Db, key: SecretKey, address: string,
   }
 }
 
+/** The rules of a username, the same for a self-registered account and for one a coach creates. */
+export function normalizeUsername(value: unknown): string {
+  if (typeof value !== 'string') throw new HttpError(400, 'نام کاربری را وارد کنید.');
+  const username = value.trim().toLowerCase();
+  if (username.length < 3 || username.length > 32) throw new HttpError(400, 'نام کاربری باید بین ۳ تا ۳۲ نویسه باشد.');
+  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
+    throw new HttpError(400, 'نام کاربری باید با حروف انگلیسی کوچک یا عدد شروع شود و فقط حروف انگلیسی، عدد، نقطه، خط تیره و زیرخط داشته باشد.');
+  }
+  return username;
+}
+
 /** A student starts independent; a self-registered coach needs admin approval before sign-in. */
 export async function registerAccount(db: Db, body: unknown, now: Date): Promise<{ username: string; pendingApproval: boolean }> {
   const input = requireObject(body);
@@ -88,10 +99,7 @@ export async function registerAccount(db: Db, body: unknown, now: Date): Promise
   const displayName = requireText(input, 'displayName', 2, 60, 'نام');
   if (/[\u0000-\u001f\u007f]/.test(displayName)) throw new HttpError(400, 'نام شامل نویسهٔ نامعتبر است.');
   const phoneNumber = requireMobile(input.phoneNumber);
-  const username = requireText(input, 'username', 3, 32, 'نام کاربری').toLowerCase();
-  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
-    throw new HttpError(400, 'نام کاربری باید با حروف انگلیسی کوچک یا عدد شروع شود و فقط حروف انگلیسی، عدد، نقطه، خط تیره و زیرخط داشته باشد.');
-  }
+  const username = normalizeUsername(input.username);
   const password = requireText(input, 'password', 10, 128, 'رمز عبور');
   if (password.toLowerCase() === username) throw new HttpError(400, 'رمز عبور باید با نام کاربری متفاوت باشد.');
   if ((await db.query('SELECT 1 FROM users WHERE lower(username) = $1 LIMIT 1', [username])).length) {

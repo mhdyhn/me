@@ -30,6 +30,7 @@ function AdminCoaches() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [username, setUsername] = useState('');
   const [coachSearch, setCoachSearch] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,10 +62,11 @@ function AdminCoaches() {
     setFormError(null);
     setBusy(true);
     try {
-      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/coaches', { displayName: name.trim(), phoneNumber });
+      const created = await api<{ user: PublicUser; username: string; password: string }>('POST', '/coaches', { displayName: name.trim(), phoneNumber, username: username.trim() });
       setCredentials({ user: created.user, username: created.username, password: created.password });
       setName('');
       setPhoneNumber('');
+      setUsername('');
       void load();
     } catch (caught) {
       setFormError(caught instanceof ApiError ? caught.message : 'مربی ساخته نشد.');
@@ -225,7 +227,8 @@ function AdminCoaches() {
             <span>نام مربی جدید</span>
             <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required />
           </label>
-          <label className="field" htmlFor="coach-phone"><span id="coach-phone-label">شماره موبایل مربی</span><input id="coach-phone" aria-labelledby="coach-phone-label" aria-describedby="coach-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="coach-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد.</small></label>
+          <label className="field" htmlFor="coach-phone"><span id="coach-phone-label">شماره موبایل مربی</span><input id="coach-phone" aria-labelledby="coach-phone-label" aria-describedby="coach-phone-help" dir="ltr" type="tel" inputMode="tel" autoComplete="tel" maxLength={32} value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} required /><small id="coach-phone-help" className="field-hint">فعلاً تأیید پیامکی ندارد. این شماره نام کاربریِ مربی می‌شود؛ خودِ مربی با همین شماره وارد می‌شود.</small></label>
+          <label className="field" htmlFor="coach-username"><span id="coach-username-label">نام کاربری (اختیاری)</span><input id="coach-username" aria-labelledby="coach-username-label" aria-describedby="coach-username-help" dir="ltr" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={32} value={username} onChange={(event) => setUsername(event.target.value)} /><small id="coach-username-help" className="field-hint">اگر خالی بماند، شمارهٔ موبایل نام کاربری می‌شود؛ مثلاً maryam.</small></label>
           <button type="submit" className="button button--primary" disabled={busy}>
             <UserPlus size={16} /> {busy ? 'در حال ساخت…' : 'ساخت مربی'}
           </button>

@@ -105,6 +105,13 @@ export async function findUserByUsername(db: Db, username: string): Promise<Stor
   return row ? fromRow(row) : null;
 }
 
+/** The account of a phone number; the one with the smaller id when a number is shared. */
+export async function findUserByPhone(db: Db, phoneNumber: string): Promise<StoredUser | null> {
+  if (!phoneNumber) return null;
+  const row = (await db.query<UserRow>('SELECT * FROM users WHERE phone_number = $1 ORDER BY id LIMIT 1', [phoneNumber]))[0];
+  return row ? fromRow(row) : null;
+}
+
 export async function insertUser(
   db: Db,
   input: { username: string; passwordHash: string; passwordEnc?: string | null; role: Role; displayName: string; phoneNumber?: string | null; coachId: number | null; mustChangePassword: boolean; now: Date; selfRegistered?: boolean; isActive?: boolean; pendingApproval?: boolean },
