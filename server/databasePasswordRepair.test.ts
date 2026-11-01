@@ -29,7 +29,7 @@ vi.mock('pg', async () => {
   return { default: { Pool }, Pool };
 });
 
-const { connectionCandidates, describeConnection, openDatabase, usLayoutSpellings } = await import('./db.ts');
+const { connectionCandidates, connectionForm, describeConnection, openDatabase, usLayoutSpellings } = await import('./db.ts');
 
 const host = 'aws-0-eu-north-1.pooler.supabase.com:5432';
 const user = 'postgres.yvngvwhjavjzpxewblug';
@@ -75,7 +75,13 @@ describe('a password that lost a character in the connection string', () => {
     const candidates = connectionCandidates(url);
     expect(candidates).toContain(`postgresql://${user}:Mhdy2020x@${host}/postgres`);
     // Every candidate carries a password the server can be asked with.
-    expect(candidates.map((candidate) => parse(candidate).password)).toEqual(['Mhdy2020x@', 'Mhdy2020x', 'Mhdy2020x@@']);
+    expect(candidates.map((candidate) => parse(candidate).password)).toEqual([
+      'Mhdy2020x@',
+      'Mhdy2020x',
+      'Mhdy2020x@@',
+      // The direct connection of the same project, with the same password.
+      'Mhdy2020x@',
+    ]);
   });
 
   it('keeps an @ that belongs to the password', () => {
@@ -163,7 +169,31 @@ describe('a password that lost a character in the connection string', () => {
       '@Mhdy2020x',
       'Mhdy2020x@',
       'Mhdy2020x',
+      // The direct connection of the same project, with the same password.
+      '@Mhdy2020x',
     ]);
+  });
+
+  it('tries the shared pooler when the direct connection is configured', () => {
+    // The direct connection of a hosted database speaks IPv6 only, and a server without IPv6
+    // cannot reach it. The shared pooler speaks IPv4 and carries the project behind the name
+    // of the user.
+    const url = `postgresql://postgres:Cc2r3ddKTILbIFhU@db.yvngvwhjavjzpxewblug.supabase.co:5432/postgres`;
+    const candidates = connectionCandidates(url);
+    expect(candidates[0]).toBe(url);
+    expect(candidates).toContain(
+      'postgresql://postgres.yvngvwhjavjzpxewblug:Cc2r3ddKTILbIFhU@aws-0-eu-north-1.pooler.supabase.com:5432/postgres',
+    );
+    expect(connectionForm(url)).toBe('direct');
+  });
+
+  it('tries the direct connection when the shared pooler is configured', () => {
+    const url = `postgresql://${user}:Cc2r3ddKTILbIFhU@${host}/postgres`;
+    const candidates = connectionCandidates(url);
+    expect(candidates).toContain(
+      'postgresql://postgres:Cc2r3ddKTILbIFhU@db.yvngvwhjavjzpxewblug.supabase.co:5432/postgres',
+    );
+    expect(connectionForm(url)).toBe('pooler');
   });
 
   it('connects with the raw string although the password lost its @', async () => {
@@ -183,6 +213,6 @@ describe('a password that lost a character in the connection string', () => {
   it('gives up with the error of the server when no spelling works', async () => {
     state.password = 'another-password';
     await expect(openDatabase(raw)).rejects.toMatchObject({ code: '28P01' });
-    expect(state.attempts).toHaveLength(2);
+    expect(state.attempts).toHaveLength(3);
   });
 });

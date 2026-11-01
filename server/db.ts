@@ -86,7 +86,11 @@ function canRepairWithAnotherSpelling(error: unknown): boolean {
   if (describeFailure(error).code === '28P01') return true;
   const message = String((error as { message?: string })?.message ?? '');
   // A raw character in the password can make the string unreadable for the driver.
-  return /invalid url|malformed/i.test(message);
+  if (/invalid url|malformed/i.test(message)) return true;
+  // The host may be the wrong one: the direct connection of a hosted database speaks IPv6
+  // only, and a server without IPv6 cannot reach it.
+  const code = String((error as { code?: string })?.code ?? '');
+  return code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message);
 }
 
 /** The pause between two tries. The pooler counts the failed logins of a user. */
@@ -107,6 +111,8 @@ export interface ConnectionSummary {
   database: string;
   userHash: string;
   passwordLength: number;
+  /** The form of the connection: the shared pooler, the direct connection or something else. */
+  form: ConnectionForm;
   /** The kinds of characters of the password, without the characters themselves. */
   passwordShape: string;
   /** How many characters of the password are of each kind, for example "arabic:7,symbol:3". */
@@ -134,7 +140,7 @@ function characterGroup(character: string): string {
 
 export function describeConnection(rawUrl: string): ConnectionSummary {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
-  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0, passwordShape: '', passwordKinds: '' };
+  const empty = { host: '', port: '', database: '', userHash: '', passwordLength: 0, form: 'other' as ConnectionForm, passwordShape: '', passwordKinds: '' };
   const schemeEnd = url.indexOf('://');
   if (schemeEnd < 0) return empty;
   const authorityStart = schemeEnd + 3;
@@ -167,6 +173,7 @@ export function describeConnection(rawUrl: string): ConnectionSummary {
     database: pathStart < 0 ? '' : (url.slice(pathStart + 1).split('?')[0] ?? ''),
     userHash: createHash('sha256').update(user).digest('hex').slice(0, 12),
     passwordLength: password.length,
+    form: connectionForm(rawUrl),
     passwordShape: [...password].map(characterKind).join(''),
     passwordKinds: [...groups.entries()].map(([group, count]) => `${group}:${count}`).join(','),
   };
@@ -402,6 +409,37 @@ export function usLayoutSpellings(password: string): string[] {
   return spellings;
 }
 
+/** The host of the shared pooler of a Supabase project, and the region it stands for. */
+const SUPABASE_POOLER_HOST = /^aws-\d+-([a-z0-9-]+)\.pooler\.supabase\.com(?::(\d+))?$/;
+/** The host of a direct connection to a Supabase project, and the project it stands for. */
+const SUPABASE_DIRECT_HOST = /^db\.([a-z0-9]+)\.supabase\.co(?::(\d+))?$/;
+
+/** The region of the project. The direct connection of a project does not name it. */
+function projectRegion(): string {
+  const configured = String(process.env.DATABASE_REGION ?? '').trim();
+  return configured || 'eu-north-1';
+}
+
+/** Which form of connection a hosted database uses. */
+export type ConnectionForm = 'pooler' | 'direct' | 'other';
+
+/** The form of the connection that a connection string uses. */
+export function connectionForm(rawUrl: string): ConnectionForm {
+  const url = withoutSslParameters(tidyConnectionString(rawUrl));
+  const schemeEnd = url.indexOf('://');
+  if (schemeEnd < 0) return 'other';
+  const authorityStart = schemeEnd + 3;
+  const pathStart = url.indexOf('/', authorityStart);
+  const authorityEnd = pathStart < 0 ? url.length : pathStart;
+  const authority = url.slice(authorityStart, authorityEnd);
+  const separator = authority.lastIndexOf('@');
+  if (separator < 0) return 'other';
+  const host = authority.slice(separator + 1);
+  if (SUPABASE_POOLER_HOST.test(host)) return 'pooler';
+  if (SUPABASE_DIRECT_HOST.test(host)) return 'direct';
+  return 'other';
+}
+
 export function connectionCandidates(rawUrl: string): string[] {
   const url = withoutSslParameters(tidyConnectionString(rawUrl));
   const schemeEnd = url.indexOf('://');
@@ -425,11 +463,16 @@ export function connectionCandidates(rawUrl: string): string[] {
   } catch {
     decoded = password;
   }
-  const build = (value: string): string => `${url.slice(0, authorityStart)}${user}:${encodeURIComponent(value)}@${host}${url.slice(authorityEnd)}`;
+  const buildUrl = (userName: string, hostName: string, value: string): string =>
+    `${url.slice(0, authorityStart)}${userName}:${encodeURIComponent(value)}@${hostName}${url.slice(authorityEnd)}`;
+  const build = (value: string): string => buildUrl(user, host, value);
   const candidates = [url];
   const add = (value: string): void => {
     const built = build(value);
     if (built !== url && !candidates.includes(built)) candidates.push(built);
+  };
+  const addUrl = (value: string): void => {
+    if (value !== url && !candidates.includes(value)) candidates.push(value);
   };
   // A password that was typed while the keyboard was in Persian holds the Persian letters.
   for (const spelling of usLayoutSpellings(decoded)) add(spelling);
@@ -455,6 +498,21 @@ export function connectionCandidates(rawUrl: string): string[] {
     if (decoded.startsWith(character)) {
       add(`${decoded.slice(character.length)}${character}`);
       add(decoded.slice(character.length));
+    }
+  }
+  // A hosted database has two forms: the direct connection, which only speaks IPv6 on the
+  // free plan, and the shared pooler, which speaks IPv4 and carries the project behind the
+  // name of the user. Whichever form is configured, the other one is worth a try.
+  const pooler = SUPABASE_POOLER_HOST.exec(host);
+  const direct = SUPABASE_DIRECT_HOST.exec(host);
+  if (pooler) {
+    const project = /^postgres\.(.+)$/.exec(user)?.[1] ?? '';
+    if (project) addUrl(buildUrl('postgres', `db.${project}.supabase.co:5432`, decoded));
+  }
+  if (direct) {
+    const project = direct[1] ?? '';
+    if (project) {
+      addUrl(buildUrl(`postgres.${project}`, `aws-0-${projectRegion()}.pooler.supabase.com:5432`, decoded));
     }
   }
   return candidates;
