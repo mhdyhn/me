@@ -48,10 +48,49 @@ export function normalizeDatabaseUrl(rawUrl) {
 }
 
 /**
+ * The US letters that sit on the same key as the Persian ones. A password that was typed while
+ * the keyboard was in Persian comes out with the Persian letters and digits, and the US
+ * spelling is the one that was meant.
+ */
+const PERSIAN_TO_US = {
+  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ف': 'r', 'ق': 't', 'ع': 'y', 'ه': 'u', 'خ': 'i', 'ح': 'o', 'ج': 'p', 'د': '[', 'چ': ']',
+  'ش': 'a', 'س': 's', 'ی': 'd', 'ي': 'd', 'ب': 'f', 'ل': 'g', 'ك': 'l', '،': 'h', 'ؤ': 'j', 'ئ': 'k', '؛': 'l',
+  'ظ': 'z', 'ط': 'x', 'ز': 'c', 'غ': 'v', 'ر': 'b', 'ن': 'n', 'م': 'm', 'و': '.', 'ة': 'h', 'أ': 'a', 'إ': 'i', 'آ': 'a',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '؟': '/', '«': '@',
+};
+
+/** Keys that give the same Persian character, so the US letter behind them is not certain. */
+const PERSIAN_AMBIGUOUS = {
+  '،': [','],
+};
+
+/**
+ * The password as it looks on a US keyboard. The list is empty when the password holds no
+ * Persian character.
+ */
+export function usLayoutSpellings(password) {
+  const characters = [...String(password ?? '')];
+  const primary = characters.map((character) => PERSIAN_TO_US[character] ?? character).join('');
+  if (primary === characters.join('')) return [];
+  const spellings = [primary];
+  for (const [index, character] of characters.entries()) {
+    for (const alternative of PERSIAN_AMBIGUOUS[character] ?? []) {
+      const spelled = characters
+        .map((current, position) => (position === index ? alternative : (PERSIAN_TO_US[current] ?? current)))
+        .join('');
+      if (!spellings.includes(spelled)) spellings.push(spelled);
+    }
+  }
+  return spellings;
+}
+
+/**
  * The connection strings that are worth trying for one configured string: the string itself,
- * the string with the password percent-encoded, and the string with a `@` put back at the end
- * of the password. The password can only lose that character when it is copied into the
- * string by hand.
+ * the string with the password percent-encoded, the string with the password on a US keyboard
+ * and the string with a `@` put back at the end of the password. The password can only lose
+ * that character when it is copied into the string by hand.
  */
 export function connectionCandidates(rawUrl) {
   const url = String(rawUrl ?? '').trim();
@@ -80,6 +119,8 @@ export function connectionCandidates(rawUrl) {
         decoded = password;
       }
       const build = (value) => `${url.slice(0, authorityStart)}${user}:${encodeURIComponent(value)}@${authority.slice(separator + 1)}${url.slice(authorityEnd)}`;
+      // A password that was typed with a Persian keyboard: the US spelling is the one meant.
+      for (const spelling of usLayoutSpellings(decoded)) add(build(spelling));
       if (password.endsWith('@')) {
         // The string has the character twice: the password may be the one without it.
         add(build(decoded.slice(0, -1)));
