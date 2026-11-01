@@ -8,8 +8,8 @@ import { deleteProgramme, listCoachProgrammes, restoreCoachProgramme, saveProgra
 import { emptyPlan, loadDiary, loadPlan, saveDiary, savePlan } from './nutrition.ts';
 import { loadBiometrics, migrateBiometrics, saveBiometrics } from './biometrics.ts';
 import { addMessage } from './chat.ts';
-import { allowTestPurchase, confirmTestPurchase, listTestTransactions, startTestPurchase } from './testPurchases.ts';
-import { createPaymentRequest, isProgramPaid } from './payments.ts';
+import { isProgramPaid } from './payments.ts';
+import { createCardTransferRequest } from './cardTransfer.ts';
 import { applyPersonalChange } from './personalData.ts';
 import { openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
@@ -19,6 +19,7 @@ import { migrateAccountHistory } from './accountHistory.ts';
 import { loadStudentProfileForCoach, revokeStudentProfileSharing, saveStudentProfile, setStudentProfileSharing } from './studentProfile.ts';
 
 const url = process.env.TEST_POSTGRES_URL;
+process.env.CARD_TRANSFER_CARD_NUMBER ??= '6104337812345678';
 const schema = `meety_invite_${randomBytes(10).toString('hex')}`;
 const now = new Date('2026-10-29T09:00:00Z');
 const key = keyFromSecret('postgres-invitation-test-secret');
@@ -99,7 +100,6 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     const coach = await user('coach'); const student = await user('student');
     const refs = [
       ['payment_transactions', 'student_id'], ['payment_transactions', 'coach_id'],
-      ['payment_test_transactions', 'student_id'], ['payment_test_transactions', 'coach_id'],
       ['messages', 'coach_id'], ['messages', 'sender_id'],
       ['admin_coach_messages', 'coach_id'], ['admin_coach_messages', 'sender_id'],
     ];
@@ -119,17 +119,12 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     expect(await db!.query('SELECT id FROM messages WHERE coach_id = $1', [coach.id])).toHaveLength(0);
   }, 30000);
 
-  it.each(['payment_transactions', 'payment_test_transactions'])('does not delete an account while a %s record commits concurrently', async (table) => {
+  it.each(['payment_transactions'])('does not delete an account while a %s record commits concurrently', async (table) => {
     const coach = await user('coach'); const student = await user('student');
     await sql!.query('BEGIN');
     try {
-      if (table === 'payment_transactions') {
-        await sql!.query(`INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at)
-          VALUES ($1, $2, 100, 90, 10, $3, 'paid', $4)`, [student.id, coach.id, `financial-${student.id}`, now.toISOString()]);
-      } else {
-        await sql!.query(`INSERT INTO payment_test_transactions (student_id, coach_id, programme_id, programme_version, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at, expires_at)
-          VALUES ($1, $2, 'offer', 1, 100, 90, 10, $3, 'paid', $4, $4)`, [student.id, coach.id, `test-financial-${student.id}`, now.toISOString()]);
-      }
+      await sql!.query(`INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, created_at)
+        VALUES ($1, $2, 100, 90, 10, $3, 'paid', $4)`, [student.id, coach.id, `financial-${student.id}`, now.toISOString()]);
       const deletion = deleteUser(db!, student.id).then(() => null, (error: unknown) => error);
       await waitForLock('DELETE FROM users');
       await sql!.query('COMMIT');
@@ -195,7 +190,7 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     }
   }, 30000);
 
-  it.each(['program-save', 'program-delete', 'nutrition', 'biometrics', 'chat', 'test-grant'] as const)(
+  it.each(['program-save', 'program-delete', 'nutrition', 'biometrics', 'chat'] as const)(
     'rejects a stale %s that waits for withdrawal, including after reconnection to the same coach', async (mode) => {
       const coach = await user('coach'); const student = await user('student', true);
       const connected = await attach(student, (await issue(coach)).code);
@@ -208,11 +203,10 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
           if (mode === 'program-delete') return deleteProgramme(db!, student.id, coach.id, first.id, first.version, connected.coachAccessVersion);
           if (mode === 'nutrition') return savePlan(db!, student.id, coach.id, emptyPlan(), now.toISOString(), connected.coachAccessVersion);
           if (mode === 'biometrics') return saveBiometrics(db!, student.id, coach.id, { limitations: 'نباید ذخیره شود' }, now.toISOString(), connected.coachAccessVersion);
-          if (mode === 'chat') return addMessage(db!, coach.id, student.id, coach.id, 'نباید ارسال شود', now.toISOString(), null, null, connected.coachAccessVersion);
-          return allowTestPurchase(db!, student.id, { id: first.id, version: first.version }, now, { coachId: coach.id, version: connected.coachAccessVersion, allowRevoked: false });
+          return addMessage(db!, coach.id, student.id, coach.id, 'نباید ارسال شود', now.toISOString(), null, null, connected.coachAccessVersion);
         };
         const stale = execute().then(() => null, (error: unknown) => error);
-        await waitForLock(mode === 'test-grant' ? 'active_program AS MATERIALIZED' : 'relationship AS MATERIALIZED');
+        await waitForLock('relationship AS MATERIALIZED');
         await sql!.query('COMMIT');
         expect(await stale).toMatchObject({ status: 409 });
         const disconnected = (await findUserById(db!, student.id))!;
@@ -241,16 +235,14 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     const edited = await saveProgramme(db!, student.id, coach.id, { ...programme, title: 'ویرایش بدون خرید تازه' }, { mode: 'edit', expectedId: restored.id, expectedVersion: restored.version }, now, connected.coachAccessVersion);
     const secondArchived = (await listCoachProgrammes(db!, student.id, coach.id, null)).programs.find((item) => item.id === second.id)!;
     const secondRestored = await restoreCoachProgramme(db!, student.id, coach.id, second.id, secondArchived.version, edited.id, edited.version, now, connected.coachAccessVersion);
-    await allowTestPurchase(db!, student.id, { id: secondRestored.id, version: secondRestored.version }, now, { coachId: coach.id, version: connected.coachAccessVersion, allowRevoked: false });
-    const checkout = await startTestPurchase(db!, student.id, { id: secondRestored.id, version: secondRestored.version }, now);
-    expect((await confirmTestPurchase(db!, student.id, checkout.authority, 'success', now)).success).toBe(true);
-    expect((await listTestTransactions(db!, now, coach.id))[0]).toMatchObject({ programmeVersion: secondRestored.version, status: 'paid' });
+    await db!.query(`INSERT INTO payment_transactions (student_id, coach_id, amount_tomans, coach_share_tomans, admin_share_tomans, authority, status, ref_id, created_at, programme_id, programme_mapping, gateway_mode)
+      VALUES ($1, $2, 100000, 90000, 10000, $3, 'paid', 'real-reference', $4, $5, 'explicit', 'card_transfer')`, [student.id, coach.id, `paid-second-${student.id}`, now.toISOString(), secondRestored.id]);
     const firstAgain = (await listCoachProgrammes(db!, student.id, coach.id, null)).programs.find((item) => item.id === first.id)!;
     const again = await restoreCoachProgramme(db!, student.id, coach.id, first.id, firstAgain.version, secondRestored.id, secondRestored.version, now, connected.coachAccessVersion);
     expect(again.version).toBeGreaterThan(edited.version);
     await expect(saveProgramme(db!, student.id, coach.id, programme, { mode: 'edit', expectedId: first.id, expectedVersion: restored.version }, now, connected.coachAccessVersion)).rejects.toMatchObject({ status: 409 });
     expect(await isProgramPaid(db!, student.id, first.id)).toBe(true);
-    expect(await db!.query('SELECT * FROM payment_transactions WHERE student_id = $1', [student.id])).toHaveLength(1);
+    expect(await db!.query('SELECT * FROM payment_transactions WHERE student_id = $1', [student.id])).toHaveLength(2);
   }, 30000);
 
   it('rejects restoring an old offer if withdrawal wins the lock', async () => {
@@ -277,7 +269,7 @@ describe.skipIf(!url)('PostgreSQL coach invitations and consent races', () => {
     try {
       const withdrawn = await withdrawCoachAccess(txDb(), connected, { accountId: student.id });
       await returnToPersonalProgram(txDb(), withdrawn, { accountId: student.id });
-      const stale = createPaymentRequest(db!, student.id, 'http://example.test', { id: first.id, version: first.version }, now).then(() => null, (error: unknown) => error);
+      const stale = createCardTransferRequest(db!, student.id, { id: first.id, version: first.version }, now).then(() => null, (error: unknown) => error);
       await waitForLock('current_offer AS MATERIALIZED');
       await sql!.query('COMMIT');
       expect(await stale).toMatchObject({ status: 409 });

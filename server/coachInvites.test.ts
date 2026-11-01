@@ -249,45 +249,7 @@ describe('consent-based coach invitations', () => {
     expect((await call('GET', '/api/admin/transactions', undefined, admin)).json.transactions).toHaveLength(1);
   }, 30000);
 
-  it('applies a late sandbox callback to the old offer and original coach after a coach change', async () => {
-    const a = await account('coach-a', 'coach');
-    const b = await account('coach-b', 'coach');
-    const student = await account('student', 'student', null, true);
-    await accept(student, (await invite(a)).json.code);
-    const input = { title: 'خرید در جریان', priceTomans: 100000, days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
-    const first = (await call('PUT', `/api/students/${student.id}/program`, input, a)).json.program;
-    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, student);
-    expect(checkout.status).toBe(201);
-    await withdraw(student);
-    await accept(student, (await invite(b)).json.code);
-    expect((await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, student)).status).not.toBe(201);
-    const second = (await call('PUT', `/api/students/${student.id}/program`, { ...input, title: 'برنامه جدید', priceTomans: 200000 }, b)).json.program;
-    const result = await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, student);
-    expect(result.json).toMatchObject({ success: true, transaction: { coachId: a.id, studentId: student.id } });
-    expect(result.json.message).toContain('بایگانی');
-    expect((await call('GET', '/api/me/program', undefined, student)).json).toMatchObject({ isPaid: false, program: { id: second.id, days: [] } });
-    expect((await call('GET', '/api/me/programs/archive', undefined, student)).json.programs).toMatchObject([{ id: first.id }]);
-  });
 
-  it('keeps test access explicitly temporary in the archive after switching to a personal programme', async () => {
-    const coach = await account('coach', 'coach');
-    const student = await account('student', 'student', null, true);
-    await accept(student, (await invite(coach)).json.code);
-    const input = { title: 'برنامه آزمایشی', priceTomans: 100000, days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
-    const program = (await call('PUT', `/api/students/${student.id}/program`, input, coach)).json.program;
-    const expected = { expectedId: program.id, expectedVersion: program.version };
-    expect((await call('PUT', `/api/students/${student.id}/test-purchase`, { enabled: true, ...expected }, coach)).status).toBe(200);
-    const checkout = await call('POST', '/api/pay/test/start', expected, student);
-    expect(checkout.status).toBe(201);
-    expect((await call('POST', '/api/pay/test/confirm', { authority: checkout.json.authority, result: 'success' }, student)).json.success).toBe(true);
-    await withdraw(student);
-    await call('POST', '/api/me/personal-program/activate', { accountId: student.id }, student);
-    const archive = (await call('GET', '/api/me/programs/archive', undefined, student)).json.programs;
-    expect(archive).toMatchObject([{ id: program.id, isTestPurchase: true, testPurchaseExpiresAt: expect.any(String) }]);
-    expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
-    clock = new Date(clock.getTime() + 24 * 60 * 60 * 1000);
-    expect((await call('GET', '/api/me/programs/archive', undefined, student)).json.programs).toEqual([]);
-  });
 
   it('allows immediate withdrawal during a workout but blocks the personal-programme switch until it is synced and finished', async () => {
     const coach = await account('coach', 'coach');

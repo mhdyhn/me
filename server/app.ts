@@ -9,10 +9,9 @@ import { normalizeMobile, requireMobile } from './phone.ts';
 import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLink, makeCoachInvitation, previewCoachInvitation, previewCoachRegistrationLink, returnToPersonalProgram, revokeCoachInvitations, revokeCoachRegistrationLink, withdrawCoachAccess } from './coachInvites.ts';
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
-import { calculateCommission, createPaymentRequest, getTransactionByAuthority, isProgramPaid, listAllTransactions, listCoachTransactions, normalizeIban, verifyPayment } from './payments.ts';
+import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
 import { cardTransferConfig, createCardTransferRequest, reviewCardTransfer, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
-import { allowTestPurchase, confirmTestPurchase, getTestMode, listTestTransactions, revokeTestPurchase, setTestMode, startTestPurchase, studentTestPurchasesAvailable, testPurchaseState } from './testPurchases.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -75,10 +74,6 @@ function isAllowedOrigin(origin: string, request: IncomingMessage, configured: S
   } catch {
     return false;
   }
-}
-
-function canViewTransaction(user: StoredUser, transaction: { studentId: number; coachId: number }): boolean {
-  return user.role === 'admin' || (user.role === 'student' && user.id === transaction.studentId) || (user.role === 'coach' && user.id === transaction.coachId);
 }
 
 /** Routes a student may still call before changing a generated password. */
@@ -655,50 +650,7 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       },
     },
 
-    {
-      method: 'GET',
-      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
-      auth: ['coach', 'admin'],
-      handler: async ({ user, params }) => {
-        const student = await ownStudent(user!, Number(params[0]));
-        const programme = student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId);
-        const state = programme ? await testPurchaseState(db, student.id, programme.id, now()) : null;
-        const mode = await getTestMode(db, now());
-        return {
-          status: 200,
-          body: { available: studentTestPurchasesAvailable(), enabled: !!state, purchased: state?.status === 'paid', expiresAt: state?.expires_at ?? null, globalModeEnabled: mode.enabled },
-          headers: { 'Cache-Control': 'no-store' },
-        };
-      },
-    },
 
-    {
-      method: 'PUT',
-      pattern: /^\/api\/students\/(\d+)\/test-purchase$/,
-      auth: ['coach', 'admin'],
-      handler: async ({ user, params, body }) => {
-        const student = await ownStudent(user!, Number(params[0]));
-        const input = requireObject(body);
-        if (typeof input.enabled !== 'boolean') throw new HttpError(400, 'وضعیت آزمایش نامعتبر است.');
-        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
-        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
-          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
-        }
-        const programme = student.coachId === null ? null : await loadProgramme(db, student.id, student.coachId);
-        if (!programme || programme.id !== expectedId || programme.version !== input.expectedVersion) {
-          throw new HttpError(409, 'برنامه تغییر کرده است؛ صفحه را دوباره بارگذاری کنید.');
-        }
-        if (student.coachId === null) throw new HttpError(409, 'مربی این شاگرد مشخص نیست.');
-        const relationship = { coachId: student.coachId, version: student.coachAccessVersion, allowRevoked: user!.role === 'admin' };
-        if (!input.enabled) {
-          await revokeTestPurchase(db, student.id, expectedId, now(), relationship);
-          return { status: 200, body: { enabled: false } };
-        }
-        if (await isProgramPaid(db, student.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
-        const expiresAt = await allowTestPurchase(db, student.id, { id: expectedId, version: input.expectedVersion as number }, now(), relationship);
-        return { status: 200, body: { enabled: true, expiresAt } };
-      },
-    },
 
     {
       method: 'PUT',
@@ -1030,35 +982,7 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
 
     // Payment endpoints
     // Test checkout requires an individual grant or an explicitly enabled global test session.
-    {
-      method: 'POST',
-      pattern: /^\/api\/pay\/test\/start$/,
-      auth: ['student'],
-      handler: async ({ user, body }) => {
-        const input = requireObject(body);
-        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
-        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
-          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
-        }
-        if (await isProgramPaid(db, user!.id, expectedId)) throw new HttpError(409, 'این برنامه قبلاً خریداری شده است.');
-        const checkout = await startTestPurchase(db, user!.id, { id: expectedId, version: input.expectedVersion as number }, now());
-        return { status: 201, body: { simulation: true, ...checkout }, headers: { 'Cache-Control': 'no-store' } };
-      },
-    },
 
-    {
-      method: 'POST',
-      pattern: /^\/api\/pay\/test\/confirm$/,
-      auth: ['student'],
-      handler: async ({ user, body }) => {
-        const input = requireObject(body);
-        const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ آزمایشی');
-        if (!/^TEST-[a-f0-9-]{36}$/.test(authority)) throw new HttpError(400, 'شناسهٔ آزمایشی نامعتبر است.');
-        if (input.result !== 'success' && input.result !== 'cancel') throw new HttpError(400, 'نتیجهٔ آزمایش نامعتبر است.');
-        const result = await confirmTestPurchase(db, user!.id, authority, input.result, now());
-        return { status: 200, body: { simulation: true, ...result }, headers: { 'Cache-Control': 'no-store' } };
-      },
-    },
 
     // A read-only rehearsal: it neither creates transactions nor grants programme access.
     {
@@ -1110,32 +1034,6 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       },
     },
 
-    {
-      method: 'POST',
-      pattern: /^\/api\/pay\/start$/,
-      auth: ['student'],
-      handler: async ({ user, request, url, body }) => {
-        const input = requireObject(body);
-        const expectedId = requireText(input, 'expectedId', 1, 80, 'شناسهٔ برنامه');
-        if (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
-          throw new HttpError(409, 'نسخهٔ برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.');
-        }
-        const configuredOrigin = process.env.PAYMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, '');
-        if (process.env.NODE_ENV === 'production') {
-          try {
-            const publicUrl = new URL(configuredOrigin ?? '');
-            if (publicUrl.protocol !== 'https:' || publicUrl.origin !== configuredOrigin) throw new Error('invalid payment origin');
-          } catch {
-            throw new HttpError(503, 'پرداخت واقعی هنوز آماده نیست؛ برای بررسی از «آزمایش پرداخت» استفاده کنید.');
-          }
-        }
-        const proto = request.headers['x-forwarded-proto'] || 'http';
-        const host = request.headers['x-forwarded-host'] || request.headers.host || url.host;
-        const origin = configuredOrigin || request.headers.origin || `${proto}://${host}`;
-        const result = await createPaymentRequest(db, user!.id, origin, { id: expectedId, version: input.expectedVersion as number }, now());
-        return { status: 201, body: result };
-      },
-    },
 
     {
       method: 'GET',
@@ -1240,49 +1138,8 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       },
     },
 
-    {
-      method: 'POST',
-      pattern: /^\/api\/pay\/verify$/,
-      auth: 'signed-in',
-      handler: async ({ body, user }) => {        const input = requireObject(body);
-        const authority = requireText(input, 'authority', 5, 100, 'شناسه ارجاع پرداخت');
-        const transaction = await getTransactionByAuthority(db, authority);
-        if (!transaction || !canViewTransaction(user!, transaction)) throw new HttpError(404, 'تراکنش یافت نشد.');
-        const status = typeof input.status === 'string' ? input.status : 'OK';
-        const result = await verifyPayment(db, authority, status, now());
-        return { status: 200, body: result };
-      },
-    },
 
-    {
-      method: 'GET',
-      pattern: /^\/api\/pay\/callback$/,
-      auth: 'public',
-      handler: async ({ url }) => {
-        const authority = url.searchParams.get('Authority') || '';
-        const status = url.searchParams.get('Status') || '';
-        if (!authority) throw new HttpError(400, 'شناسه پرداخت یافت نشد.');
-        const result = await verifyPayment(db, authority, status, now());
-        const outcome = result.success ? 'paid' : 'failed';
-        return {
-          status: 302,
-          body: { redirect: `/payment/result?authority=${encodeURIComponent(authority)}&status=${outcome}` },
-          headers: { Location: `/payment/result?authority=${encodeURIComponent(authority)}&status=${outcome}` },
-        };
-      },
-    },
 
-    {
-      method: 'GET',
-      pattern: /^\/api\/pay\/transaction\/([^/]+)$/,
-      auth: 'signed-in',
-      handler: async ({ params, user }) => {
-        const authority = decodeURIComponent(params[0]!);
-        const transaction = await getTransactionByAuthority(db, authority);
-        if (!transaction || !canViewTransaction(user!, transaction)) throw new HttpError(404, 'تراکنش یافت نشد.');
-        return { status: 200, body: { transaction } };
-      },
-    },
 
     {
       method: 'GET',
@@ -1293,7 +1150,6 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
           status: 200,
           body: {
             transactions: await listCoachTransactions(db, user!.id),
-            testTransactions: await listTestTransactions(db, now(), user!.id),
             subscriptionShares: await listCoachSubscriptionShares(db, user!.id),
           },
           headers: { 'Cache-Control': 'no-store' },
@@ -1306,27 +1162,11 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       pattern: /^\/api\/admin\/transactions$/,
       auth: ['admin'],
       handler: async () => {
-        return { status: 200, body: { transactions: await listAllTransactions(db), testTransactions: await listTestTransactions(db, now()) }, headers: { 'Cache-Control': 'no-store' } };
+        return { status: 200, body: { transactions: await listAllTransactions(db) }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
-    {
-      method: 'GET',
-      pattern: /^\/api\/admin\/payment-test-mode$/,
-      auth: ['admin'],
-      handler: async () => ({ status: 200, body: await getTestMode(db, now()), headers: { 'Cache-Control': 'no-store' } }),
-    },
 
-    {
-      method: 'PUT',
-      pattern: /^\/api\/admin\/payment-test-mode$/,
-      auth: ['admin'],
-      handler: async ({ user, body }) => {
-        const input = requireObject(body);
-        if (typeof input.enabled !== 'boolean') throw new HttpError(400, 'وضعیت آزمایش نامعتبر است.');
-        return { status: 200, body: await setTestMode(db, user!.id, input.enabled, now()), headers: { 'Cache-Control': 'no-store' } };
-      },
-    },
 
     {
       method: 'PUT',

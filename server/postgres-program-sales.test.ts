@@ -4,11 +4,13 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { openDatabase, type Db } from './db.ts';
-import { createPaymentRequest, isProgramPaid, verifyPayment } from './payments.ts';
+import { isProgramPaid } from './payments.ts';
+import { createCardTransferRequest } from './cardTransfer.ts';
 import { listPurchasedProgrammes, loadProgramme, saveProgramme, studentProgrammeView, type ProgrammeInput } from './programs.ts';
 import { findUserById } from './users.ts';
 
 const url = process.env.TEST_POSTGRES_URL;
+process.env.CARD_TRANSFER_CARD_NUMBER ??= '6104337812345678';
 const schema = `meety_sales_${randomBytes(10).toString('hex')}`;
 const now = new Date('2026-10-27T12:00:00.000Z');
 const input: ProgrammeInput = { title: 'برنامه یک', priceTomans: 100000, days: [{ name: 'روز اول', exercises: [{ exerciseId: 'squat', name: 'اسکوات', muscle: 'پا', sets: 3, reps: '8-12', restSeconds: 90 }] }] };
@@ -54,26 +56,24 @@ describe.skipIf(!url)('PostgreSQL programme sales and concurrency', () => {
     const current = (await loadProgramme(db!, 2))!;
     const expected = { id: current.id, version: current.version };
     const checkouts = await Promise.all([
-      createPaymentRequest(db!, 2, 'http://test.example', expected, now),
-      createPaymentRequest(db!, 2, 'http://test.example', expected, now),
+      createCardTransferRequest(db!, 2, expected, now),
+      createCardTransferRequest(db!, 2, expected, now),
     ]);
     expect(checkouts[0]!.authority).toBe(checkouts[1]!.authority);
     expect((await db!.query("SELECT id FROM payment_transactions WHERE student_id = 2 AND status = 'pending'"))).toHaveLength(1);
-    expect((await verifyPayment(db!, checkouts[0]!.authority, 'OK', now)).success).toBe(true);
+    await db!.query("UPDATE payment_transactions SET status = 'paid', ref_id = '123456' WHERE authority = $1", [checkouts[0]!.authority]);
     expect(await isProgramPaid(db!, 2, current.id)).toBe(true);
     expect(await isProgramPaid(db!, 2, first.id)).toBe(false);
     await saveProgramme(db!, 2, 1, { ...input, title: 'برنامه بعدی' }, {
       mode: 'new', expectedId: current.id, expectedVersion: current.version,
     }, now);
-    const archive = await listPurchasedProgrammes(db!, 2, null);
+    const archive = await listPurchasedProgrammes(db!, 2, null, now);
     expect(archive.programs.map((program) => program.id)).toContain(current.id);
   }, 30000);
 
   it('keeps production entitlements and relationship guards in the single-query view', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
-    vi.stubEnv('STUDENT_TEST_PURCHASES', 'on');
-    try {
+      try {
       const student = (await findUserById(db!, 2))!;
       const current = (await loadProgramme(db!, 2))!;
       expect(await studentProgrammeView(db!, student, now)).toMatchObject({ isPaid: false, program: { id: current.id, days: [] } });

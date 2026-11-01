@@ -10,9 +10,6 @@ export interface AssignedMeta {
   priceTomans: number;
   coachName: string | null;
   isPaid: boolean;
-  isTestPurchase?: boolean;
-  testPurchaseAvailable?: boolean;
-  testPurchaseExpiresAt?: string | null;
   /** The student can pay by card transfer instead of the online gateway. */
   cardTransferAvailable?: boolean;
 }

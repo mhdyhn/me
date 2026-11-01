@@ -102,24 +102,6 @@ describe('coach programme builder', () => {
     expect(screen.getByText('سهم مدیر · ۱۰٪')).toBeInTheDocument();
   });
 
-  it('requires coach confirmation before granting a single student temporary test purchase access', async () => {
-    const sent = mockApi({ title: 'برنامهٔ پولی', priceTomans: 250000, updatedAt: 'x', days: [] });
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    renderBuilder();
-    const user = userEvent.setup();
-    await screen.findByLabelText('عنوان برنامه');
-    await user.click(screen.getByText('خرید آزمایشی برای این شاگرد'));
-    expect(screen.getByText(/تمرین‌هایی که در حساب شاگرد ثبت شوند/)).toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: 'اجازهٔ خرید آزمایشی برای این شاگرد' }));
-    expect(confirm).toHaveBeenCalledOnce();
-    expect((await screen.findByRole('status'))).toHaveTextContent('برای این شاگرد فعال است');
-    const grants = sent.filter((call) => call.path === '/api/students/3/test-purchase' && call.method === 'PUT');
-    expect(grants[0]?.body).toEqual({ enabled: true, expectedId: 'program-1', expectedVersion: 1 });
-    await user.click(screen.getByRole('button', { name: 'پایان دسترسی آزمایشی' }));
-    expect(sent.filter((call) => call.path === '/api/students/3/test-purchase' && call.method === 'PUT')[1]?.body)
-      .toEqual({ enabled: false, expectedId: 'program-1', expectedVersion: 1 });
-    confirm.mockRestore();
-  });
 
   it('offers an explicitly read-only payment rehearsal for the saved programme', async () => {
     const sent = mockApi({ title: 'برنامهٔ پولی', priceTomans: 250000, updatedAt: 'x', days: [] });
@@ -129,9 +111,9 @@ describe('coach programme builder', () => {
     await user.click(screen.getByText('تنظیمات قیمت'));
     await user.clear(screen.getByLabelText('هزینهٔ برنامه (تومان)'));
     await user.type(screen.getByLabelText('هزینهٔ برنامه (تومان)'), '300000');
-    await user.click(screen.getByText('آزمایش پرداخت بدون درگاه'));
-    expect(screen.getByText(/تغییرات ذخیره‌نشده در آزمایش لحاظ نمی‌شوند/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'شروع آزمایش پرداخت' }));
+    await user.click(screen.getByText('پیش‌نمایش سهم مربی'));
+    expect(screen.getByText(/تغییرات ذخیره‌نشده در پیش‌نمایش لحاظ نمی‌شوند/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'نمایش سهم' }));
     expect(await screen.findByText(/مبلغ برنامه:/)).toHaveTextContent('۲۵۰٬۰۰۰ تومان');
     expect(sent.find((call) => call.path === '/api/pay/practice')?.body).toEqual({ expectedId: 'program-1', expectedVersion: 1, studentId: 3 });
     expect(sent.some((call) => call.path === '/api/pay/start')).toBe(false);

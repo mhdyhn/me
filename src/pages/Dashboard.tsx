@@ -169,7 +169,7 @@ export function Dashboard() {
               action={<button className="button button--primary" type="button" onClick={() => void loadAssignedProgram()}>تلاش دوباره <RefreshCw size={15} /></button>}
             />
           </section>
-        ) : !personal && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid && !assignedMeta.isTestPurchase ? (
+        ) : !personal && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid ? (
           <section className="dashboard-no-program panel-card">
             <EmptyState
               title="برنامهٔ مربی آماده است"

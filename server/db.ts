@@ -11,7 +11,6 @@ import { migrateSubscriptions } from './subscriptions.ts';
 import { migrateBiometrics } from './biometrics.ts';
 import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
-import { migrateTestPurchases } from './testPurchases.ts';
 import { migrateRegistration } from './registration.ts';
 import { migrateAccountHistory } from './accountHistory.ts';
 
@@ -683,7 +682,6 @@ async function migrate(db: Db): Promise<void> {
   await migratePayments(db);
   await migrateCardTransfers(db);
   await migrateSubscriptions(db);
-  await migrateTestPurchases(db);
   await migrateBiometrics(db);
   await migrateStudentProfiles(db);
   await migratePersonalData(db);

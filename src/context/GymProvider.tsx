@@ -3,7 +3,7 @@ import { blankNutritionGoals, blankProfile, localizeKnownProfileCopy } from '../
 import { db } from '../lib/db';
 import { PERSONAL_DATA_APPLIED, notifyPersonalDataApplied, notifyPersonalDataChanged } from '../lib/personalSyncEvents';
 import { DraftChangedError, requireUnchanged } from '../lib/draftGuard';
-import { getAssignedMeta, getWorkoutTemplate, isProgramReadOnly } from '../lib/programStore';
+import { getWorkoutTemplate } from '../lib/programStore';
 import { isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
 import { getStoredUser } from '../lib/api';
 import { dateInputValue } from '../lib/format';
@@ -139,14 +139,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const template = getWorkoutTemplate(templateId);
     if (!template) return null;
 
-    const assigned = isProgramReadOnly() ? getAssignedMeta() : null;
     const session: WorkoutSession = {
       id: newId(),
       templateId,
-      // A temporary test keeps only the offer/version, not a permanent paid prescription.
-      ...(assigned?.isTestPurchase
-        ? { templateReference: { programmeId: assigned.id, version: assigned.version } }
-        : { templateSnapshot: structuredClone(template) }),
+      templateSnapshot: structuredClone(template),
       name: template.name,
       startedAt: new Date().toISOString(),
       status: 'active',

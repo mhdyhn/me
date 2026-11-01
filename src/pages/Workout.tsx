@@ -169,7 +169,7 @@ export function Workout() {
   if (!template) {
     if (loading || programLoadState === 'loading') return <div className="workout-loading"><span className="loader-dot" /><p>در حال آماده‌سازی جلسه…</p></div>;
     if (activeSession?.templateId === templateId) return <div className="page-stack">
-      <EmptyState title="برنامهٔ اصلی این جلسه در دسترس نیست" detail="ممکن است جلسهٔ قدیمی قبل از ذخیرهٔ نسخهٔ برنامه شروع شده یا دسترسی آزمایشی پایان یافته باشد. برای جلوگیری از ثبت روی برنامهٔ اشتباه، ادامهٔ خودکار ممکن نیست. ست‌های ثبت‌شده محفوظ‌اند." action={<Link to="/progress" className="button button--secondary">دیدن سوابق</Link>} />
+      <EmptyState title="برنامهٔ اصلی این جلسه در دسترس نیست" detail="ممکن است جلسهٔ قدیمی قبل از ذخیرهٔ نسخهٔ برنامه شروع شده باشد. برای جلوگیری از ثبت روی برنامهٔ اشتباه، ادامهٔ خودکار ممکن نیست. ست‌های ثبت‌شده محفوظ‌اند." action={<Link to="/progress" className="button button--secondary">دیدن سوابق</Link>} />
       {formError && <p className="form-error" role="alert">{formError}</p>}
       <button type="button" className="button button--primary" onClick={async () => {
         const confirmed = await confirmModal({ title: 'بستن جلسه با ست‌های ثبت‌شده', message: 'جلسه با همین ست‌های موجود ثبت می‌شود. حرکت‌ها یا ست‌های باقیمانده تکمیل‌شده محسوب نمی‌شوند. ادامه می‌دهی؟', confirmText: 'ثبت و بستن جلسه', cancelText: 'انصراف' });

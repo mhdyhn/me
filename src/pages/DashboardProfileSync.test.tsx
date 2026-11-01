@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 const mocks = vi.hoisted(() => ({
   loadAssignedProgram: vi.fn(),
   programLoadState: 'loading' as 'idle' | 'loading' | 'ready' | 'error',
-  assignedMeta: null as null | { priceTomans: number; isPaid: boolean; isTestPurchase: boolean },
+  assignedMeta: null as null | { priceTomans: number; isPaid: boolean },
   activeSession: null as null | { templateId: string; name: string; exercises: never[] },
 }));
 
@@ -71,7 +71,7 @@ describe('student dashboard program loading', () => {
 
   it('does not describe a locked paid programme as missing', () => {
     mocks.programLoadState = 'ready';
-    mocks.assignedMeta = { priceTomans: 100000, isPaid: false, isTestPurchase: false };
+    mocks.assignedMeta = { priceTomans: 100000, isPaid: false };
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
     expect(screen.getByText('برنامهٔ مربی آماده است')).toBeInTheDocument();

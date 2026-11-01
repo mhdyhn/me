@@ -62,7 +62,6 @@ export async function loadAssignedProgram(): Promise<void> {
   try {
     const result = await api<{
       program: Programme | null; coachName?: string | null; isPaid?: boolean;
-      isTestPurchase?: boolean; testPurchaseAvailable?: boolean; testPurchaseExpiresAt?: string | null;
       cardTransferAvailable?: boolean;
     }>('GET', '/me/program');
     if (!stillCurrent()) return;
@@ -73,12 +72,8 @@ export async function loadAssignedProgram(): Promise<void> {
       const program = result.program;
       if (!program || typeof program.id !== 'string' || !program.id || !Number.isSafeInteger(program.version) || program.version < 0 ||
           typeof program.title !== 'string' || !Array.isArray(program.days)) throw new Error('برنامهٔ دریافتی معتبر نیست.');
-      const isTestPurchase = result.isTestPurchase === true;
-      if (isTestPurchase && (typeof result.testPurchaseExpiresAt !== 'string' || !Number.isFinite(Date.parse(result.testPurchaseExpiresAt)))) {
-        throw new Error('اعتبار دسترسی آزمایشی معتبر نیست.');
-      }
       // Validate the entire open programme before changing any visible metadata.
-      const templates = result.isPaid || isTestPurchase ? assignedToTemplates(program) : [];
+      const templates = result.isPaid ? assignedToTemplates(program) : [];
       setAssignedMeta({
         id: result.program.id,
         version: result.program.version,
@@ -86,9 +81,6 @@ export async function loadAssignedProgram(): Promise<void> {
         priceTomans: result.program.priceTomans ?? 0,
         coachName: result.coachName ?? null,
         isPaid: result.isPaid,
-        isTestPurchase,
-        testPurchaseAvailable: result.testPurchaseAvailable === true,
-        testPurchaseExpiresAt: result.testPurchaseExpiresAt ?? null,
         cardTransferAvailable: result.cardTransferAvailable === true,
       });
       setAssignedProgram(templates);

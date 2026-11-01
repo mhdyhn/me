@@ -21,8 +21,6 @@ const clock = new Date('2026-10-29T12:00:00Z');
 
 beforeAll(async () => {
   vi.stubEnv('NODE_ENV', 'production');
-  vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
-  vi.stubEnv('STUDENT_TEST_PURCHASES', 'on');
   db = await openDatabase('memory');
   const common = { passwordHash: 'synthetic', mustChangePassword: false, now: clock };
   const admin = await insertUser(db, { ...common, username: 'admin', role: 'admin', displayName: 'مدیر', coachId: null });
@@ -83,7 +81,7 @@ describe('bounded database round trips and entitlement safety', () => {
     const result = await get('/api/me/program', tokens.student!);
     expect(result.queries).toBe(2);
     expect(result.headers.get('cache-control')).toBe('no-store');
-    expect(result.json).toMatchObject({ coachName: 'مربی', isPaid: false, testPurchaseAvailable: false, program: { id: programmeId, days: [] } });
+    expect(result.json).toMatchObject({ coachName: 'مربی', isPaid: false, program: { id: programmeId, days: [] } });
     expect((await get('/api/me/program', tokens.independent!))).toMatchObject({ queries: 1, json: { program: null, isPaid: true } });
   });
 

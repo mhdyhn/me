@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
 import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
@@ -15,6 +15,8 @@ let base: string;
 const clock = new Date('2026-10-13T08:00:00Z');
 
 beforeEach(async () => {
+  vi.stubEnv('CARD_TRANSFER_CARD_NUMBER', '6037999912345678');
+  vi.stubEnv('CARD_TRANSFER_VERIFY_URL', '');
   db = await openDatabase('memory');
   await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
   server = createServer(createApp({ db, now: () => clock, secretKey: keyFromSecret('test-secret-for-the-suite') }));
@@ -25,6 +27,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
+  vi.unstubAllEnvs();
 });
 
 async function call(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: Json }> {
@@ -111,12 +114,12 @@ describe('student programme', () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);
     const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
-    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    const checkout = await call('POST', '/api/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
     expect(checkout.status).toBe(201);
-    // A second device gets the same pending checkout, not a second charge request.
-    const again = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    // A second device gets the same pending request, not a second charge request.
+    const again = await call('POST', '/api/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
     expect(again.json.authority).toBe(checkout.json.authority);
-    expect((await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: checkout.json.authority, trackingNumber: '11223344' }, pupil.token)).json.success).toBe(true);
     const edit = await call('PUT', `/api/students/${pupil.id}/program`, {
       ...goodProgramme, title: 'اصلاح برنامه', priceTomans: 150000, saveMode: 'edit', expectedId: first.id, expectedVersion: first.version,
     }, coachToken);
@@ -137,11 +140,11 @@ describe('student programme', () => {
     expect(archive.json.programs[0].days).toHaveLength(1);
     const secondPupil = await student(coachToken);
     expect((await call('GET', '/api/me/programs/archive', undefined, secondPupil.token)).json.programs).toEqual([]);
-    expect((await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token)).status).toBe(409);
-    const second = await call('POST', '/api/pay/start', { expectedId: next.json.program.id, expectedVersion: next.json.program.version }, pupil.token);
+    expect((await call('POST', '/api/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token)).status).toBe(409);
+    const second = await call('POST', '/api/pay/card-transfer/start', { expectedId: next.json.program.id, expectedVersion: next.json.program.version }, pupil.token);
     expect(second.status).toBe(201);
     expect(second.json.authority).not.toBe(checkout.json.authority);
-    expect((await call('POST', '/api/pay/verify', { authority: second.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: second.json.authority, trackingNumber: '55667788' }, pupil.token)).json.success).toBe(true);
     expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(true);
   });
 
@@ -149,15 +152,20 @@ describe('student programme', () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);
     const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
-    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    const checkout = await call('POST', '/api/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
     expect(checkout.status).toBe(201);
     const edited = (await call('PUT', `/api/students/${pupil.id}/program`, {
       ...goodProgramme, priceTomans: 200000, saveMode: 'edit', expectedId: first.id, expectedVersion: first.version,
     }, coachToken)).json.program;
-    const retry = await call('POST', '/api/pay/start', { expectedId: edited.id, expectedVersion: edited.version }, pupil.token);
-    expect(retry.status).toBe(409);
-    expect(retry.json.error).toContain('پرداخت تکراری');
-    expect((await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token)).json.success).toBe(true);
+    const retry = await call('POST', '/api/pay/card-transfer/start', { expectedId: edited.id, expectedVersion: edited.version }, pupil.token);
+    expect(retry.status).toBe(201);
+    // The student must never pay the old amount: the old request is void and a new one is issued.
+    expect(retry.json.priceTomans).toBe(200000);
+    expect(retry.json.authority).not.toBe(checkout.json.authority);
+    expect((await db.query('SELECT status FROM payment_transactions WHERE authority = $1', [checkout.json.authority]))[0].status).toBe('expired');
+    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: checkout.json.authority, trackingNumber: '99887766' }, pupil.token)).status).toBe(409);
+    const paid = await call('POST', '/api/pay/card-transfer/receipt', { authority: retry.json.authority, trackingNumber: '99887766' }, pupil.token);
+    expect(paid.json.success).toBe(true);
     expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(true);
   });
 
@@ -165,15 +173,14 @@ describe('student programme', () => {
     const coachToken = await coach();
     const pupil = await student(coachToken);
     const first = (await call('PUT', `/api/students/${pupil.id}/program`, { ...goodProgramme, priceTomans: 100000 }, coachToken)).json.program;
-    const checkout = await call('POST', '/api/pay/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
+    const checkout = await call('POST', '/api/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, pupil.token);
     expect(checkout.status).toBe(201);
     const next = await call('PUT', `/api/students/${pupil.id}/program`, {
       ...goodProgramme, title: 'برنامهٔ بعدی', priceTomans: 300000, saveMode: 'new', expectedId: first.id, expectedVersion: first.version,
     }, coachToken);
     expect(next.status).toBe(200);
-    const verified = await call('POST', '/api/pay/verify', { authority: checkout.json.authority, status: 'OK' }, pupil.token);
-    expect(verified.json.success).toBe(true);
-    expect(verified.json.message).toContain('بایگانی');
+    const confirmed = await call('POST', '/api/pay/card-transfer/receipt', { authority: checkout.json.authority, trackingNumber: '99887766' }, pupil.token);
+    expect(confirmed.json.success).toBe(true);
     expect((await call('GET', '/api/me/program', undefined, pupil.token)).json.isPaid).toBe(false);
     const archive = await call('GET', '/api/me/programs/archive', undefined, pupil.token);
     expect(archive.json.programs).toHaveLength(1);

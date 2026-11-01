@@ -50,8 +50,6 @@ export interface Programme {
   days: ProgramDay[];
   priceTomans?: number;
   updatedAt: string;
-  isTestPurchase?: boolean;
-  testPurchaseExpiresAt?: string | null;
 }
 
 export interface PaymentTransaction {

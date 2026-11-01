@@ -42,8 +42,6 @@ const StudentChat = lazy(() => import('./pages/account/Chat').then((module) => (
 const CoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachChat })));
 const CoachAdminChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.CoachAdminChat })));
 const AdminCoachChat = lazy(() => import('./pages/account/Chat').then((module) => ({ default: module.AdminCoachChat })));
-const PaymentResult = lazy(() => import('./pages/account/PaymentResult').then((module) => ({ default: module.PaymentResult })));
-const SandboxPay = lazy(() => import('./pages/account/SandboxPay').then((module) => ({ default: module.SandboxPay })));
 const CoachTransactions = lazy(() => import('./pages/account/Transactions').then((module) => ({ default: module.CoachTransactions })));
 const AdminTransactions = lazy(() => import('./pages/account/Transactions').then((module) => ({ default: module.AdminTransactions })));
 const AssignedMovementGate = lazy(() => import('./pages/account/StudentProgram').then((module) => ({ default: module.AssignedMovementGate })));
@@ -106,9 +104,6 @@ export function App() {
             <Route path="coach/chat" element={signedIn(<ForRoles roles={['coach']}><CoachAdminChat /></ForRoles>)} />
             <Route path="coach/students/:studentId/chat" element={signedIn(<ForRoles roles={['coach']}><CoachChat /></ForRoles>)} />
             <Route path="coach/coaches/:coachId/chat" element={signedIn(<ForRoles roles={['admin']}><AdminCoachChat /></ForRoles>)} />
-            <Route path="payment/result" element={<PaymentResult />} />
-            <Route path="payment/callback" element={<PaymentResult />} />
-            <Route path="payment/sandbox-pay" element={<SandboxPay />} />
             <Route element={signedIn(<Layout />)}>
               <Route index element={<RoleHome />} />
               <Route path="my-program" element={<Navigate to="/program" replace />} />

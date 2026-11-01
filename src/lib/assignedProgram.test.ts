@@ -4,8 +4,8 @@ import { getActiveProgram, getAssignedMeta, getAssignedProgramLoadState, isProgr
 
 const program = { id: 'offer', version: 1, title: 'برنامه', priceTomans: 100000, updatedAt: '2026-10-28', days: [{ name: 'روز اول', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-const openTestAccess = { program, isPaid: false, isTestPurchase: true, testPurchaseExpiresAt: '2026-10-29T12:00:00Z' };
-const locked = { program: { ...program, days: [] }, isPaid: false, testPurchaseAvailable: false };
+const openAccess = { program, isPaid: true };
+const locked = { program: { ...program, days: [] }, isPaid: false };
 
 beforeEach(() => {
   window.localStorage.setItem('meety.session-token', 'first-student-token');
@@ -23,7 +23,7 @@ describe('assigned programme response ordering', () => {
   it('fails closed on a malformed response instead of showing an empty or unlocked programme', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      for (const invalid of [{}, { program, isPaid: undefined }, { program: { ...program, days: null }, isPaid: true }, { program, isPaid: false, isTestPurchase: true }]) {
+      for (const invalid of [{}, { program, isPaid: undefined }, { program: { ...program, days: null }, isPaid: true }]) {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(invalid)));
         await loadAssignedProgram();
         expect(getAssignedProgramLoadState()).toBe('error');
@@ -39,10 +39,10 @@ describe('assigned programme response ordering', () => {
     vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(oldResponse).mockResolvedValueOnce(response(locked)));
     const oldRequest = loadAssignedProgram();
     await loadAssignedProgram();
-    expect(getAssignedMeta()).toMatchObject({ isPaid: false, isTestPurchase: false });
-    resolveOld(response(openTestAccess));
+    expect(getAssignedMeta()).toMatchObject({ isPaid: false });
+    resolveOld(response(openAccess));
     await oldRequest;
-    expect(getAssignedMeta()).toMatchObject({ isPaid: false, isTestPurchase: false });
+    expect(getAssignedMeta()).toMatchObject({ isPaid: false });
     expect(getActiveProgram()).toEqual([]);
   });
 
@@ -53,7 +53,7 @@ describe('assigned programme response ordering', () => {
     cancelAssignedProgramLoad();
     setAssignedMeta(null);
     setActiveProgram([]);
-    resolveOld(response(openTestAccess));
+    resolveOld(response(openAccess));
     await request;
     expect(isProgramReadOnly()).toBe(false);
     expect(getAssignedMeta()).toBeNull();
@@ -65,7 +65,7 @@ describe('assigned programme response ordering', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveOld = resolve; })));
     const oldRequest = loadAssignedProgram();
     window.localStorage.setItem('meety.session-token', 'other-student-token');
-    resolveOld(response(openTestAccess));
+    resolveOld(response(openAccess));
     await oldRequest;
     expect(getAssignedMeta()).toBeNull();
     expect(getActiveProgram()).toEqual([]);

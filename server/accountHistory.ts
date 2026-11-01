@@ -14,10 +14,10 @@ export async function migrateAccountHistory(db: Db): Promise<void> {
         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
         WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass AND c.confdeltype = 'c'
           AND array_length(c.conkey, 1) = 1 AND (
-            (c.conrelid = 'payment_transactions'::regclass AND a.attname IN ('student_id', 'coach_id')) OR
-            (c.conrelid = 'payment_test_transactions'::regclass AND a.attname IN ('student_id', 'coach_id')) OR
-            (c.conrelid = 'messages'::regclass AND a.attname IN ('coach_id', 'sender_id')) OR
-            (c.conrelid = 'admin_coach_messages'::regclass AND a.attname IN ('coach_id', 'sender_id'))
+            (c.conrelid::regclass::text = 'payment_transactions' AND a.attname IN ('student_id', 'coach_id')) OR
+            (c.conrelid::regclass::text = 'payment_test_transactions' AND a.attname IN ('student_id', 'coach_id')) OR
+            (c.conrelid::regclass::text = 'messages' AND a.attname IN ('coach_id', 'sender_id')) OR
+            (c.conrelid::regclass::text = 'admin_coach_messages' AND a.attname IN ('coach_id', 'sender_id'))
           )
       LOOP
         EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);

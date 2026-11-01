@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
 import { ApiError, api, type PaymentTransaction, type TransactionsResponse } from '../../lib/api';
-import { confirmModal } from '../../components/ConfirmModal';
 import { useSession } from '../../context/SessionContext';
 import { PaymentPractice } from '../../components/PaymentPractice';
 import { faNumber } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
 
-type TestMode = { available: boolean; enabled: boolean; expiresAt: string | null };
 
 function useFinancialReport(path: string) {
   const [report, setReport] = useState<TransactionsResponse | null>(null);
@@ -88,7 +86,6 @@ function CoachTransactionsView() {
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!report && !loadError && <p className="account-muted">در حال بارگذاری تراکنش‌ها…</p>}
       {report && <>
-        <FinancialReport transactions={report.testTransactions ?? []} isCoach simulation />
         <FinancialReport transactions={report.transactions} isCoach />
         {report.subscriptionShares && report.subscriptionShares.length > 0 && (
           <section className="panel-card financial-report" aria-label="سهم اشتراک معرفی‌شده">
@@ -124,7 +121,7 @@ function CoachTransactionsView() {
           <CreditCard size={18} /> شماره شبای تسویه حساب
         </h3>
         <p className="account-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
-          ثبت شبا به‌تنهایی به معنی واریز وجه نیست. تسهیم و تسویهٔ بانکی باید پس از اتصال درگاه و بررسی قرارداد آن تأیید شوند؛ سهم پیش‌فرض مربی ۹۰٪ است و می‌تواند در تنظیمات سرور تغییر کند.
+          ثبت شبا به‌تنهایی به معنی واریز وجه نیست. تسهیم و تسویهٔ بانکی باید پس از بررسی واریز توسط مدیر انجام شود؛ سهم پیش‌فرض مربی ۹۰٪ است و می‌تواند در تنظیمات سرور تغییر کند.
         </p>
         <form className="iban-form" onSubmit={(e) => void onSaveIban(e)}>
           <label className="iban-form__field"><span>شماره شبای بانکی</span>
@@ -155,12 +152,10 @@ function AdminTransactionsView() {
   return (
     <PanelPage title="تراکنش‌های کل باشگاه">
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> مربی‌ها</Link>
-      <TestModeControl onChanged={refresh} />
       <button type="button" className="button button--secondary financial-refresh" disabled={loading} onClick={() => void refresh()}>{loading ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی گزارش مالی'}</button>
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!report && !loadError && <p className="account-muted">در حال بارگذاری تراکنش‌ها…</p>}
       {report && <>
-        <FinancialReport transactions={report.testTransactions ?? []} isCoach={false} simulation />
         <FinancialReport transactions={report.transactions} isCoach={false} />
       </>}
       <SampleCalculation />
@@ -168,108 +163,24 @@ function AdminTransactionsView() {
   );
 }
 
-function TestModeControl({ onChanged }: { onChanged: () => Promise<void> }) {
-  const [mode, setMode] = useState<TestMode | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const requestId = useRef(0);
-
-  async function load() {
-    const current = ++requestId.current;
-    try {
-      const result = await api<TestMode>('GET', '/admin/payment-test-mode');
-      if (current === requestId.current) { setMode(result); setError(null); }
-    } catch (caught) {
-      if (current === requestId.current) setError(caught instanceof ApiError ? caught.message : 'وضعیت آزمایش بارگذاری نشد.');
-    }
-  }
-
-  useEffect(() => {
-    void load();
-    const refresh = () => void load();
-    window.addEventListener('focus', refresh);
-    return () => { requestId.current += 1; window.removeEventListener('focus', refresh); };
-  }, []);
-
-  useEffect(() => {
-    if (!mode?.enabled || !mode.expiresAt) return;
-    const delay = Date.parse(mode.expiresAt) - Date.now();
-    if (!Number.isFinite(delay) || delay <= 0) return;
-    const timer = window.setTimeout(() => void load(), delay + 250);
-    return () => window.clearTimeout(timer);
-  }, [mode?.enabled, mode?.expiresAt]);
-
-  async function change(enabled: boolean) {
-    const accepted = await confirmModal(enabled ? {
-      title: 'فعال‌کردن آزمایش سراسری',
-      message: 'تا ۲۴ ساعت همهٔ شاگردان می‌توانند برنامهٔ پولی خود را بدون پرداخت بانکی آزمایشی باز کنند. از حساب‌های آزمایشی استفاده کنید؛ تمرین‌های ثبت‌شده دادهٔ واقعی حساب هستند. گزارش مالی آزمایشی جدا از واقعی است. ادامه می‌دهید؟',
-      confirmText: 'فعال‌کردن آزمایش سراسری', cancelText: 'انصراف', variant: 'warning',
-    } : {
-      title: 'پایان آزمایش سراسری',
-      message: 'دسترسی‌هایی که از حالت سراسری گرفته شده‌اند قطع می‌شوند؛ گزارش آزمایشی باقی می‌ماند. مجوزهای فردی مربیان جداگانه معتبر می‌مانند. ادامه می‌دهید؟',
-      confirmText: 'پایان آزمایش سراسری', cancelText: 'انصراف', variant: 'warning',
-    });
-    if (!accepted) return;
-    setBusy(true);
-    setError(null);
-    requestId.current += 1;
-    try {
-      const result = await api<TestMode>('PUT', '/admin/payment-test-mode', { enabled });
-      requestId.current += 1;
-      setMode(result);
-      void onChanged();
-    } catch (caught) {
-      setMode(null);
-      setError(caught instanceof ApiError && caught.status !== 0 ? caught.message : 'نتیجهٔ درخواست مشخص نیست؛ وضعیت را دوباره بررسی کنید.');
-      void load();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="panel-card test-mode-card" aria-label="مدیریت آزمایش سراسری خرید">
-      <h2>حالت آزمایشی خرید</h2>
-      <p>برای تست مانند خرید معمول، بدون درگاه بانکی؛ نتیجه در گزارش مالی آزمایشی مربی و مدیر ثبت می‌شود.</p>
-      <p><strong>هشدار:</strong> در حالت سراسری همهٔ شاگردان می‌توانند برنامهٔ پولی خود را بدون پول باز کنند. فقط هنگام آزمایش و ترجیحاً با حساب‌های آزمایشی روشن کنید.</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {!mode && !error && <p>در حال بررسی وضعیت…</p>}
-      {!mode && error && <button type="button" className="button button--secondary" onClick={() => void load()}>بررسی دوباره</button>}
-      {mode && !mode.available && <p role="status">آزمایش با تنظیم شناسهٔ درگاه واقعی یا غیرفعال‌شدن آن در سرور در دسترس نیست.</p>}
-      {mode?.available && (mode.enabled ? <>
-        <p role="status">آزمایش سراسری روشن است{mode.expiresAt ? ` تا ${new Date(mode.expiresAt).toLocaleString('fa-IR')}` : ''}؛ سپس خودکار پایان می‌یابد.</p>
-        <button type="button" className="button button--secondary" disabled={busy} onClick={() => void change(false)}>{busy ? 'در حال ثبت…' : 'پایان آزمایش سراسری'}</button>
-      </> : <>
-        <p role="status">آزمایش سراسری خاموش است. مجوز فردی مربی همچنان جداگانه قابل استفاده است.</p>
-        <button type="button" className="button button--secondary" disabled={busy} onClick={() => void change(true)}>{busy ? 'در حال ثبت…' : 'فعال‌کردن آزمایش سراسری'}</button>
-      </>)}
-    </section>
-  );
-}
-
-function FinancialReport({ transactions, isCoach, simulation = false }: { transactions: PaymentTransaction[]; isCoach: boolean; simulation?: boolean }) {
+function FinancialReport({ transactions, isCoach }: { transactions: PaymentTransaction[]; isCoach: boolean }) {
   const paid = transactions.filter((t) => t.status === 'paid');
   const volume = paid.reduce((sum, t) => sum + t.amountTomans, 0);
   const coachShare = paid.reduce((sum, t) => sum + t.coachShareTomans, 0);
   const adminShare = paid.reduce((sum, t) => sum + t.adminShareTomans, 0);
-  const prefix = simulation ? 'آزمایشی' : 'واقعی';
   return (
-    <section className={simulation ? 'financial-report financial-report--test' : 'financial-report'} aria-label={`گزارش مالی ${prefix}`}>
-      <h2>گزارش مالی {prefix}</h2>
-      <p className="account-muted">{simulation
-        ? 'خریدهای آزمایشی با همان مبلغ و درصد سهم محاسبه می‌شوند؛ هیچ پولی جابه‌جا نشده و این اعداد در جمع واقعی نیستند.'
-        : 'این اعداد بر اساس تراکنش‌های ثبت‌شدهٔ موفق‌اند و به‌تنهایی تأیید واریز یا تسویهٔ بانکی نیستند.'}</p>
-      {simulation && <p className="account-muted">خریدهای آزمایشی قدیمی که پیش از ایجاد این گزارش انجام شده‌اند، اطلاعات مالی قابل بازیابی ندارند.</p>}
+    <section className="financial-report" aria-label="گزارش مالی">
+      <h2>گزارش مالی</h2>
+      <p className="account-muted">این اعداد بر اساس تراکنش‌های ثبت‌شدهٔ موفق‌اند و به‌تنهایی تأیید واریز یا تسویهٔ بانکی نیستند.</p>
       <div className="financial-report__stats">
-        {!isCoach && <Metric label={`کل مبلغ ${prefix}`} value={`${faNumber(volume)} تومان`} />}
-        {isCoach && simulation && <Metric label="کل خرید آزمایشی موفق شاگردان" value={`${faNumber(volume)} تومان`} />}
-        {!isCoach && <Metric label={`سهم ${prefix} باشگاه`} value={`${faNumber(adminShare)} تومان`} />}
-        <Metric label={isCoach ? `سهم ${prefix} شما` : `سهم ${prefix} مربیان`} value={`${faNumber(coachShare)} تومان`} />
-        <Metric label={`تراکنش‌های موفق ${prefix}`} value={`${faNumber(paid.length)} عدد`} />
+        {!isCoach && <Metric label="کل مبلغ" value={`${faNumber(volume)} تومان`} />}
+        {!isCoach && <Metric label="سهم باشگاه" value={`${faNumber(adminShare)} تومان`} />}
+        <Metric label={isCoach ? 'سهم شما' : 'سهم مربیان'} value={`${faNumber(coachShare)} تومان`} />
+        <Metric label="تراکنش‌های موفق" value={`${faNumber(paid.length)} عدد`} />
       </div>
-      <h3>تراکنش‌های {prefix}</h3>
-      {transactions.length === 0 ? <p className="account-muted">هنوز تراکنش {prefix} ثبت نشده است.</p> :
-        <TransactionList transactions={transactions} isCoach={isCoach} simulation={simulation} />}
+      <h3>تراکنش‌ها</h3>
+      {transactions.length === 0 ? <p className="account-muted">هنوز تراکنشی ثبت نشده است.</p> :
+        <TransactionList transactions={transactions} isCoach={isCoach} />}
     </section>
   );
 }
@@ -289,7 +200,7 @@ function SampleCalculation({ isCoach = false }: { isCoach?: boolean }) {
   );
 }
 
-function TransactionList({ transactions, isCoach, simulation }: { transactions: PaymentTransaction[]; isCoach: boolean; simulation: boolean }) {
+function TransactionList({ transactions, isCoach }: { transactions: PaymentTransaction[]; isCoach: boolean }) {
   return (
     <div className="transaction-list">
       {transactions.map((t) => {
@@ -305,22 +216,20 @@ function TransactionList({ transactions, isCoach, simulation }: { transactions: 
               <div className="transaction-card__names">
                 <span style={{ fontWeight: 600 }}>شاگرد: {t.studentName ?? 'شاگرد'}</span>
                 {!isCoach && t.coachName && <span className="badge">مربی: {t.coachName}</span>}
-                {simulation && <span className="badge test-transaction-badge">آزمایشی؛ بدون پول</span>}
               </div>
               <div className="account-muted transaction-card__meta">
                 <span>{dateStr}</span>
-                {simulation && <span>شمارهٔ آزمایش: {faNumber(t.id)}</span>}
                 {t.refId && <span>کد پیگیری: <code dir="ltr">{t.refId}</code></span>}
               </div>
             </div>
             <div style={{ textAlign: 'end', display: 'grid', gap: 4 }}>
               <div>
                 <strong style={{ fontSize: 16 }}>{faNumber(t.amountTomans)} تومان</strong>
-                {(isCoach || simulation) && <span style={{ display: 'block', fontSize: 12, color: '#4ade80' }}>
-                  {shareLabel} {isCoach ? 'شما' : 'مربی'}: {faNumber(t.coachShareTomans)} تومان
+                {isCoach && <span style={{ display: 'block', fontSize: 12, color: '#4ade80' }}>
+                  {shareLabel} شما: {faNumber(t.coachShareTomans)} تومان
                 </span>}
-                {simulation && !isCoach && <span style={{ display: 'block', fontSize: 12 }}>
-                  {shareLabel} باشگاه: {faNumber(t.adminShareTomans)} تومان
+                {!isCoach && <span style={{ display: 'block', fontSize: 12 }}>
+                  {shareLabel} مربی: {faNumber(t.coachShareTomans)} تومان
                 </span>}
               </div>
               <div>
