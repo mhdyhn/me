@@ -348,10 +348,19 @@ export async function submitSubscriptionReceipt(
   const adminShare = row.amount_tomans - coachShare;
   const startedAt = now.toISOString();
   const periodEnd = new Date(now.getTime() + SUBSCRIPTION_PERIOD_DAYS * 86_400_000).toISOString();
-  await db.query(
-    `UPDATE subscription_payments SET status = 'paid', tracking_number = $1, sender_card_last4 = $2, confirmed_at = $3 WHERE id = $4 AND status = 'pending'`,
+  // Only one request may claim this payment. The same receipt that arrives twice at the same
+  // moment must not open two months of subscription and pay the coach twice.
+  const claimed = await db.query<{ id: number }>(
+    `UPDATE subscription_payments SET status = 'paid', tracking_number = $1, sender_card_last4 = $2, confirmed_at = $3
+     WHERE id = $4 AND status = 'pending' RETURNING id`,
     [trackingNumber, senderLast4, startedAt, row.id]
   );
+  if (!claimed.length) {
+    // Another request confirmed the same transfer a moment earlier. Its subscription row
+    // may still be on its way, so we wait a moment for it.
+    const state = await waitForSubscription(db, userId, row.authority, now);
+    return { success: true, message: 'این پرداخت پیش‌تر تأیید شده و اشتراک شما فعال است.', state };
+  }
   await db.query(
     `INSERT INTO subscriptions
      (user_id, plan, amount_tomans, status, started_at, expires_at, source_coach_id, coach_share_tomans, admin_share_tomans, authority, created_at)
@@ -364,6 +373,16 @@ export async function submitSubscriptionReceipt(
     message: 'رسید واریزی تأیید شد و اشتراک هوشمند شما فعال شد.',
     state,
   };
+}
+
+/** Waits a short moment for the subscription of a payment that another request has confirmed. */
+async function waitForSubscription(db: Db, userId: number, authority: string, now: Date): Promise<SubscriptionState> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const rows = await db.query('SELECT 1 FROM subscriptions WHERE user_id = $1 AND authority = $2 LIMIT 1', [userId, authority]);
+    if (rows.length) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return subscriptionState(db, userId, now);
 }
 
 export interface SubscriptionShare {

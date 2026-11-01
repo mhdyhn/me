@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DatabaseError, describeConnection, type ConnectionSummary, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUnclaimedStudent, deleteUser, findUserById, findUserByPhone, findUserBySession, findUserByUsername, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { countStudents, deleteUnclaimedStudent, deleteUser, findLoginCandidates, findUserById, findUserBySession, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, normalizeUsername, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
 import { normalizeMobile, requireMobile } from './phone.ts';
@@ -99,8 +99,9 @@ function parseMessageInput(body: unknown): { text: string; mediaType: string | n
 
 /**
  * Creates the request handler. Coaches create students; students only read their own data.
- * Login attempts are limited per username so a generated password cannot be guessed by
- * repeated tries.
+ * Login attempts are limited per account and per written name, so a generated password cannot
+ * be guessed by repeated tries, and the limit cannot be walked around by spelling the name
+ * in another way.
  */
 export function createApp(options: AppOptions) {
   const { db, secretKey } = options;
@@ -154,25 +155,35 @@ export function createApp(options: AppOptions) {
   // the same time either way and does not reveal which usernames are registered.
   const dummyHash = hashPassword(generatePassword(24));
 
-  function assertNotLocked(username: string): void {
+  /** The keys of one sign-in attempt: the written name and the accounts it may belong to. */
+  function lockedKey(username: string, candidates: StoredUser[]): string[] {
+    return [username, ...candidates.map((candidate) => `account:${candidate.id}`)];
+  }
+
+  function assertNotLocked(keys: string[]): void {
     cleanExpiredFailures();
-    const entry = failures.get(username);
-    if (entry && entry.lockedUntil > now().getTime()) {
-      throw new HttpError(429, 'تعداد تلاش‌های ناموفق زیاد بود. چند دقیقه صبر کنید و دوباره امتحان کنید.');
+    const current = now().getTime();
+    for (const key of keys) {
+      const entry = failures.get(key);
+      if (entry && entry.lockedUntil > current) {
+        throw new HttpError(429, 'تعداد تلاش‌های ناموفق زیاد بود. چند دقیقه صبر کنید و دوباره امتحان کنید.');
+      }
     }
   }
 
-  function recordFailure(username: string): void {
+  function recordFailure(keys: string[]): void {
     cleanExpiredFailures();
     const timestamp = now().getTime();
-    const entry = failures.get(username) ?? { count: 0, lockedUntil: 0, lastFailure: timestamp };
-    entry.count += 1;
-    entry.lastFailure = timestamp;
-    if (entry.count >= maxFailed) {
-      entry.lockedUntil = timestamp + lockMs;
-      entry.count = 0;
+    for (const key of keys) {
+      const entry = failures.get(key) ?? { count: 0, lockedUntil: 0, lastFailure: timestamp };
+      entry.count += 1;
+      entry.lastFailure = timestamp;
+      if (entry.count >= maxFailed) {
+        entry.lockedUntil = timestamp + lockMs;
+        entry.count = 0;
+      }
+      failures.set(key, entry);
     }
-    failures.set(username, entry);
   }
 
   /**
@@ -277,23 +288,38 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       auth: 'public',
       handler: async ({ body }) => {
         const input = requireObject(body);
-        const username = requireText(input, 'username', 1, 64, 'نام کاربری');
+        const written = requireText(input, 'username', 1, 64, 'نام کاربری');
         const password = requireText(input, 'password', 1, PASSWORD_MAX, 'رمز عبور');
-        assertNotLocked(username);
+        // One account is written in many ways: with a capital letter, with +98, with spaces or
+        // with Persian digits. All of them lead to the same account and to the same counter of
+        // failed attempts, otherwise the lock could be walked around by changing the spelling.
+        const phone = normalizeMobile(written);
+        const name = phone ?? written.trim().toLowerCase();
+        const identifier = phone ? `phone:${phone}` : `name:${name}`;
         // The account owner knows their own phone number; the name is not something to remember.
-        const user = await findUserByUsername(db, username) ?? await findUserByPhone(db, normalizeMobile(username) ?? '');
-        const valid = user ? verifyPassword(password, user.passwordHash) : (verifyPassword(password, dummyHash), false);
-        if (!user || !valid) {
-          recordFailure(username);
+        const candidates = await findLoginCandidates(db, name, phone);
+        const keys = lockedKey(identifier, candidates);
+        assertNotLocked(keys);
+        // Every candidate is checked, so the time a login takes does not tell which one matched.
+        const matches = candidates.filter((candidate) => verifyPassword(password, candidate.passwordHash));
+        if (!candidates.length) verifyPassword(password, dummyHash); // an unknown name takes the same time
+        if (!matches.length) {
+          recordFailure(keys);
           throw new HttpError(401, 'نام کاربری یا رمز عبور اشتباه است.');
         }
+        if (matches.length > 1) {
+          // The same password fits more than one account of this number; the account itself
+          // decides, not the server.
+          throw new HttpError(409, 'چند حساب با این شماره ساخته شده است؛ با نام کاربری وارد شوید.');
+        }
+        const user = matches[0]!;
         if (!user.isActive) {
           if (user.pendingApproval) throw new HttpError(403, 'ثبت‌نام مربی در انتظار تأیید مدیر است. پس از تأیید می‌توانید وارد شوید.');
           throw new HttpError(403, 'حساب کاربری شما غیرفعال شده است. لطفاً با مربی یا پشتیبانی تماس بگیرید.');
         }
         const token = await createSession(db, user.id, user.authVersion, now());
         if (!token) throw new HttpError(401, 'وضعیت حساب تغییر کرده است؛ دوباره وارد شوید.');
-        failures.delete(username);
+        for (const key of keys) failures.delete(key);
         return { status: 200, body: { token, user: toPublic(user) }, headers: { 'Set-Cookie': sessionCookie(token) } };
       },
     },

@@ -2,6 +2,7 @@ import { decryptSecret, type SecretKey } from './secrets.ts';
 import { hashToken } from './auth.ts';
 import type { Db } from './db.ts';
 import { HttpError } from './http.ts';
+import { normalizeMobile } from './phone.ts';
 
 export type Role = 'admin' | 'coach' | 'student';
 
@@ -112,6 +113,23 @@ export async function findUserByPhone(db: Db, phoneNumber: string): Promise<Stor
   return row ? fromRow(row) : null;
 }
 
+/**
+ * The accounts a sign-in name may belong to.
+ *
+ * A name is matched without regard to case, and a phone number can belong to more than one
+ * account (a family, a coach who also trains). Every one of them is returned, so the password
+ * decides which account it is instead of the server silently picking the first one.
+ */
+export async function findLoginCandidates(db: Db, name: string, phoneNumber: string | null): Promise<StoredUser[]> {
+  const rows = await db.query<UserRow>(
+    `SELECT * FROM users
+     WHERE lower(username) = $1 OR ($2::text IS NOT NULL AND phone_number = $2)
+     ORDER BY id`,
+    [name, phoneNumber],
+  );
+  return rows.map(fromRow);
+}
+
 export async function insertUser(
   db: Db,
   input: { username: string; passwordHash: string; passwordEnc?: string | null; role: Role; displayName: string; phoneNumber?: string | null; coachId: number | null; mustChangePassword: boolean; now: Date; selfRegistered?: boolean; isActive?: boolean; pendingApproval?: boolean },
@@ -220,9 +238,12 @@ export async function listCoachSummaries(db: Db, key: SecretKey): Promise<CoachS
 
 export async function listAdminStudents(db: Db, key: SecretKey, username: string | null = null, before: number | null = null): Promise<{ students: (PublicUser & { coachName: string | null; password: string | null })[]; nextCursor: number | null }> {
   const pageSize = 30;
+  // The name of an account is often its phone number, so a search by number has to find the
+  // accounts that carry that number, not only the one whose name is exactly the number.
+  const phone = username ? normalizeMobile(username) : null;
   const rows = await db.query<UserRow & { coach_name: string | null }>(
-    "SELECT s.*, c.display_name AS coach_name FROM users s LEFT JOIN users c ON c.id = s.coach_id WHERE s.role = 'student' AND ($1::text IS NULL OR lower(s.username) = lower($1)) AND ($2::integer IS NULL OR s.id < $2) ORDER BY s.id DESC LIMIT 31",
-    [username, before],
+    "SELECT s.*, c.display_name AS coach_name FROM users s LEFT JOIN users c ON c.id = s.coach_id WHERE s.role = 'student' AND ($1::text IS NULL OR lower(s.username) = lower($1) OR s.phone_number = $2) AND ($3::integer IS NULL OR s.id < $3) ORDER BY s.id DESC LIMIT 31",
+    [username, phone, before],
   );
   const page = rows.slice(0, pageSize);
   return {

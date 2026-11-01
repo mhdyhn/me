@@ -77,10 +77,10 @@ export function AdminStudents() {
   return (
     <section className="independent-accounts panel-card" aria-labelledby="admin-students-heading">
       <div className="admin-students-heading"><div><span className="eyebrow">مدیریت حساب‌ها</span><h3 id="admin-students-heading">همهٔ شاگردها</h3></div><span>ساخته‌شده دستی و ثبت‌نام مستقیم</span></div>
-      <p className="account-muted">حساب‌ها از جدیدترین نمایش داده می‌شوند؛ می‌توانی بقیه را ببینی یا نام کاربری دقیق را جست‌وجو کنی. پیش از بازیابی رمز، هویت صاحب حساب را خارج از برنامه بررسی کن.</p>
+      <p className="account-muted">حساب‌ها از جدیدترین نمایش داده می‌شوند؛ می‌توانی بقیه را ببینی یا نام کاربری یا شمارهٔ موبایل را جست‌وجو کنی. پیش از بازیابی رمز، هویت صاحب حساب را خارج از برنامه بررسی کن.</p>
       {credentials && <CredentialsCard credentials={credentials} onDone={() => setCredentials(null)} />}
       <form className="independent-accounts__search" onSubmit={(event) => void search(event)}>
-        <label className="field"><span>نام کاربری دقیق</span><input dir="ltr" value={username} onChange={(event) => setUsername(event.target.value)} maxLength={64} /></label>
+        <label className="field"><span>نام کاربری یا شمارهٔ موبایل</span><input dir="ltr" value={username} onChange={(event) => setUsername(event.target.value)} maxLength={64} /></label>
         <button type="submit" className="button button--secondary" disabled={loading}><Search size={16} /> جست‌وجو</button>
         <button type="button" className="button button--ghost" disabled={loading} onClick={() => { setUsername(''); void load(); }}>همهٔ شاگردها</button>
       </form>
