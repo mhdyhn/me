@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DatabaseError, describeConnection, type ConnectionSummary, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
 import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
-import { countStudents, deleteUnclaimedStudent, deleteUser, findLoginCandidates, findUserById, findUserBySession, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
+import { assertPhoneAvailable, countStudents, deleteUnclaimedStudent, deleteUser, findLoginCandidates, findUserById, findUserBySession, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, normalizeUsername, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
 import { normalizeMobile, requireMobile } from './phone.ts';
@@ -186,6 +186,8 @@ export function createApp(options: AppOptions) {
  * the phone number of the account, which the owner knows by heart.
  */
 async function usernameForNewAccount(db: Db, input: Record<string, unknown>, prefix: 'c' | 's', phoneNumber: string): Promise<string> {
+  // A mobile number belongs to one account only.
+  await assertPhoneAvailable(db, phoneNumber);
   const asked = typeof input.username === 'string' ? input.username.trim() : '';
   if (asked) {
     const username = normalizeUsername(asked);

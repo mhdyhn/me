@@ -7,6 +7,14 @@ import { keyFromSecret } from '../server/secrets.ts';
 import { ensureAdmin } from '../server/bootstrap.ts';
 import { openDatabase, type Db } from '../server/db.ts';
 
+/** A fresh mobile number for every account: one number belongs to one account only. */
+let phoneSequence = 0;
+function nextPhone(): string {
+  phoneSequence += 1;
+  return `0912${String(1230000 + phoneSequence)}`;
+}
+
+
 type Json = Record<string, any>;
 
 let db: Db;
@@ -42,7 +50,7 @@ async function login(username: string, password: string) {
 
 async function setupCoach() {
   const admin = (await login('owner', 'owner-pass-123')).json.token as string;
-  const created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی اصلی' }, admin);
+  const created = await call('POST', '/api/coaches', { phoneNumber: nextPhone(), displayName: 'مربی اصلی' }, admin);
   const coachLogin = await login(created.json.username, created.json.password);
   const token = coachLogin.json.token as string;
   await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'coach-new-pass-1' }, token);
@@ -50,7 +58,7 @@ async function setupCoach() {
 }
 
 async function setupStudent(coachToken: string, claim = true) {
-  const created = await call('POST', '/api/students', { phoneNumber: '09121234567', displayName: 'شاگرد هدف' }, coachToken);
+  const created = await call('POST', '/api/students', { phoneNumber: nextPhone(), displayName: 'شاگرد هدف' }, coachToken);
   const studentLogin = await login(created.json.username, created.json.password);
   const token = studentLogin.json.token as string;
   if (claim) await call('POST', '/api/me/password', { currentPassword: created.json.password, newPassword: 'student-new-pass-1' }, token);
@@ -191,7 +199,7 @@ describe('Account Activation and Deactivation', () => {
 
     // Create coach2
     const admin = coach1.adminToken;
-    const coach2Created = await call('POST', '/api/coaches', { phoneNumber: '09121234567', displayName: 'مربی دوم' }, admin);
+    const coach2Created = await call('POST', '/api/coaches', { phoneNumber: nextPhone(), displayName: 'مربی دوم' }, admin);
     const coach2Login = await login(coach2Created.json.username, coach2Created.json.password);
     await call('POST', '/api/me/password', { currentPassword: coach2Created.json.password, newPassword: 'coach2-pass-1' }, coach2Login.json.token);
     const coach2Token = (await login(coach2Created.json.username, 'coach2-pass-1')).json.token as string;

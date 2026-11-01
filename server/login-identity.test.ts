@@ -7,6 +7,7 @@ import { hashPassword } from './auth.ts';
 import { keyFromSecret } from './secrets.ts';
 import { ensureAdmin } from './bootstrap.ts';
 import { openDatabase, type Db } from './db.ts';
+import { insertUser } from './users.ts';
 
 type Json = Record<string, any>;
 
@@ -54,6 +55,18 @@ async function coachSession(phoneNumber = '09121234000', username?: string) {
   return { admin, coach, created, password: COACH_PASSWORD };
 }
 
+/**
+ * Only an old database can hold the same number twice; the app refuses a new pair. The login
+ * keeps handling such a pair, so the second account is written straight into the database.
+ */
+async function legacySecondAccount(username: string, phoneNumber: string, displayName: string, coachId: number): Promise<number> {
+  await db.exec('DROP INDEX IF EXISTS idx_users_phone_number');
+  return insertUser(db, {
+    username, passwordHash: hashPassword('legacy-password-1'), role: 'student', displayName, phoneNumber,
+    coachId, selfRegistered: false, mustChangePassword: false, now: clock,
+  });
+}
+
 describe('the name that an account signs in with', () => {
   it('accepts a name written with a capital letter', async () => {
     const { created, password } = await coachSession('09121234001', 'maryam');
@@ -82,24 +95,23 @@ describe('the name that an account signs in with', () => {
   });
 
   it('signs in with the account of a phone number that several accounts share', async () => {
-    const { coach } = await coachSession('09121234004');
+    const { coach, created } = await coachSession('09121234004');
     const first = await call('POST', '/api/students', { phoneNumber: '09121234005', displayName: 'شاگرد یک' }, coach);
-    const second = await call('POST', '/api/students', { phoneNumber: '09121234005', displayName: 'شاگرد دو' }, coach);
     expect(first.json.username).toBe('09121234005');
-    expect(second.json.username).toBe('09121234005-2');
+    await legacySecondAccount('09121234005-2', '09121234005', 'شاگرد دو', created.json.user.id);
     // The password of the second account opens the second account, not the first one.
-    const signedIn = await login('09121234005', second.json.password);
+    const signedIn = await login('09121234005', 'legacy-password-1');
     expect(signedIn.status).toBe(200);
     expect(signedIn.json.user.username).toBe('09121234005-2');
     expect(signedIn.json.user.displayName).toBe('شاگرد دو');
   });
 
   it('asks for the name when the same password fits more than one account', async () => {
-    const { coach } = await coachSession('09121234006');
+    const { coach, created } = await coachSession('09121234006');
     const first = await call('POST', '/api/students', { phoneNumber: '09121234007', displayName: 'شاگرد یک' }, coach);
-    const second = await call('POST', '/api/students', { phoneNumber: '09121234007', displayName: 'شاگرد دو' }, coach);
+    const secondId = await legacySecondAccount('09121234007-2', '09121234007', 'شاگرد دو', created.json.user.id);
     const shared = hashPassword('shared-pass-1234');
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = ANY($2::int[])', [shared, [first.json.user.id, second.json.user.id]]);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = ANY($2::int[])', [shared, [first.json.user.id, secondId]]);
     const signedIn = await login('09121234007', 'shared-pass-1234');
     expect(signedIn.status).toBe(409);
     expect(String(signedIn.json.error)).toContain('نام کاربری');
@@ -108,9 +120,9 @@ describe('the name that an account signs in with', () => {
   });
 
   it('finds every student of a phone number in the list of the admin', async () => {
-    const { admin, coach } = await coachSession('09121234008');
+    const { admin, coach, created } = await coachSession('09121234008');
     await call('POST', '/api/students', { phoneNumber: '09121234009', displayName: 'شاگرد یک' }, coach);
-    await call('POST', '/api/students', { phoneNumber: '09121234009', displayName: 'شاگرد دو' }, coach);
+    await legacySecondAccount('09121234009-2', '09121234009', 'شاگرد دو', created.json.user.id);
     const found = await call('GET', '/api/admin/students?username=09121234009', undefined, admin);
     expect(found.status).toBe(200);
     const names = found.json.students.map((student: Json) => student.username).sort();
