@@ -127,9 +127,28 @@ const targetUrl = process.env.TARGET_DATABASE_URL ?? '';
 const dryRun = process.argv.includes('--dry-run');
 const only = process.argv.find((argument) => argument.startsWith('--tables='))?.split('=')[1];
 
-if (sourceUrl && targetUrl) {
+/** The host, the port and the database of a connection string, without the secret. */
+export function endpointOf(url) {
+  const text = String(url ?? '');
+  const schemeEnd = text.indexOf('://');
+  if (schemeEnd < 0) return text;
+  const authorityStart = schemeEnd + 3;
+  const pathStart = text.indexOf('/', authorityStart);
+  const authority = text.slice(authorityStart, pathStart < 0 ? text.length : pathStart);
+  const separator = authority.lastIndexOf('@');
+  return separator < 0 ? authority : authority.slice(separator + 1);
+}
+
+/** Copies the rows of the source into the target and reports the count per table. */
+export async function copyDatabases(sourceUrl, targetUrl, { dryRun = false, only = '' } = {}) {
+  // Copying a database onto itself would only count the rows; it is better to say so.
+  if (endpointOf(sourceUrl) === endpointOf(targetUrl)) {
+    console.log('The source and the target are the same database; nothing is copied.');
+    return [];
+  }
   const source = new pg.Pool({ connectionString: sourceUrl, max: 2, connectionTimeoutMillis: 30000, ssl: { rejectUnauthorized: false } });
   const target = new pg.Pool({ connectionString: targetUrl, max: 2, connectionTimeoutMillis: 30000, ssl: { rejectUnauthorized: false } });
+  const results = [];
   try {
     const available = await listTables(source);
     const wanted = only ? only.split(',').map((name) => name.trim()) : available;
@@ -141,6 +160,7 @@ if (sourceUrl && targetUrl) {
       const result = await copyTable(source, target, table, { dryRun });
       const note = result.skipped ? ` (${result.skipped})` : result.expected && result.expected !== result.rows ? ` (source has ${result.expected})` : '';
       console.log(`  ${table}: ${result.rows} rows${note}`);
+      results.push(result);
     }
     if (!dryRun) {
       await resetSequences(target, tables);
@@ -150,4 +170,9 @@ if (sourceUrl && targetUrl) {
     await source.end();
     await target.end();
   }
+  return results;
+}
+
+if (sourceUrl && targetUrl) {
+  await copyDatabases(sourceUrl, targetUrl, { dryRun, only });
 }
