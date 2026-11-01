@@ -174,5 +174,19 @@ export async function copyDatabases(sourceUrl, targetUrl, { dryRun = false, only
 }
 
 if (sourceUrl && targetUrl) {
-  await copyDatabases(sourceUrl, targetUrl, { dryRun, only });
+  try {
+    await copyDatabases(sourceUrl, targetUrl, { dryRun, only });
+  } catch (error) {
+    // The message of the driver has the host in it; the password is never in it.
+    const reason = String(error?.message ?? error).split('\n')[0];
+    console.error(`The copy failed: ${reason}`);
+    if (/password authentication|28P01/i.test(reason)) {
+      console.error('The password of one of the two databases is not accepted.');
+    } else if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|timeout/i.test(reason)) {
+      console.error('One of the two databases did not answer; check its host and its port.');
+    } else if (/does not exist/i.test(reason)) {
+      console.error('A table is missing in the source; deploy the application against the source first.');
+    }
+    process.exitCode = 1;
+  }
 }
