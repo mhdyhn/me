@@ -3,7 +3,6 @@ import { ArrowRight, Check, Clock3, CreditCard, Dumbbell, Info, Lock, Pencil, Pl
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
 import { ProgrammeArchive } from '../components/ProgrammeArchive';
-import { StudentTestPurchase } from '../components/StudentTestPurchase';
 import { CardTransferCheckout } from '../components/CardTransferCheckout';
 import { ProgramFilePanel } from '../components/ProgramFilePanel';
 import { loadAssignedProgram } from '../lib/assignedProgram';
@@ -14,7 +13,6 @@ import { isProgramReadOnly, useAssignedMeta, useAssignedProgramLoadState, usePro
 import { clearProgram, resetProgram, saveProgram, syncCloudProgram } from '../lib/programPersistence';
 import { presetTemplates, type PresetTemplate } from '../lib/programTemplates';
 import { faDigits, faNumber } from '../lib/format';
-import { ApiError, api } from '../lib/api';
 import { useSession } from '../context/SessionContext';
 import { generalTrainingGuidelines } from '../data/generalTrainingGuidelines';
 
@@ -28,8 +26,6 @@ export function Program() {
   const assignedMeta = useAssignedMeta();
   const assignedLoadState = useAssignedProgramLoadState();
 
-  const [paying, setPaying] = useState(false);
-  const [payError, setPayError] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -44,24 +40,6 @@ export function Program() {
   const primaryCount = workoutTemplates.filter((workout) => !workout.optional).length;
   const averageMinutes = workoutTemplates.length ? Math.round(workoutTemplates.reduce((sum, workout) => sum + workout.durationMinutes, 0) / workoutTemplates.length) : 0;
   const structure = workoutTemplates.map((workout) => workout.name).join(' · ');
-
-  async function startPayment() {
-    setPayError(null);
-    if (!assignedMeta?.id || !Number.isInteger(assignedMeta.version)) {
-      setPayError('شناسهٔ برنامه در دسترس نیست. صفحه را دوباره بارگذاری کنید.');
-      return;
-    }
-    setPaying(true);
-    try {
-      const res = await api<{ authority: string; paymentUrl: string }>('POST', '/pay/start', {
-        expectedId: assignedMeta.id, expectedVersion: assignedMeta.version,
-      });
-      window.location.href = res.paymentUrl;
-    } catch (err) {
-      setPayError(err instanceof ApiError ? err.message : 'خطا در اتصال به درگاه پرداخت.');
-      setPaying(false);
-    }
-  }
 
   async function handleApplyTemplate(template: PresetTemplate, openEditor = false) {
     if (template.id === 'blank' || openEditor) {
@@ -132,7 +110,7 @@ export function Program() {
   }
 
   // If the coach set a price on the program and the student has not paid yet, show the payment locked view.
-  if (readOnly && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid && !assignedMeta.isTestPurchase) {
+  if (readOnly && assignedMeta && assignedMeta.priceTomans > 0 && !assignedMeta.isPaid) {
     return (
       <div className="page-stack">
         <SectionHeading
@@ -146,32 +124,16 @@ export function Program() {
           </div>
           <h2 style={{ margin: 0, fontSize: '1.25rem' }}>این برنامه نیازمند پرداخت و فعال‌سازی است</h2>
           <p className="account-muted" style={{ margin: 0, maxWidth: 440 }}>
-            {assignedMeta.testPurchaseAvailable
-              ? 'این برنامه در حالت خرید آزمایشی است. تأیید خرید، برنامه را برای مدت محدود و بدون پرداخت بانکی باز می‌کند.'
-              : 'مربی شما این برنامه را اختصاصی برای شما آماده کرده است. هزینه را آنلاین از طریق درگاه امن شاپرک و زرین‌پال بپردازید یا کارت‌به‌کارت واریز کنید؛ در هر دو حالت تمام روزها و حرکت‌های برنامه برای شما بازگشایی می‌شود.'}
+            'مربی شما این برنامه را اختصاصی برای شما آماده کرده است. هزینه را کارت‌به‌کارت به شمارهٔ اعلام‌شده واریز کنید و رسید را ثبت کنید؛ پس از تأیید، تمام روزها و حرکت‌های برنامه برای شما بازگشایی می‌شود.'
           </p>
           <div style={{ padding: '12px 24px', borderRadius: 12, background: 'var(--surface-soft)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
             <CreditCard size={20} className="account-muted" />
             <span style={{ fontSize: 14 }}>مبلغ قابل پرداخت:</span>
             <strong style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{faNumber(assignedMeta.priceTomans)} تومان</strong>
           </div>
-          {assignedMeta.testPurchaseAvailable ? (
-            <StudentTestPurchase key={`${assignedMeta.id}:${assignedMeta.version}`} program={assignedMeta} />
-          ) : (
-            <>
-              {payError && <p className="form-error" role="alert">{payError}</p>}
-              <button
-                type="button"
-                className="button button--primary"
-                style={{ width: 'min(100%, 260px)', fontSize: 15, padding: '12px 20px' }}
-                disabled={paying}
-                onClick={() => void startPayment()}
-              >
-                {paying ? 'در حال انتقال به درگاه…' : `پرداخت آنلاین و فعال‌سازی (${faNumber(assignedMeta.priceTomans)} تومان)`}
-              </button>
-              {assignedMeta.cardTransferAvailable && <CardTransferCheckout program={assignedMeta} />}
-            </>
-          )}
+          {assignedMeta.cardTransferAvailable
+            ? <CardTransferCheckout program={assignedMeta} />
+            : <p className="form-error" role="alert">پرداخت کارت‌به‌کارت هنوز فعال نشده است؛ لطفاً به مربی خود اطلاع دهید.</p>}
           <button type="button" className="button button--ghost" onClick={() => void loadAssignedProgram()}>بررسی دوبارهٔ وضعیت برنامه</button>
         </div>
         {user?.role === 'student' && user.coachId !== null && <ProgrammeArchive key={`${user.id}:${user.coachId}:${user.personalProgramMode === true}`} studentId={user.id} />}

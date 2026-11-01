@@ -199,7 +199,10 @@ export async function createCardTransferRequest(
 
   if (pending && pending.gateway_mode === CARD_TRANSFER_MODE) {
     const expiresAt = expiryFrom(pending.created_at, config.expiryHours);
-    if (Date.parse(expiresAt) > now.getTime()) {
+    // A request is bound to the price of the moment it was made. When the coach changes the
+    // price, the old request is void and a fresh one is issued for the new amount.
+    const priceUnchanged = pending.amount_tomans === info.price_tomans;
+    if (priceUnchanged && Date.parse(expiresAt) > now.getTime()) {
       const transferAmount = pending.card_transfer_amount_tomans ?? pending.amount_tomans;
       const reference = pending.card_transfer_reference ?? '';
       return {
@@ -259,6 +262,9 @@ export async function createCardTransferRequest(
       [studentId, info.programme_id]
     ))[0];
     if (!existing) throw new HttpError(409, 'وضعیت پرداخت تغییر کرده است؛ برنامه را دوباره بارگذاری کنید.');
+    if (existing.amount_tomans !== info.price_tomans) {
+      throw new HttpError(409, 'پرداخت قبلی با قیمت متفاوت در انتظار است؛ برای جلوگیری از پرداخت تکراری با پشتیبانی تماس بگیرید.');
+    }
     if (existing.gateway_mode !== CARD_TRANSFER_MODE) {
       await db.query(
         `UPDATE payment_transactions SET gateway_mode = '${CARD_TRANSFER_MODE}', card_transfer_amount_tomans = $1, card_transfer_reference = $2 WHERE id = $3`,

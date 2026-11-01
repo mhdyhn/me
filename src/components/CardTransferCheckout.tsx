@@ -106,7 +106,7 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
     return (
       <section className="card-transfer" aria-label="پرداخت کارت‌به‌کارت">
         <p className="account-muted">
-          اگر درگاه بانکی برایتان باز نمی‌شود، مبلغ را کارت‌به‌کارت واریز کنید و رسید را همین‌جا ثبت کنید؛
+          تنها روش پرداخت میتی، کارت‌به‌کارت است؛ مبلغ را کارت‌به‌کارت واریز کنید و رسید را همین‌جا ثبت کنید.
           تأیید رسید خودکار است و برنامه بلافاصله باز می‌شود.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}

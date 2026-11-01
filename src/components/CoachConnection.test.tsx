@@ -67,7 +67,7 @@ describe('coach connection controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'بازگشت به برنامهٔ شخصی' }));
     await waitFor(() => expect(mocks.setUser).toHaveBeenCalledWith(personal));
     expect(mocks.api).toHaveBeenCalledWith('POST', '/me/personal-program/activate', { accountId: 17 });
-    expect(mocks.confirm.mock.calls[0]![0].message).toContain('خرید آزمایشی');
+    expect(mocks.confirm.mock.calls[0]![0].message).toContain('برنامه‌های رایگان و خریداری‌شدهٔ مربی');
   });
 
   it('lets a manually provisioned student withdraw and explains reconnection is limited to the same coach', async () => {

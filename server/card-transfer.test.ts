@@ -16,9 +16,6 @@ const CARD = '6037999912345678';
 
 beforeEach(async () => {
   vi.stubEnv('NODE_ENV', 'production');
-  vi.stubEnv('PAYMENT_PUBLIC_BASE_URL', '');
-  vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
-  vi.stubEnv('ZARINPAL_SANDBOX', 'true');
   vi.stubEnv('COACH_COMMISSION_PERCENT', '90');
   vi.stubEnv('CARD_TRANSFER_CARD_NUMBER', CARD);
   vi.stubEnv('CARD_TRANSFER_CARD_HOLDER', 'شرکت میتی');

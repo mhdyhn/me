@@ -11,29 +11,27 @@ type PracticeQuote = {
   adminShareTomans?: number;
 };
 
-/** A labelled rehearsal only; the result stays in this component, never in the ledger. */
+/** A read-only preview of the split; it never moves money and never writes a transaction. */
 export function PaymentPractice({ program, studentId, sample = false }: { program: PracticeProgram | null; studentId?: number; sample?: boolean }) {
   const [quote, setQuote] = useState<PracticeQuote | null>(null);
-  const [outcome, setOutcome] = useState<'success' | 'canceled' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [samplePrice, setSamplePrice] = useState('250000');
   const requestVersion = useRef(0);
   const sampleAmount = Number(samplePrice);
   const validSample = Number.isSafeInteger(sampleAmount) && sampleAmount >= 1 && sampleAmount <= 2147483647;
-  const canPractice = sample ? validSample : !!program?.id && Number.isSafeInteger(program.version) && (program.priceTomans ?? 0) > 0;
+  const canPreview = sample ? validSample : !!program?.id && Number.isSafeInteger(program.version) && (program.priceTomans ?? 0) > 0;
 
   useEffect(() => {
     requestVersion.current += 1;
     setQuote(null);
-    setOutcome(null);
     setError(null);
     setLoading(false);
     return () => { requestVersion.current += 1; };
   }, [program?.id, program?.version, studentId, sample]);
 
   async function start() {
-    if (!canPractice || (!sample && !program)) return;
+    if (!canPreview || (!sample && !program)) return;
     const current = ++requestVersion.current;
     setError(null);
     setLoading(true);
@@ -45,12 +43,12 @@ export function PaymentPractice({ program, studentId, sample = false }: { progra
       };
       const result = await api<PracticeQuote>('POST', '/pay/practice', input);
       if (result.simulation !== true || !Number.isSafeInteger(result.amountTomans) || result.amountTomans <= 0) {
-        throw new Error('Invalid practice response');
+        throw new Error('Invalid preview response');
       }
       if (requestVersion.current === current) setQuote(result);
     } catch (caught) {
       if (requestVersion.current === current) {
-        setError(caught instanceof ApiError ? caught.message : 'آزمایش بارگذاری نشد. دوباره تلاش کنید.');
+        setError(caught instanceof ApiError ? caught.message : 'پیش‌نمایش بارگذاری نشد. دوباره تلاش کنید.');
       }
     } finally {
       if (requestVersion.current === current) setLoading(false);
@@ -59,11 +57,11 @@ export function PaymentPractice({ program, studentId, sample = false }: { progra
 
   return (
     <details className="payment-practice">
-      <summary><span>آزمایش پرداخت بدون درگاه</span><small>صرفاً نمایشی</small></summary>
+      <summary><span>پیش‌نمایش سهم مربی</span><small>صرفاً نمایشی</small></summary>
       <div className="payment-practice__content">
-        <p>این آزمایش پولی جابه‌جا نمی‌کند، تراکنشی ثبت نمی‌کند و برنامه را باز نمی‌کند. اتصال واقعی درگاه و بازگشت بانکی در این بخش آزموده نمی‌شوند.</p>
+        <p>این بخش فقط مبلغ برنامه و سهم مربی و مدیر را نشان می‌دهد؛ پولی جابه‌جا نمی‌کند، تراکنشی ثبت نمی‌کند و برنامه‌ای را باز نمی‌کند.</p>
         {sample && <p>این نمونه مستقل از حساب شاگرد و برنامه‌های واقعی است و مبلغ واردشده ذخیره نمی‌شود.</p>}
-        {!sample && studentId !== undefined && <p>مبلغ از برنامهٔ ذخیره‌شده خوانده می‌شود؛ تغییرات ذخیره‌نشده در آزمایش لحاظ نمی‌شوند.</p>}
+        {!sample && studentId !== undefined && <p>مبلغ از برنامهٔ ذخیره‌شده خوانده می‌شود؛ تغییرات ذخیره‌نشده در پیش‌نمایش لحاظ نمی‌شوند.</p>}
         {sample && !quote && (
           <label className="field payment-practice__amount">
             <span>مبلغ نمونه (تومان)</span>
@@ -71,31 +69,20 @@ export function PaymentPractice({ program, studentId, sample = false }: { progra
             {!validSample && <small>مبلغ باید بین ۱ تا ۲٬۱۴۷٬۴۸۳٬۶۴۷ تومان باشد.</small>}
           </label>
         )}
-        {!sample && !canPractice && <p>ابتدا یک برنامهٔ پولی برای شاگرد ذخیره کنید.</p>}
+        {!sample && !canPreview && <p>ابتدا یک برنامهٔ پولی برای شاگرد ذخیره کنید.</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
-        {(sample || canPractice) && !quote && (
-          <button type="button" className="button button--secondary" onClick={() => void start()} disabled={loading || !canPractice}>
-            {loading ? 'در حال آماده‌سازی…' : 'شروع آزمایش پرداخت'}
+        {(sample || canPreview) && !quote && (
+          <button type="button" className="button button--secondary" onClick={() => void start()} disabled={loading || !canPreview}>
+            {loading ? 'در حال آماده‌سازی…' : 'نمایش سهم'}
           </button>
         )}
-        {quote && !outcome && (
+        {quote && (
           <div className="payment-practice__result">
-            <strong>پیش‌نمایش آزمایشی: {quote.programmeTitle}</strong>
+            <strong>{quote.programmeTitle}</strong>
             <p>مبلغ برنامه: <strong>{faNumber(quote.amountTomans)} تومان</strong></p>
             {(sample || studentId !== undefined) && quote.coachShareTomans !== undefined && quote.adminShareTomans !== undefined && (
               <p>سهم محاسبه‌شدهٔ مربی: {faNumber(quote.coachShareTomans)} تومان · سهم مدیر: {faNumber(quote.adminShareTomans)} تومان</p>
             )}
-            <div className="payment-practice__actions">
-              <button type="button" className="button button--secondary" onClick={() => setOutcome('success')}>فرض پرداخت موفق</button>
-              <button type="button" className="button button--ghost" onClick={() => setOutcome('canceled')}>فرض انصراف</button>
-            </div>
-          </div>
-        )}
-        {quote && outcome && (
-          <div className="payment-practice__result" role="status">
-            <strong>{outcome === 'success' ? 'نتیجهٔ آزمایشی: پرداخت موفق فرض شد.' : 'نتیجهٔ آزمایشی: انصراف فرض شد.'}</strong>
-            <p>هیچ پول، تراکنش یا دسترسی واقعی ایجاد نشده است.</p>
-            <button type="button" className="button button--secondary" onClick={() => { setQuote(null); setOutcome(null); }}>آزمایش دوباره</button>
           </div>
         )}
       </div>

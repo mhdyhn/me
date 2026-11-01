@@ -302,9 +302,9 @@ async function runScenario(base) {
     if (persistedPlan.plan.targets.kcal !== 2400) throw new Error('Weekly nutrition resolution was not persisted');
     const input = { title: 'برنامه اول مربی الف', priceTomans: 100000, days: [{ name: 'روز تمرین الف', exercises: [{ exerciseId: 'push-up', name: 'شنا', muscle: 'سینه', sets: 3, reps: '10', restSeconds: 60 }] }] };
     const first = (await call('PUT', `/students/${s.user.id}/program`, input, a.token)).program;
-    const checkout = await call('POST', '/pay/start', { expectedId: first.id, expectedVersion: first.version }, s.token, 201);
-    const verify = await call('POST', '/pay/verify', { authority: checkout.authority, status: 'OK' }, s.token);
-    if (!verify.success) throw new Error('Sandbox checkout did not verify');
+    const checkout = await call('POST', '/pay/card-transfer/start', { expectedId: first.id, expectedVersion: first.version }, s.token, 201);
+    const receipt = await call('POST', '/pay/card-transfer/receipt', { authority: checkout.authority, trackingNumber: '99887766' }, s.token);
+    if (!receipt.success) throw new Error('Card transfer did not confirm');
     const empty = await call('GET', `/students/${s.user.id}/nutrition`, undefined, a.token);
     await call('PUT', `/students/${s.user.id}/nutrition`, { ...empty.plan, targets: { kcal: 2100, proteinG: 120, carbsG: null, fatG: null } }, a.token);
     await call('PUT', `/students/${s.user.id}/ai-settings`, { age: 31, limitations: 'محدودیت محرمانه الف' }, a.token);
@@ -443,8 +443,10 @@ async function main() {
     child = spawn(process.execPath, ['server/index.ts'], { stdio: ['ignore', 'pipe', 'pipe'], env: {
       ...process.env, NODE_ENV: 'development', DATABASE_URL: target.toString(), HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dataDir,
       MEETY_SECRET: randomBytes(32).toString('hex'), ADMIN_USERNAME: 'localadmin', ADMIN_PASSWORD: 'local-admin-password',
-      ZARINPAL_MERCHANT_ID: '', ZARINPAL_SANDBOX: 'true', STUDENT_TEST_PURCHASES: 'on', COACH_COMMISSION_PERCENT: '90',
-      PAYMENT_PUBLIC_BASE_URL: '', MEETY_TRUSTED_PROXIES: '',
+      COACH_COMMISSION_PERCENT: '90',
+      CARD_TRANSFER_CARD_NUMBER: '6037999912345678',
+      CARD_TRANSFER_VERIFY_URL: '',
+      MEETY_TRUSTED_PROXIES: '',
     } });
     await awaitServer(child);
     await runScenario(`http://127.0.0.1:${port}`);

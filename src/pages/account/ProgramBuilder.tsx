@@ -4,7 +4,6 @@ import { ArrowDown, ArrowRight, ArrowUp, ChevronLeft, Dumbbell, Plus, Save, Shie
 import { confirmModal } from '../../components/ConfirmModal';
 import { PaymentPractice } from '../../components/PaymentPractice';
 import { CoachProgrammeArchive } from '../../components/CoachProgrammeArchive';
-import { StudentTestAccess } from '../../components/StudentTestAccess';
 import { CoachProgramConflictPreview } from '../../components/ProgramConflictPreview';
 import { DraftConflictNotice } from '../../components/DraftConflictNotice';
 import { SessionDraftRecovery, SessionDraftStatus } from '../../components/SessionDraftNotice';
@@ -434,7 +433,6 @@ function Builder({ userId }: { userId: number }) {
             </div>
           </details>
         </div>
-        <StudentTestAccess key={`${id}:${currentProgram?.id ?? 'none'}:${currentProgram?.version ?? 0}`} studentId={id} program={currentProgram} />
         <PaymentPractice program={currentProgram} studentId={id} />
 
         {limitations && limitations.trim().length > 0 && (

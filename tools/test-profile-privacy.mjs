@@ -79,8 +79,8 @@ async function main() {
   const child = spawn(process.execPath, ['server/index.ts'], { stdio: ['ignore', 'pipe', 'pipe'], env: {
     ...process.env, NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(port), DATA_DIR: dataDir, STATIC_DIR: 'dist',
     MEETY_SECRET: 'profile-privacy-test-secret', ADMIN_USERNAME: '', ADMIN_PASSWORD: '',
-    ZARINPAL_MERCHANT_ID: '', ZARINPAL_SANDBOX: 'true', STUDENT_TEST_PURCHASES: 'off', COACH_COMMISSION_PERCENT: '90',
-    PAYMENT_PUBLIC_BASE_URL: '', MEETY_TRUSTED_PROXIES: '',
+    COACH_COMMISSION_PERCENT: '90',
+    MEETY_TRUSTED_PROXIES: '',
   } });
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox', '--disable-features=LocalNetworkAccessChecks'] });
   const errors = [];

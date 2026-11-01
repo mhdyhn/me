@@ -11,7 +11,6 @@ describe('account history migration', () => {
   it('replaces legacy cascades idempotently without deleting records', async () => {
     const refs = [
       ['payment_transactions', 'student_id'], ['payment_transactions', 'coach_id'],
-      ['payment_test_transactions', 'student_id'], ['payment_test_transactions', 'coach_id'],
       ['messages', 'coach_id'], ['messages', 'sender_id'],
       ['admin_coach_messages', 'coach_id'], ['admin_coach_messages', 'sender_id'],
     ];

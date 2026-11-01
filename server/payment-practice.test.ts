@@ -15,9 +15,6 @@ const clock = new Date('2026-10-28T08:00:00Z');
 
 beforeEach(async () => {
   vi.stubEnv('NODE_ENV', 'production');
-  vi.stubEnv('PAYMENT_PUBLIC_BASE_URL', '');
-  vi.stubEnv('ZARINPAL_MERCHANT_ID', '');
-  vi.stubEnv('ZARINPAL_SANDBOX', 'true');
   vi.stubEnv('COACH_COMMISSION_PERCENT', '90');
   db = await openDatabase('memory');
   await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
@@ -149,7 +146,7 @@ describe('read-only payment practice in production', () => {
     expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
   });
 
-  it('keeps real checkout and fake verification closed when production configuration is absent', async () => {
+  it('keeps the card transfer closed while no destination card is configured and removes the online gateway', async () => {
     const admin = await signIn('owner', 'owner-pass-123');
     const coach = await createCoach(admin);
     const student = await createStudent(coach.token);
@@ -157,14 +154,12 @@ describe('read-only payment practice in production', () => {
     const input = request(program);
     const practice = await call('POST', '/api/pay/practice', input, student.token);
     expect(practice.status).toBe(200);
-    const missingOrigin = await call('POST', '/api/pay/start', input, student.token);
-    expect(missingOrigin.status).toBe(503);
-    expect(missingOrigin.json.error).toContain('پرداخت واقعی هنوز آماده نیست');
-    expect((await call('POST', '/api/pay/start', input, coach.token)).status).toBe(403);
-    expect((await call('POST', '/api/pay/start', input, admin)).status).toBe(403);
-    vi.stubEnv('PAYMENT_PUBLIC_BASE_URL', 'https://example.com');
-    expect((await call('POST', '/api/pay/start', input, student.token)).status).toBe(503);
+    // The online gateway and the test checkout of the programme are gone for good.
+    expect((await call('POST', '/api/pay/start', input, student.token)).status).toBe(404);
     expect((await call('POST', '/api/pay/verify', { authority: 'SANDBOX-fake-123', status: 'OK' }, student.token)).status).toBe(404);
+    expect((await call('POST', '/api/pay/test/start', input, student.token)).status).toBe(404);
+    // Without a destination card the only payment method stays closed.
+    expect((await call('POST', '/api/pay/card-transfer/start', input, student.token)).status).toBe(503);
     expect(await db.query('SELECT * FROM payment_transactions')).toEqual([]);
     expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(false);
   });
