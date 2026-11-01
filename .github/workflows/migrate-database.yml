@@ -1,0 +1,81 @@
+name: Copy the data of the old database
+
+# Copies the accounts, the programmes and the transactions of an old database into the current
+# one. Use it when the hosted database changed and the old accounts have to come along.
+#
+# Repository secrets are needed (Settings → Secrets and variables → Actions):
+#   SOURCE_DATABASE_URL  the connection string of the OLD database, for example the Neon one
+#   RENDER_API_KEY       an API key from render.com → Account Settings → API Keys; only needed
+#                        when the target is not given
+#   TARGET_DATABASE_URL  optional; the connection string of the CURRENT database. When it is
+#                        missing, the value of DATABASE_URL in the Render service is used.
+#
+# Nothing is deleted: only the rows that are missing are inserted, so a second run is safe.
+# The log holds the number of rows per table, never a password.
+#
+# The old database has to answer on IPv4: the runner of GitHub has no IPv6 route.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only count the rows, write nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the dependencies
+        run: npm ci
+
+      - name: Copy the rows
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
+          TARGET_DATABASE_URL: ${{ secrets.TARGET_DATABASE_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_NAME: meety
+        run: |
+          set -euo pipefail
+          if [ -z "${SOURCE_DATABASE_URL:-}" ]; then
+            echo "SOURCE_DATABASE_URL is missing in the repository secrets."
+            exit 1
+          fi
+
+          target="${TARGET_DATABASE_URL:-}"
+          if [ -z "$target" ] && [ -n "${RENDER_API_KEY:-}" ]; then
+            # The current connection string of the service is the target.
+            service_id=$(curl -fsS "https://api.render.com/v1/services?limit=100" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.service&&x.service.name===process.env.SERVICE_NAME);if(!hit){console.error('Service not found: '+process.env.SERVICE_NAME);process.exit(1)}console.log(hit.service.id)})")
+            target=$(curl -fsS "https://api.render.com/v1/services/${service_id}/env-vars?limit=100" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.envVar&&x.envVar.key==='DATABASE_URL');if(!hit)process.exit(1);process.stdout.write(hit.envVar.value)})")
+          fi
+          if [ -z "$target" ]; then
+            echo "TARGET_DATABASE_URL is missing and the Render service could not be read."
+            exit 1
+          fi
+
+          export TARGET_DATABASE_URL="$target"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            node tools/migrate-database.mjs --dry-run
+          else
+            node tools/migrate-database.mjs
+          fi
+
+      - name: Show the health of the service
+        run: curl -fsS "https://meety-985n.onrender.com/api/health?probe=1" || true
