@@ -72,6 +72,11 @@ jobs:
               | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const list=JSON.parse(d);const hit=list.find(x=>x.envVar&&x.envVar.key==='DATABASE_URL');if(!hit)process.exit(1);process.stdout.write(hit.envVar.value)})")
           fi
           if [ -z "$target" ]; then
+            # The last resort: the secret that holds the connection string of the service.
+            target="$OLD_DATABASE_URL"
+            echo "The Render service could not be read; the secret DATABASE_URL is used as the target."
+          fi
+          if [ -z "$target" ]; then
             echo "TARGET_DATABASE_URL is missing and the Render service could not be read."
             exit 1
           fi
