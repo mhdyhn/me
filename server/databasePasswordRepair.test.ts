@@ -112,6 +112,14 @@ describe('a password that lost a character in the connection string', () => {
     expect(summary.userHash).not.toContain(user);
     // The length of the password shows that the last character was eaten.
     expect(summary.passwordLength).toBe(9);
+    // The kinds of characters, without the characters themselves.
+    expect(summary.passwordShape).toBe('Ulllddddl');
+  });
+
+  it('shows a password that starts with a special character', () => {
+    const summary = describeConnection(`postgresql://${user}:@Mhdy2020x@${host}/postgres`);
+    expect(summary.passwordLength).toBe(10);
+    expect(summary.passwordShape).toBe('sUlllddddl');
   });
 
   it('connects with the raw string although the password lost its @', async () => {
