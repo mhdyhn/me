@@ -136,6 +136,25 @@ export function connectionCandidates(rawUrl) {
       // The character was eaten by the URL syntax: it belongs to the password. That can only
       // have happened when the password holds no such character at all.
       if (!password.includes('@')) add(build(`${decoded}@`));
+      // A hosted database has two forms: the direct connection, which only speaks IPv6 on the
+      // free plan, and the shared pooler, which speaks IPv4 and carries the project behind the
+      // name of the user. Whichever form is configured, the other one is worth a try.
+      const host = authority.slice(separator + 1);
+      const pooler = /^aws-\d+-([a-z0-9-]+)\.pooler\.supabase\.com(?::\d+)?$/.exec(host);
+      const direct = /^db\.([a-z0-9]+)\.supabase\.co(?::\d+)?$/.exec(host);
+      const buildUrl = (userName, hostName, value) =>
+        `${url.slice(0, authorityStart)}${userName}:${encodeURIComponent(value)}@${hostName}${url.slice(authorityEnd)}`;
+      if (pooler) {
+        const project = /^postgres\.(.+)$/.exec(user)?.[1] ?? '';
+        if (project) add(buildUrl('postgres', `db.${project}.supabase.co:5432`, decoded));
+      }
+      if (direct) {
+        const project = direct[1] ?? '';
+        if (project) {
+          const region = String(process.env.DATABASE_REGION ?? '').trim() || 'eu-north-1';
+          add(buildUrl(`postgres.${project}`, `aws-0-${region}.pooler.supabase.com:5432`, decoded));
+        }
+      }
     }
   }
   return candidates;

@@ -52,6 +52,19 @@ describe('the connection string of the database', () => {
     expect(candidates).toContain('postgresql://postgres.abc:%40m%2Cdy2020x@aws-0-eu-north-1.pooler.supabase.com:5432/postgres');
   });
 
+  it('offers the other form of a hosted database as well', () => {
+    // The direct connection of a hosted database speaks IPv6 only; the shared pooler speaks
+    // IPv4 and carries the project behind the name of the user.
+    const direct = 'postgresql://postgres:secret@db.yvngvwhjavjzpxewblug.supabase.co:5432/postgres';
+    expect(connectionCandidates(direct)).toContain(
+      'postgresql://postgres.yvngvwhjavjzpxewblug:secret@aws-0-eu-north-1.pooler.supabase.com:5432/postgres',
+    );
+    const pooler = 'postgresql://postgres.yvngvwhjavjzpxewblug:secret@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
+    expect(connectionCandidates(pooler)).toContain(
+      'postgresql://postgres:secret@db.yvngvwhjavjzpxewblug.supabase.co:5432/postgres',
+    );
+  });
+
   it('keeps the string itself when the password has its @', () => {
     const url = 'postgresql://postgres.abc:Mhdy2020x%40@aws-0-eu-north-1.pooler.supabase.com:5432/postgres';
     expect(connectionCandidates(url)[0]).toBe(url);
