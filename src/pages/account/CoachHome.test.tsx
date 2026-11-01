@@ -18,21 +18,33 @@ const students = [
   { id: 22, username: 'ali.gh', role: 'student', displayName: 'علی احمدی', coachId: 1, mustChangePassword: false, isActive: false, password: null },
 ];
 
+/** The coach panel asks for two things: the students and the report of the inactive ones. */
+function mockApi(options: { students?: unknown; inactive?: unknown; failStudentsOnce?: boolean } = {}) {
+  let studentCalls = 0;
+  mocks.api.mockImplementation((_method: string, path: string) => {
+    if (String(path).includes('inactive-students')) {
+      return Promise.resolve(options.inactive ?? { students: [], inactiveDays: 7 });
+    }
+    studentCalls += 1;
+    if (options.failStudentsOnce && studentCalls === 1) return Promise.reject(new Error('offline'));
+    return Promise.resolve(options.students ?? { students });
+  });
+}
+
 describe('coach student list filters', () => {
   beforeEach(() => {
     mocks.api.mockReset();
-    mocks.api.mockResolvedValue({ students });
+    mockApi();
   });
   afterEach(() => cleanup());
 
   it('retries loading the student list after a network error', async () => {
-    mocks.api.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ students });
+    mockApi({ failStudentsOnce: true });
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
 
     expect(await screen.findByText('فهرست شاگردها بارگذاری نشد.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'تلاش دوباره برای بارگذاری شاگردها' }));
     expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
-    expect(mocks.api).toHaveBeenCalledTimes(2);
   });
 
   it('keeps common actions but hides account controls after the student claims it', async () => {
@@ -50,7 +62,7 @@ describe('coach student list filters', () => {
   });
 
   it('retains account controls for a manual account before handover', async () => {
-    mocks.api.mockResolvedValueOnce({ students: [{ ...students[0], selfRegistered: false, mustChangePassword: true, password: 'temporary-pass' }] });
+    mockApi({ students: { students: [{ ...students[0]!, selfRegistered: false, mustChangePassword: true, password: 'temporary-pass' }] } });
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
     const card = (await screen.findByText('سارا رضایی')).closest('li');
     if (!card) throw new Error('Student card fixture is missing.');
@@ -78,5 +90,17 @@ describe('coach student list filters', () => {
     expect(screen.getByText('علی احمدی')).toBeInTheDocument();
     expect(screen.queryByText('سارا رضایی')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('۱ از ۲');
+  });
+
+  it('shows the report of the inactive students next to the student list', async () => {
+    mockApi({
+      inactive: {
+        students: [{ id: 21, displayName: 'سارا رضایی', username: 'sara.fit', lastSessionAt: null, daysSinceLastSession: null, sessionsLast30Days: 0, hasProgramme: false }],
+        inactiveDays: 7,
+      },
+    });
+    render(<MemoryRouter><CoachHome /></MemoryRouter>);
+    expect(await screen.findByText('شاگردان بی‌تمرین')).toBeInTheDocument();
+    expect(screen.getByText(/هنوز هیچ تمرینی ثبت نشده/)).toBeInTheDocument();
   });
 });

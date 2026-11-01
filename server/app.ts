@@ -12,6 +12,7 @@ import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, 
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
 import { cardTransferConfig, createCardTransferRequest, reviewCardTransfer, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
+import { INACTIVE_DAYS, listInactiveStudents } from './coachReports.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
 import { listSummaries, saveSummaries, validateSummaries } from './sessions.ts';
@@ -1154,6 +1155,19 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
             transactions: await listCoachTransactions(db, user!.id),
             subscriptionShares: await listCoachSubscriptionShares(db, user!.id),
           },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/coach\/inactive-students$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        return {
+          status: 200,
+          body: { students: await listInactiveStudents(db, user!.id, now()), inactiveDays: INACTIVE_DAYS },
           headers: { 'Cache-Control': 'no-store' },
         };
       },
