@@ -155,6 +155,17 @@ describe('a password that lost a character in the connection string', () => {
     await db.close();
   });
 
+  it('offers the @ at the end of the password as well', async () => {
+    // The password starts with the @. It may belong at the end of it, or not be part of it.
+    const url = `postgresql://${user}:@Mhdy2020x@${host}/postgres`;
+    const candidates = connectionCandidates(url);
+    expect(candidates.map((candidate) => parse(candidate).password)).toEqual([
+      '@Mhdy2020x',
+      'Mhdy2020x@',
+      'Mhdy2020x',
+    ]);
+  });
+
   it('connects with the raw string although the password lost its @', async () => {
     const db = await openDatabase(raw);
     expect(state.attempts).toHaveLength(2);
