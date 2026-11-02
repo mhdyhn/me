@@ -41,23 +41,25 @@ export async function migratePlanPrices(db: Db): Promise<void> {
 /**
  * The price of every paid plan.
  *
- * A plan the admin never touched keeps the price from the environment, so the club can
- * set the price in the panel or in the environment, whichever it prefers.
+ * The price in the database is the truth: the admin writes it in the panel and it takes
+ * effect at once. The environment is only the starting point of a plan the club never
+ * gave a price to, so the three levels never collapse into one price by accident.
  */
 export async function planPrices(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<Record<PlanId, number>> {
   const prices = { ...DEFAULT_PLAN_PRICES };
   const rows = await db.query<PlanPriceRow>('SELECT plan_id, price_tomans, updated_at FROM plan_prices');
-  for (const row of rows) {
-    if (!PAID_PLAN_IDS.includes(row.plan_id as PlanId)) continue;
-    prices[row.plan_id as PlanId] = row.price_tomans;
-  }
-  // The environment still decides the price of a plan the admin never changed.
+  const stored = new Map<string, PlanPriceRow>();
+  for (const row of rows) stored.set(row.plan_id, row);
   const envPrice = Number((env.SUBSCRIPTION_PRICE_TOMANS ?? '').trim());
-  if (Number.isFinite(envPrice) && envPrice >= MIN_PLAN_PRICE_TOMANS && envPrice <= MAX_PLAN_PRICE_TOMANS) {
-    const touched = new Set(rows.map((row) => row.plan_id));
-    for (const planId of PAID_PLAN_IDS) {
-      if (!touched.has(planId)) prices[planId] = Math.floor(envPrice);
+  const envIsSane = Number.isFinite(envPrice) && envPrice >= MIN_PLAN_PRICE_TOMANS && envPrice <= MAX_PLAN_PRICE_TOMANS;
+  for (const planId of PAID_PLAN_IDS) {
+    const row = stored.get(planId);
+    if (row) {
+      prices[planId] = row.price_tomans;
+      continue;
     }
+    // The plan has no price of its own yet: the environment gives it one.
+    if (envIsSane) prices[planId] = Math.floor(envPrice);
   }
   return prices;
 }

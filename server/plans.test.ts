@@ -197,6 +197,25 @@ describe('the prices of the plans in the manager panel', () => {
     expect(String(saved.json.error)).toContain('تومان');
   });
 
+  it('keeps the three levels apart even when the environment carries one price', async () => {
+    // The club has one price in the environment; that must not flatten the three levels.
+    vi.stubEnv('SUBSCRIPTION_PRICE_TOMANS', '99000');
+    const admin = await account('manager-env-price', 'admin');
+    const student = await account('student-env-price', 'student');
+
+    const plan = await call('GET', '/api/me/plan', undefined, student);
+    const prices = plan.json.plans.map((item: { id: string; priceTomans: number }) => [item.id, item.priceTomans]);
+    expect(prices).toEqual([['basic', 49000], ['pro', 99000], ['full', 149000]]);
+
+    // The admin writes a new price and it replaces the price of the database.
+    const saved = await call('PUT', '/api/admin/plans', { full: 199000 }, admin);
+    expect(saved.status).toBe(200);
+    const after = await call('GET', '/api/me/plan', undefined, student);
+    expect(after.json.plans.find((item: { id: string }) => item.id === 'full').priceTomans).toBe(199000);
+    // The other two keep their own price.
+    expect(after.json.plans.find((item: { id: string }) => item.id === 'basic').priceTomans).toBe(49000);
+  });
+
   it('does not let a student change the prices', async () => {
     const student = await account('student-cheap-price', 'student');
     const saved = await call('PUT', '/api/admin/plans', { pro: 1000 }, student);
