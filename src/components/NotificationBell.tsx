@@ -51,9 +51,28 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
+    let timer = 0;
+    const start = () => {
+      window.clearInterval(timer);
+      timer = window.setInterval(() => void load(), 60_000);
+    };
+    // A hidden tab does not poll: an open app keeps its list fresh, a closed one lets the
+    // hosted database sleep instead of staying awake for every logged-in account.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void load();
+        start();
+      } else {
+        window.clearInterval(timer);
+      }
+    };
     void load();
-    const timer = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(timer);
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [load]);
 
   useEffect(() => {

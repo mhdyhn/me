@@ -50,7 +50,7 @@ export async function studentWeeklyInsight(db: Db, userId: number, now = new Dat
   const change = recent - previous;
 
   const rules = recent === 0
-    ? 'در یک ماه گذشته جلسه‌ای تمرین ثبت نشده است؛ یک جلسهٔ سبک، بهترین شروع دوباره است.'
+    ? 'در یک ماه گذشته تمرینی در اپ ثبت نشده است؛ اگر تمرین کرده‌اید، جلسه‌ها را ثبت کنید وگرنه یک جلسهٔ سبک، بهترین شروع دوباره است.'
     : `در یک ماه گذشته ${fa(recent)} جلسه تمرین کرده‌اید (میانگین ${fa(Math.round(perWeek * 10) / 10)} جلسه در هفته)` +
       `${change === 0 ? '؛ همان روند ماه قبل ادامه دارد.' : change > 0 ? `؛ ${fa(change)} جلسه بیشتر از ماه قبل.` : `؛ ${fa(Math.abs(change))} جلسه کمتر از ماه قبل.`}`;
   const ruleText: Insight = { text: rules, source: 'rules' };

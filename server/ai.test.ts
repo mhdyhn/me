@@ -85,7 +85,8 @@ describe('the internal AI of the club', () => {
     const config = aiConfig({ AI_API_KEY: 'k', AI_BASE_URL: 'https://api.example.com/v1' } as NodeJS.ProcessEnv);
     expect(await askAi({ ...config, enabled: false }, 'a', 'b')).toBeNull();
 
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: '  متن   خوب  ' } }] }), { status: 200 }));
+    const fetchMock = vi.fn(async (_input: string | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ choices: [{ message: { content: '  متن   خوب  ' } }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     expect(await askAi(config, 'a', 'b')).toBe('متن خوب');
     const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
@@ -123,10 +124,10 @@ describe('the internal AI of the club', () => {
     vi.stubEnv('AI_BASE_URL', 'https://api.example.com/v1');
     const admin = await signIn('owner', 'owner-pass-123');
     const coach = await createCoach(admin);
-    const student = await createStudent(coach.token, 'سارا');
+    await createStudent(coach.token, 'سارا');
 
     const realFetch = globalThis.fetch;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       if (!String(input).includes('api.example.com')) return realFetch(input, init);
       return new Response(
         JSON.stringify({ choices: [{ message: { content: 'شاگرد ۱ مدتی است تمرین نکرده؛ با او تماس بگیرید.' } }] }),

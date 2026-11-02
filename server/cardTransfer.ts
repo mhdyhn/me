@@ -135,14 +135,15 @@ export async function saveCardTransferSettings(
   };
 }
 
+/** The card number of the club as a column of another query; no extra round trip. */
+export const CARD_TRANSFER_CARD_SQL = '(SELECT card_number FROM card_transfer_settings WHERE id = 1)';
+
 /**
- * Reads the card-transfer configuration; `null` means the feature is switched off.
- * The settings the admin saved in the panel win; the environment is the fallback.
+ * The card-transfer configuration of the environment alone; `null` means there is none.
+ * It reads no database, so a hot route can use it without an extra query.
  */
-export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<CardTransferConfig | null> {
-  const saved = await cardTransferSettings(db);
-  const rawCardNumber = saved ? saved.cardNumber : toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
-  const cardNumber = rawCardNumber;
+export function cardTransferEnvConfig(env: NodeJS.ProcessEnv = process.env): CardTransferConfig | null {
+  const cardNumber = toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
   if (!/^\d{16}$/.test(cardNumber)) return null;
   const rawVerifyUrl = (env.CARD_TRANSFER_VERIFY_URL ?? '').trim();
   let verifyUrl: string | null = null;
@@ -158,13 +159,34 @@ export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = proces
   }
   return {
     cardNumber,
-    cardHolder: (saved ? saved.cardHolder : (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim()) || 'میتی',
-    bankName: saved ? saved.bankName : (env.CARD_TRANSFER_BANK_NAME ?? '').trim(),
-    expiryHours: saved ? saved.expiryHours : positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
-    maxPerDay: saved ? saved.maxPerDay : positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
-    uniqueAmount: saved ? saved.uniqueAmount : (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
+    cardHolder: (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim() || 'میتی',
+    bankName: (env.CARD_TRANSFER_BANK_NAME ?? '').trim(),
+    expiryHours: positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
+    maxPerDay: positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
+    uniqueAmount: (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
     verifyUrl,
     verifyUrlError,
+  };
+}
+
+/**
+ * Reads the card-transfer configuration; `null` means the feature is switched off.
+ * The settings the admin saved in the panel win; the environment is the fallback.
+ */
+export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<CardTransferConfig | null> {
+  const saved = await cardTransferSettings(db);
+  const fromEnv = cardTransferEnvConfig(env);
+  if (!saved) return fromEnv;
+  if (!/^\d{16}$/.test(saved.cardNumber)) return null;
+  return {
+    cardNumber: saved.cardNumber,
+    cardHolder: saved.cardHolder || 'میتی',
+    bankName: saved.bankName,
+    expiryHours: saved.expiryHours,
+    maxPerDay: saved.maxPerDay,
+    uniqueAmount: saved.uniqueAmount,
+    verifyUrl: fromEnv?.verifyUrl ?? null,
+    verifyUrlError: fromEnv?.verifyUrlError ?? null,
   };
 }
 
@@ -246,7 +268,7 @@ export async function createCardTransferRequest(
 ): Promise<CardTransferDetails> {
   const config = await cardTransferConfig(db);
   if (!config) {
-    throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است؛ از پرداخت آنلاین استفاده کنید.');
+    throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است. لطفاً به مربی خود اطلاع دهید.');
   }
   const rows = await db.query<{
     coach_id: number;

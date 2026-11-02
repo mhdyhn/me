@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
 import { paidTransactionCondition } from './payments.ts';
-import { cardTransferConfig } from './cardTransfer.ts';
+import { CARD_TRANSFER_CARD_SQL, cardTransferEnvConfig } from './cardTransfer.ts';
 import { HttpError, requireObject, requireText } from './http.ts';
 import { isValidReps, normalizeReps } from '../shared/repetitions.ts';
 import type { StoredUser } from './users.ts';
@@ -161,8 +161,12 @@ export async function studentProgrammeView(db: Db, user: StoredUser, _now: Date)
   /** Whether the student can pay by card transfer. */
   cardTransferAvailable?: boolean;
 }> {
-  const cardTransferAvailable = (await cardTransferConfig(db)) !== null;
-  if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true, cardTransferAvailable };
+  // The availability comes from the same query as the programme; no extra round trip.
+  const availabilityFrom = (row: { card_transfer_card?: string | null } | undefined) =>
+    row?.card_transfer_card === null || row?.card_transfer_card === undefined
+      ? cardTransferEnvConfig() !== null
+      : row.card_transfer_card.trim() !== '';
+  if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true, cardTransferAvailable: cardTransferEnvConfig() !== null };
   const row = (await db.query<{
     coach_name: string | null;
     body: string | null;
@@ -171,8 +175,10 @@ export async function studentProgrammeView(db: Db, user: StoredUser, _now: Date)
     programme_id: string | null;
     version: string | number | null;
     has_paid: boolean;
+    card_transfer_card: string | null;
   }>(`
     SELECT c.display_name AS coach_name, sp.body, sp.price_tomans, sp.updated_at, sp.programme_id, sp.version,
+      ${CARD_TRANSFER_CARD_SQL} AS card_transfer_card,
       EXISTS (SELECT 1 FROM payment_transactions t
         WHERE t.student_id = s.id AND t.programme_id = sp.programme_id AND ${paidTransactionCondition('t', '$3')}) AS has_paid
     FROM users s
@@ -182,7 +188,7 @@ export async function studentProgrammeView(db: Db, user: StoredUser, _now: Date)
       AND s.personal_program_mode = 0 AND s.auth_version = $4 AND s.coach_access_version = $5
   `, [user.id, user.coachId, process.env.NODE_ENV === 'production' ? 1 : 0, user.authVersion, user.coachAccessVersion]))[0];
   if (!row) throw new HttpError(409, 'حساب یا ارتباط با مربی تغییر کرده است؛ دوباره تلاش کنید.');
-  if (row.body === null) return { program: null, coachName: row.coach_name, isPaid: true, cardTransferAvailable };
+  if (row.body === null) return { program: null, coachName: row.coach_name, isPaid: true, cardTransferAvailable: availabilityFrom(row) };
   const parsed = JSON.parse(row.body) as ProgrammeInput;
   const program: Programme = {
     ...parsed, id: row.programme_id!, version: Number(row.version), priceTomans: row.price_tomans ?? 0, updatedAt: row.updated_at!,
@@ -192,10 +198,10 @@ export async function studentProgrammeView(db: Db, user: StoredUser, _now: Date)
     return {
       program: { id: program.id, version: program.version, title: program.title, days: [], priceTomans: program.priceTomans, updatedAt: program.updatedAt },
       coachName: row.coach_name, isPaid: false,
-      cardTransferAvailable,
+      cardTransferAvailable: availabilityFrom(row),
     };
   }
-  return { program, coachName: row.coach_name, isPaid, cardTransferAvailable };
+  return { program, coachName: row.coach_name, isPaid, cardTransferAvailable: availabilityFrom(row) };
 }
 
 /** Archive is read-only: never expose exercises from another student or an unpaid offer. */
