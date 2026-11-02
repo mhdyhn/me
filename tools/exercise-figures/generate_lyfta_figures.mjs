@@ -2055,13 +2055,16 @@ export const LYFTA_POSES = {
   },
 };
 
-let count = 0;
-for (const [id, states] of Object.entries(LYFTA_POSES)) {
-  for (const [state, pose] of Object.entries(states)) {
-    const file = join(outDir, `${id}-${state}.svg`);
-    writeFileSync(file, renderPose(pose, { label: `${id} (${state})` }));
-    count++;
+// The poses are also imported by the build script, so the writing only happens when this
+// file is run on its own.
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  let count = 0;
+  for (const [id, states] of Object.entries(LYFTA_POSES)) {
+    for (const [state, pose] of Object.entries(states)) {
+      const file = join(outDir, `${id}-${state}.svg`);
+      writeFileSync(file, renderPose(pose, { label: `${id} (${state})` }));
+      count++;
+    }
   }
+  console.log(`Rendered ${count} new SVG figures into ${outDir}`);
 }
-
-console.log(`Rendered ${count} new SVG figures into ${outDir}`);

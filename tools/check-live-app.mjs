@@ -76,6 +76,15 @@ await attempt('the pack of the illustrations', async () => {
   check('every figure of the pack has its drawing', empty.length === 0, empty.length ? `${empty.length} empty, for example ${empty[0]}` : '');
 });
 
+await attempt('the pack of the animations', async () => {
+  const { status, body } = await get('/exercise-motions.json');
+  const parsed = json(body);
+  const names = parsed ? Object.keys(parsed) : [];
+  const empty = names.filter((name) => typeof parsed[name] !== 'string' || parsed[name].length === 0);
+  check('the pack of the animations is served', status === 200 && names.length > 0, `${names.length} animations`);
+  check('every animation of the pack has its frames', empty.length === 0, empty.length ? `${empty.length} empty, for example ${empty[0]}` : '');
+});
+
 await attempt('an illustration', async () => {
   const { status, body } = await get('/exercise-images/barbell-squat-start.svg');
   check('an illustration is served', status === 200 && body.includes('<svg'), `status ${status}`);

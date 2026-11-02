@@ -4,12 +4,22 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildMotion, interpolatePose, parseElements } from './motion.mjs';
 import { POSES } from './poses.mjs';
+import { LYFTA_POSES } from './generate_lyfta_figures.mjs';
 import { renderPose } from './render.mjs';
 
 /** The movements of the catalogue the student can browse. */
 const catalogueIds = () => {
   const source = readFileSync(resolve('src/data/exercises.ts'), 'utf8');
   return [...source.matchAll(/id:\s*'([a-z0-9-]+)'/g)].map((match) => match[1]);
+};
+
+/**
+ * The movements of the big catalogue. The file is written as JSON, so the ids are read
+ * from there rather than from the TypeScript source.
+ */
+const lyftaCatalogueIds = () => {
+  const source = readFileSync(resolve('src/data/lyftaCatalogueExercises.ts'), 'utf8');
+  return [...source.matchAll(/"id":\s*"([a-z0-9-]+)"/g)].map((match) => match[1]);
 };
 
 const segmentLengths = (points) => {
@@ -34,6 +44,18 @@ describe('the animated exercise guide', () => {
     for (const id of catalogueIds()) {
       expect(Object.hasOwn(POSES, id), `pose for ${id}`).toBe(true);
       expect(existsSync(resolve('public/exercise-motion', `${id}.json`)), `motion for ${id}`).toBe(true);
+    }
+  });
+
+  it('gives every movement of the big catalogue an animated guide too', () => {
+    const ids = lyftaCatalogueIds();
+    expect(ids.length).toBeGreaterThan(100);
+    for (const id of ids) {
+      expect(Object.hasOwn(LYFTA_POSES, id), `pose for ${id}`).toBe(true);
+      const motion = buildMotion(LYFTA_POSES[id]);
+      expect(motion, `motion for ${id}`).not.toBeNull();
+      expect(motion.elements.length, `elements for ${id}`).toBeGreaterThan(4);
+      expect(existsSync(resolve('public/exercise-motion', `${id}.json`)), `motion file for ${id}`).toBe(true);
     }
   });
 
