@@ -104,6 +104,14 @@ describe('the assistant with the model', () => {
     expect(results[0].verdict).not.toBe('confirmed');
   });
 
+  it('reads the answer of the model in the ways a model writes it', async () => {
+    const rows = parseStatement('1404/08/12  99123  99887766');
+    const config: AiConfig = { enabled: true, baseUrl: 'https://example.test', model: 'test', reason: null };
+    // The model answers in its own way; the rules still hold the last word.
+    const results = await reviewReceipts(rows, [receipt()], config);
+    expect(results[0].verdict).toBe('confirmed');
+  });
+
   it('counts the receipts of every kind', () => {
     const summary = summarise([
       { authority: 'a', kind: 'program', studentName: 'الف', verdict: 'confirmed', reason: '', matchedLine: 1, matchedAmountTomans: 1, source: 'rules' },

@@ -270,7 +270,8 @@ function assistantPrompt(rows: StatementRow[], receipts: ReceiptCandidate[]): st
 function parseVerdicts(answer: string, receipts: ReceiptCandidate[]): Map<number, { verdict: ReceiptVerdict; reason: string }> {
   const verdicts = new Map<number, { verdict: ReceiptVerdict; reason: string }>();
   for (const line of answer.split(/\r?\n/)) {
-    const match = line.match(/رسید\s*(\d+)\s*[|،,\-–:]\s*(قطعی|مشکوک|ناموجود)\s*[|،,\-–:]\s*(.+)/);
+    // The model writes the line in its own way, so the separators can be anything.
+    const match = line.match(/رسید\s*(\d+)\s*[|،,\-–:؛\s]*\s*(قطعی|مشکوک|ناموجود)\s*[|،,\-–:؛\s]*\s*(.+)/);
     if (!match) continue;
     const index = Number(match[1]) - 1;
     if (!Number.isInteger(index) || index < 0 || index >= receipts.length) continue;
