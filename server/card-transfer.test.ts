@@ -42,6 +42,8 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   vi.unstubAllEnvs();
+  // A test that fails before it restores the mock must not leak it into the next one.
+  vi.restoreAllMocks();
   vi.restoreAllMocks();
 });
 
@@ -273,8 +275,41 @@ describe('card-to-card payment', () => {
     });
 
     const refused = await call('POST', '/api/pay/card-transfer/receipt', { authority: details.authority, trackingNumber: '77889900' }, student.token);
-    expect(refused.status).toBe(409);
+    expect(refused.status).toBe(400);
     expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(false);
+    // A refused receipt is not put in the queue of the manager and it does not count towards
+    // the daily limit; the request stays open so the student can send the right receipt.
+    const row = (await db.query('SELECT ref_id, card_transfer_confirmed_by FROM payment_transactions WHERE authority = $1', [details.authority]))[0];
+    expect(row.ref_id).toBeNull();
+    expect(row.card_transfer_confirmed_by).toBeNull();
+    guardedFetch.mockRestore();
+    globalThis.fetch = nativeFetch;
+  });
+
+  it('keeps a receipt for a manager when the verification service cannot be reached', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id);
+    const details = (await call('POST', '/api/pay/card-transfer/start', request(program), student.token)).json;
+
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/receipt');
+    const nativeFetch = globalThis.fetch;
+    const guardedFetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://verify.example.com/')) {
+        return new Response('service unavailable', { status: 503 });
+      }
+      if (!String(input).startsWith(base + '/')) throw new Error('Unexpected external request');
+      return nativeFetch(input, init);
+    });
+
+    const queued = await call('POST', '/api/pay/card-transfer/receipt', { authority: details.authority, trackingNumber: '88990011' }, student.token);
+    expect(queued.status).toBe(409);
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(false);
+    // The money may really have arrived, so the receipt waits for a manager.
+    const row = (await db.query('SELECT ref_id, card_transfer_confirmed_by FROM payment_transactions WHERE authority = $1', [details.authority]))[0];
+    expect(row.ref_id).toBe('88990011');
+    expect(row.card_transfer_confirmed_by).toBe('needs_review');
     guardedFetch.mockRestore();
     globalThis.fetch = nativeFetch;
   });

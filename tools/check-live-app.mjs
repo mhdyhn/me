@@ -54,6 +54,11 @@ await attempt('the release endpoint', async () => {
   const parsed = json(body);
   check('the release answers', status === 200 && typeof parsed?.revision === 'string', parsed?.revision ?? `status ${status}`);
   check('the release points at the newest Android build', typeof parsed?.apkUrl === 'string' && parsed.apkUrl.startsWith('https://'), String(parsed?.apkUrl));
+  // When the caller knows which commit should be online, an older version is a failure.
+  const expected = (process.env.EXPECTED_REVISION ?? '').trim().toLowerCase();
+  if (expected) {
+    check('the online app is the version that was just pushed', String(parsed?.revision ?? '').toLowerCase() === expected, `${String(parsed?.revision)} vs ${expected}`);
+  }
 });
 
 await attempt('the login page', async () => {

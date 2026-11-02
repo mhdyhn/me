@@ -447,7 +447,7 @@ function normalizeSenderLast4(value: unknown): string | null {
   return cleaned;
 }
 
-export type ReceiptVerification = 'verified' | 'rejected' | 'no_service';
+export type ReceiptVerification = 'verified' | 'rejected' | 'unavailable' | 'no_service';
 
 export async function verifyWithProvider(config: CardTransferConfig, payload: {
   authority: string;
@@ -471,12 +471,15 @@ export async function verifyWithProvider(config: CardTransferConfig, payload: {
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!response.ok) return 'rejected';
+    if (!response.ok) return 'unavailable';
     const body = (await response.json()) as { valid?: unknown };
+    // The service answered and refused this receipt: the tracking number or the amount is wrong.
     return body?.valid === true ? 'verified' : 'rejected';
   } catch (error) {
     console.error('Card transfer receipt verification failed:', error);
-    return 'rejected';
+    // The service could not be reached. The money may well have arrived, so the receipt is not
+    // refused; it waits for a manager, exactly like a receipt with no service at all.
+    return 'unavailable';
   }
 }
 
@@ -726,6 +729,12 @@ export async function submitCardTransferReceipt(
     amountTomans: expectedAmount,
     reference: row.card_transfer_reference ?? '',
   });
+  if (verification === 'rejected') {
+    // The bank service answered and refused this receipt: the tracking number or the amount is
+    // wrong. Such a receipt is not put in the queue of the manager and it does not count
+    // towards the daily limit; the request stays open so the student can send the right one.
+    throw new HttpError(400, 'رسید در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری یا مبلغ را بررسی کنید و دوباره بفرستید. اگر مطمئنید واریز انجام شده است، با پشتیبانی تماس بگیرید.');
+  }
   if (verification !== 'verified') {
     // The receipt is kept on the request so a manager can settle it in seconds from the panel.
     await db.query(
@@ -750,7 +759,7 @@ export async function submitCardTransferReceipt(
     }, now);
     throw new HttpError(409, verification === 'no_service'
       ? 'رسید واریزی ثبت شد و در صف بررسی مدیر است. به‌محض که واریز در صورت‌حساب دیده شود، برنامهٔ شما باز می‌شود.'
-      : 'رسید واریزی ثبت شد و در صف بررسی مدیر است. اگر شمارهٔ پیگیری درست نبوده، پس از بررسی می‌توانید رسید درست را دوباره ثبت کنید.');
+      : 'سرویس بررسی بانکی در دسترس نبود؛ رسید واریزی ثبت شد و در صف بررسی مدیر است. به‌محض که واریز در صورت‌حساب دیده شود، برنامهٔ شما باز می‌شود.');
   }
 
   await db.query(

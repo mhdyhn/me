@@ -38,6 +38,8 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   vi.unstubAllEnvs();
+  // A test that fails before it restores the mock must not leak it into the next one.
+  vi.restoreAllMocks();
 });
 
 async function account(username: string, role: Role, coachId: number | null = null, selfRegistered = false): Promise<Session> {
@@ -126,6 +128,64 @@ describe('the optional student subscription', () => {
     // The student hears about it in the app.
     const notifications = await call('GET', '/api/notifications', undefined, student);
     expect(notifications.json.notifications.some((item: { title: string }) => item.title.includes('تأیید نشد'))).toBe(true);
+  });
+
+  it('never queues a receipt that the bank service refuses, and lets the student send it again', async () => {
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/subscription');
+    const nativeFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://verify.example.com/')) {
+        return new Response(JSON.stringify({ valid: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (!String(input).startsWith(base + '/')) throw new Error('Unexpected external request');
+      return nativeFetch(input, init);
+    });
+
+    const student = await account('buyer-refused', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    const refused = await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '99887766',
+    }, student);
+    expect(refused.status).toBe(400);
+    expect(String(refused.json.error)).toContain('تأیید نشد');
+    // The subscription stays closed and the receipt is not in the queue of the manager.
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
+    const rows = await db.query<{ status: string; tracking_number: string | null }>(
+      'SELECT status, tracking_number FROM subscription_payments WHERE authority = $1', [checkout.json.authority]
+    );
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].tracking_number).toBeNull();
+    const notifications = await call('GET', '/api/notifications', undefined, student);
+    expect(notifications.json.notifications.length).toBe(0);
+    vi.restoreAllMocks();
+  });
+
+  it('keeps a receipt for a manager when the bank service cannot be reached', async () => {
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/subscription');
+    const nativeFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://verify.example.com/')) {
+        return new Response('service unavailable', { status: 503 });
+      }
+      if (!String(input).startsWith(base + '/')) throw new Error('Unexpected external request');
+      return nativeFetch(input, init);
+    });
+
+    const student = await account('buyer-unreachable', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    const queued = await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '55443322',
+    }, student);
+    expect(queued.status).toBe(200);
+    expect(queued.json.pending).toBe(true);
+    // The money may really have arrived, so the receipt waits for a manager.
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
+    const rows = await db.query<{ status: string; tracking_number: string | null }>(
+      'SELECT status, tracking_number FROM subscription_payments WHERE authority = $1', [checkout.json.authority]
+    );
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].tracking_number).toBe('55443322');
+    vi.restoreAllMocks();
   });
 
   it('activates the month at once when the bank service verifies the receipt', async () => {

@@ -68,6 +68,28 @@ describe('buying the student subscription', () => {
     expect(receipt?.body).toMatchObject({ authority: 'SUB-1234', trackingNumber: '99887766' });
   });
 
+  it('shows a receipt that waits for a manager as waiting, not as a finished purchase', async () => {
+    const user = userEvent.setup();
+    stubApi({
+      '/me/subscription/checkout': details,
+      '/me/subscription/receipt': {
+        success: true,
+        pending: true,
+        message: 'رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.',
+        state: { priceTomans: 99000, active: false, expiresAt: null, daysLeft: 0, referralCoachName: null, cardTransferAvailable: true },
+      },
+    });
+    render(<SubscriptionCheckout planId="pro" priceTomans={99000} />);
+    await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
+    await screen.findByText('6037 9999 1234 5678');
+    await user.type(screen.getByLabelText('شمارهٔ پیگیری رسید'), '99887766');
+    await user.click(screen.getByRole('button', { name: /ثبت رسید و فعال‌سازی اشتراک/ }));
+
+    expect(await screen.findByText(/در صف بررسی است/)).toBeTruthy();
+    // The green tick would tell the student the subscription is already open.
+    expect(screen.queryByText(/اشتراک هوشمند شما فعال شد/)).toBeNull();
+  });
+
   it('keeps the subscription closed when the server refuses the receipt', async () => {
     const user = userEvent.setup();
     stubApi({
