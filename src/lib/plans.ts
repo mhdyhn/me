@@ -1,6 +1,6 @@
 import { api } from './api';
 
-export type PlanId = 'free' | 'coach' | 'independent';
+export type PlanId = 'free' | 'coach' | 'basic' | 'pro' | 'full';
 
 export type FeatureKey =
   | 'exercise_guide'
@@ -82,3 +82,6 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   nutrition: 'تغذیهٔ هوشمند (هدف، دفتر خوراک، یادداشت)',
   ai_hub: 'اکوسیستم هوش سلامتی و عملکرد',
 };
+
+/** The paid plans a student can pick from, cheapest first. */
+export const PAID_PLAN_IDS: PlanId[] = ['basic', 'pro', 'full'];

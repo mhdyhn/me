@@ -10,6 +10,8 @@ import { AdminStudents } from './AdminStudents';
 import { AdminAiStatus } from './AdminAiStatus';
 import { AdminCardTransfer } from './AdminCardTransfer';
 import { AdminCardTransferReceipts } from './AdminCardTransferReceipts';
+import { AdminPlans } from './AdminPlans';
+import { AdminReceiptAssistant } from './AdminReceiptAssistant';
 import { OwnerProfileCopies } from './OwnerProfileCopies';
 
 interface CoachSummary extends PublicUser {
@@ -371,6 +373,8 @@ function AdminCoaches() {
         </ul>
       )}
       <AdminStudents />
+      <AdminPlans />
+      <AdminReceiptAssistant />
       <AdminCardTransfer />
       <AdminCardTransferReceipts />
       <AdminAiStatus />

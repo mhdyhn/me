@@ -37,7 +37,7 @@ describe('buying the student subscription', () => {
   it('shows the exact amount, the card and the reference after the request starts', async () => {
     const user = userEvent.setup();
     stubApi({ '/me/subscription/checkout': details });
-    render(<SubscriptionCheckout priceTomans={99000} />);
+    render(<SubscriptionCheckout planId="pro" priceTomans={99000} />);
 
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     expect(await screen.findByText('6037 9999 1234 5678')).toBeTruthy();
@@ -56,7 +56,7 @@ describe('buying the student subscription', () => {
         state: { priceTomans: 99000, active: true, expiresAt: '2026-11-30T08:00:00.000Z', daysLeft: 30, referralCoachName: null, cardTransferAvailable: true },
       },
     });
-    render(<SubscriptionCheckout priceTomans={99000} />);
+    render(<SubscriptionCheckout planId="pro" priceTomans={99000} />);
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     await screen.findByText('6037 9999 1234 5678');
 
@@ -74,7 +74,7 @@ describe('buying the student subscription', () => {
       '/me/subscription/checkout': details,
       '/me/subscription/receipt': { error: 'رسید واریزی در سرویس بررسی بانکی تأیید نشد.' },
     });
-    render(<SubscriptionCheckout priceTomans={99000} />);
+    render(<SubscriptionCheckout planId="pro" priceTomans={99000} />);
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     await screen.findByText('6037 9999 1234 5678');
     await user.type(screen.getByLabelText('شمارهٔ پیگیری رسید'), '99887766');

@@ -7,6 +7,8 @@ export interface SubscriptionState {
   daysLeft: number;
   referralCoachName: string | null;
   cardTransferAvailable: boolean;
+  /** The paid plan the current subscription is for; null when there is none. */
+  subscriptionPlanId?: string | null;
 }
 
 export interface SubscriptionCheckoutDetails {
@@ -20,6 +22,8 @@ export interface SubscriptionCheckoutDetails {
   cardHolder: string;
   expiresAt: string;
   instructions: string[];
+  /** The paid plan this purchase is for. */
+  planId: string;
 }
 
 /** The subscription of the signed-in user; the smart features are open when `active` is true. */
@@ -33,9 +37,9 @@ export async function loadSubscription(): Promise<SubscriptionState | null> {
   }
 }
 
-/** Starts the card-to-card purchase of one subscription month. */
-export async function startSubscriptionCheckout(): Promise<SubscriptionCheckoutDetails> {
-  const response = await api<SubscriptionCheckoutDetails>('POST', '/me/subscription/checkout');
+/** Starts the card-to-card purchase of one subscription month of the chosen plan. */
+export async function startSubscriptionCheckout(planId: string): Promise<SubscriptionCheckoutDetails> {
+  const response = await api<SubscriptionCheckoutDetails>('POST', '/me/subscription/checkout', { planId });
   if (!response || typeof response.authority !== 'string' || !/^[A-Za-z0-9_-]{5,100}$/.test(response.authority) ||
       !Number.isSafeInteger(response.transferAmountTomans) || response.transferAmountTomans <= 0 ||
       typeof response.cardNumber !== 'string' || !/^\d{16}$/.test(response.cardNumber)) {

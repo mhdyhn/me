@@ -21,7 +21,7 @@ beforeEach(async () => {
   vi.stubEnv('CARD_TRANSFER_CARD_NUMBER', '6037999912345678');
   vi.stubEnv('CARD_TRANSFER_CARD_HOLDER', 'شرکت میتی');
   vi.stubEnv('CARD_TRANSFER_VERIFY_URL', '');
-  vi.stubEnv('SUBSCRIPTION_PRICE_TOMANS', '99000');
+  vi.stubEnv('SUBSCRIPTION_PRICE_TOMANS', '');
   db = await openDatabase('memory');
   server = createServer(createApp({ db, secretKey: key, now: () => clock }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -49,6 +49,15 @@ async function call(method: string, path: string, body?: unknown, session?: Sess
   if (session) headers.Authorization = `Bearer ${session.token}`;
   const response = await fetch(base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: response.status, json: await response.json() as Record<string, any> };
+}
+
+/** Gives the student an active subscription of the given paid plan. */
+async function subscribe(student: Session, plan: string, amount = 99000) {
+  await db.query(
+    `INSERT INTO subscriptions (user_id, plan, amount_tomans, status, started_at, expires_at, created_at)
+     VALUES ($1, $2, $3, 'active', $4, $5, $4)`,
+    [student.id, plan, amount, clock.toISOString(), new Date(clock.getTime() + 30 * 86400_000).toISOString()]
+  );
 }
 
 describe('the plans of the club', () => {
@@ -79,48 +88,118 @@ describe('the plans of the club', () => {
     expect(plan.json.features).not.toContain('smart_program');
     expect(plan.json.features).not.toContain('ai_hub');
     expect(plan.json.features).not.toContain('coach_program');
-
-    // The paid plan is on sale for this student.
-    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
-    expect(checkout.status).toBe(201);
-    expect(checkout.json.priceTomans).toBe(99000);
-    expect(checkout.json.autoConfirm).toBe(false);
   });
 
-  it('opens the smart parts and closes the coach parts on the paid plan', async () => {
-    const student = await account('independent-paid', 'student');
-    await db.query(
-      `INSERT INTO subscriptions (user_id, plan, amount_tomans, status, started_at, expires_at, created_at)
-       VALUES ($1, 'monthly', 99000, 'active', $2, $3, $2)`,
-      [student.id, clock.toISOString(), new Date(clock.getTime() + 30 * 86400_000).toISOString()]
-    );
+  it('sells the three levels and each level opens its own parts', async () => {
+    const basic = await account('student-basic', 'student');
+    await subscribe(basic, 'basic', 49000);
+    const basicPlan = await call('GET', '/api/me/plan', undefined, basic);
+    expect(basicPlan.json.planId).toBe('basic');
+    // The cheapest plan gives the programme builder, but not the nutrition or the AI.
+    expect(basicPlan.json.features).toEqual(expect.arrayContaining(['smart_program', 'exercise_guide', 'progress_report']));
+    expect(basicPlan.json.features).not.toContain('nutrition');
+    expect(basicPlan.json.features).not.toContain('ai_hub');
+
+    const pro = await account('student-pro', 'student');
+    await subscribe(pro, 'pro', 99000);
+    const proPlan = await call('GET', '/api/me/plan', undefined, pro);
+    expect(proPlan.json.planId).toBe('pro');
+    expect(proPlan.json.features).toEqual(expect.arrayContaining(['smart_program', 'nutrition']));
+    expect(proPlan.json.features).not.toContain('ai_hub');
+
+    const full = await account('student-full', 'student');
+    await subscribe(full, 'full', 149000);
+    const fullPlan = await call('GET', '/api/me/plan', undefined, full);
+    expect(fullPlan.json.planId).toBe('full');
+    expect(fullPlan.json.features).toEqual(expect.arrayContaining(['smart_program', 'nutrition', 'ai_hub']));
+    // Nobody wrote a programme for these students, so the coach parts stay closed.
+    expect(fullPlan.json.features).not.toContain('coach_program');
+    expect(fullPlan.json.features).not.toContain('coach_chat');
+  });
+
+  it('keeps the older subscriptions on the plan they were bought for', async () => {
+    const student = await account('student-legacy', 'student');
+    await subscribe(student, 'monthly', 99000);
 
     const plan = await call('GET', '/api/me/plan', undefined, student);
-    expect(plan.json.planId).toBe('independent');
-    expect(plan.json.subscriptionActive).toBe(true);
-    expect(plan.json.daysLeft).toBe(30);
-    expect(plan.json.features).toEqual(expect.arrayContaining([
-      'smart_program', 'nutrition', 'ai_hub', 'exercise_guide', 'progress_report',
-    ]));
-    // Nobody wrote a programme for this student, so the coach parts stay closed.
-    expect(plan.json.features).not.toContain('coach_program');
-    expect(plan.json.features).not.toContain('coach_nutrition');
-    expect(plan.json.features).not.toContain('coach_chat');
+    // The old rows bought the only plan there was, which opened everything.
+    expect(plan.json.planId).toBe('full');
+    expect(plan.json.features).toContain('ai_hub');
   });
 
-  it('shows both plans to compare and never sells a plan to a coach', async () => {
+  it('shows the three paid plans to compare and never sells a plan to a coach', async () => {
     const coach = await account('coach-account', 'coach');
     const student = await account('student-compare', 'student');
 
     const plan = await call('GET', '/api/me/plan', undefined, student);
-    expect(plan.json.plans.map((item: { id: string }) => item.id)).toEqual(['independent', 'coach']);
-    expect(plan.json.plans[0].priceTomans).toBe(99000);
-    expect(plan.json.plans[1].priceTomans).toBe(0);
+    expect(plan.json.plans.map((item: { id: string }) => item.id)).toEqual(['basic', 'pro', 'full']);
+    expect(plan.json.plans[0].priceTomans).toBe(49000);
+    expect(plan.json.plans[1].priceTomans).toBe(99000);
+    expect(plan.json.plans[2].priceTomans).toBe(149000);
 
     expect((await call('POST', '/api/me/subscription/checkout', undefined, coach)).status).toBe(403);
 
     // A coach works inside the club: every part is open and no plan is needed.
     const coachPlan = await call('GET', '/api/me/plan', undefined, coach);
     expect(coachPlan.json.features).toEqual(expect.arrayContaining(['smart_program', 'ai_hub', 'nutrition']));
+  });
+
+  it('sells the plan the student picked and remembers it', async () => {
+    const student = await account('student-picks', 'student');
+
+    const checkout = await call('POST', '/api/me/subscription/checkout', { planId: 'basic' }, student);
+    expect(checkout.status).toBe(201);
+    expect(checkout.json.planId).toBe('basic');
+    expect(checkout.json.priceTomans).toBe(49000);
+    // The exact amount carries a small tail so the bank statement can be matched.
+    expect(checkout.json.transferAmountTomans).toBeGreaterThan(49000);
+
+    const payment = await db.query<{ plan: string }>(
+      'SELECT plan FROM subscription_payments WHERE authority = $1',
+      [checkout.json.authority]
+    );
+    expect(payment[0].plan).toBe('basic');
+  });
+
+  it('refuses a plan that is not for sale', async () => {
+    const student = await account('student-bad-plan', 'student');
+    const checkout = await call('POST', '/api/me/subscription/checkout', { planId: 'coach' }, student);
+    expect(checkout.status).toBe(400);
+    expect(String(checkout.json.error)).toContain('قابل خرید');
+  });
+});
+
+describe('the prices of the plans in the manager panel', () => {
+  it('changes the price of a plan and the paywall shows the new price', async () => {
+    const admin = await account('manager', 'admin');
+    const student = await account('student-new-price', 'student');
+
+    const before = await call('GET', '/api/me/plan', undefined, student);
+    expect(before.json.plans.find((item: { id: string }) => item.id === 'pro').priceTomans).toBe(99000);
+
+    const saved = await call('PUT', '/api/admin/plans', { pro: 129000 }, admin);
+    expect(saved.status).toBe(200);
+    expect(saved.json.plans.find((item: { id: string }) => item.id === 'pro').priceTomans).toBe(129000);
+
+    const after = await call('GET', '/api/me/plan', undefined, student);
+    expect(after.json.plans.find((item: { id: string }) => item.id === 'pro').priceTomans).toBe(129000);
+
+    // The new price is the one the student pays.
+    const checkout = await call('POST', '/api/me/subscription/checkout', { planId: 'pro' }, student);
+    expect(checkout.status).toBe(201);
+    expect(checkout.json.priceTomans).toBe(129000);
+  });
+
+  it('refuses a price that is not a sane amount', async () => {
+    const admin = await account('manager-bad-price', 'admin');
+    const saved = await call('PUT', '/api/admin/plans', { pro: 10 }, admin);
+    expect(saved.status).toBe(400);
+    expect(String(saved.json.error)).toContain('تومان');
+  });
+
+  it('does not let a student change the prices', async () => {
+    const student = await account('student-cheap-price', 'student');
+    const saved = await call('PUT', '/api/admin/plans', { pro: 1000 }, student);
+    expect(saved.status).toBe(403);
   });
 });

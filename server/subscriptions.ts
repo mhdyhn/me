@@ -9,7 +9,8 @@ import {
   verifyWithProvider,
 } from './cardTransfer.ts';
 import { adminRecipients, createNotification } from './notifications.ts';
-import { planIdForUser, unlockedFeatures, type FeatureKey, type PlanId } from './plans.ts';
+import { isPaidPlan, planIdForUser, unlockedFeatures, type FeatureKey, type PlanId } from './plans.ts';
+import { planPrice } from './planPrices.ts';
 import { findUserById } from './users.ts';
 
 /**
@@ -36,6 +37,8 @@ export interface SubscriptionState {
   priceTomans: number;
   /** The plan of this account right now. */
   planId: PlanId;
+  /** The paid plan the current subscription is for; null when there is none. */
+  subscriptionPlanId: PlanId | null;
   /** The features the plan opens. */
   features: FeatureKey[];
   /** Whether the smart features are open right now. */
@@ -96,9 +99,11 @@ export async function migrateSubscriptions(db: Db): Promise<void> {
       tracking_number TEXT,
       sender_card_last4 TEXT,
       source_coach_id INTEGER REFERENCES users(id),
+      plan TEXT,
       created_at TEXT NOT NULL,
       confirmed_at TEXT
     );
+    ALTER TABLE subscription_payments ADD COLUMN IF NOT EXISTS plan TEXT;
     CREATE INDEX IF NOT EXISTS idx_subscription_payment_user ON subscription_payments(user_id, status);
   `);
 }
@@ -109,6 +114,7 @@ interface SubscriptionRow {
   source_coach_id: number | null;
   coach_share_tomans: number;
   status: string;
+  plan: string;
 }
 
 /** The current subscription of a user, or `null` when there is none. */
@@ -116,7 +122,8 @@ export async function subscriptionState(db: Db, userId: number, now = new Date()
   const user = await findUserById(db, userId);
   if (!user) throw new HttpError(404, 'حساب یافت نشد.');
   const rows = await db.query<SubscriptionRow & { coach_name: string | null }>(
-    `SELECT s.expires_at, s.amount_tomans, s.source_coach_id, s.coach_share_tomans, s.status, c.display_name AS coach_name
+    `SELECT s.expires_at, s.amount_tomans, s.source_coach_id, s.coach_share_tomans, s.status, s.plan,
+            c.display_name AS coach_name
      FROM subscriptions s LEFT JOIN users c ON c.id = s.source_coach_id
      WHERE s.user_id = $1 AND s.status = 'active' AND s.expires_at > $2
      ORDER BY s.expires_at DESC LIMIT 1`,
@@ -126,17 +133,30 @@ export async function subscriptionState(db: Db, userId: number, now = new Date()
   const expiresAt = row?.expires_at ?? null;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((Date.parse(expiresAt) - now.getTime()) / 86_400_000)) : 0;
   const active = Boolean(row);
-  const planId = planIdForUser(user, active);
+  // The subscription remembers which paid plan the student bought. The rows of the
+  // older single-plan club carry another word and keep the plan they were bought for.
+  const subscriptionPlanId = active ? paidPlanId(row!.plan) : null;
+  const planId = planIdForUser(user, subscriptionPlanId);
+  const priceTomans = subscriptionPlanId ? await planPrice(db, subscriptionPlanId) : subscriptionPriceTomans();
   return {
-    priceTomans: subscriptionPriceTomans(),
+    priceTomans,
     planId,
-    features: unlockedFeatures(user, active),
+    subscriptionPlanId,
+    features: unlockedFeatures(user, subscriptionPlanId),
     active,
     expiresAt,
     daysLeft,
     referralCoachName: row?.coach_name ?? null,
     cardTransferAvailable: (await cardTransferConfig(db)) !== null,
   };
+}
+
+/** The paid plan a stored subscription row belongs to; null when the row names none. */
+export function paidPlanId(stored: string | null | undefined): PlanId | null {
+  if (!stored) return null;
+  if (stored === 'basic' || stored === 'pro' || stored === 'full') return stored;
+  // The rows of the older club bought the only plan there was, which opened everything.
+  return 'full';
 }
 
 export interface SubscriptionCheckout {
@@ -150,6 +170,8 @@ export interface SubscriptionCheckout {
   cardHolder: string;
   expiresAt: string;
   instructions: string[];
+  /** The paid plan this purchase is for. */
+  planId: PlanId;
 }
 
 function expiryFrom(createdAt: string, hours: number): string {
@@ -174,10 +196,18 @@ function instructionsFor(amount: number, reference: string, autoConfirm: boolean
  * Starts the card-to-card purchase of one subscription month.
  * An unfinished request is reused, so the student is never asked to pay twice.
  */
-export async function createSubscriptionCheckout(db: Db, userId: number, now = new Date()): Promise<SubscriptionCheckout> {
+export async function createSubscriptionCheckout(
+  db: Db,
+  userId: number,
+  planId: PlanId = 'pro',
+  now = new Date()
+): Promise<SubscriptionCheckout> {
   const config = await cardTransferConfig(db);
   if (!config) {
     throw new HttpError(503, 'خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.');
+  }
+  if (!isPaidPlan(planId)) {
+    throw new HttpError(400, 'این پلن قابل خرید نیست.');
   }
   const state = await subscriptionState(db, userId, now);
   if (state.active) {
@@ -186,7 +216,7 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
   if (state.planId === 'coach') {
     throw new HttpError(409, 'شما پلن «همراه مربی» را دارید؛ برنامهٔ تمرینی و غذایی مربی برایتان باز است و اشتراک لازم نیست.');
   }
-  const price = subscriptionPriceTomans();
+  const price = await planPrice(db, planId);
   const pending = (await db.query<{
     id: number;
     authority: string;
@@ -195,14 +225,17 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
     reference: string;
     created_at: string;
     status: string;
+    plan: string | null;
   }>(
-    `SELECT id, authority, amount_tomans, transfer_amount_tomans, reference, created_at, status
+    `SELECT id, authority, amount_tomans, transfer_amount_tomans, reference, created_at, status, plan
      FROM subscription_payments WHERE user_id = $1 AND status = 'pending' ORDER BY id DESC LIMIT 1`,
     [userId]
   ))[0];
   if (pending) {
     const expiresAt = expiryFrom(pending.created_at, config.expiryHours);
-    if (Date.parse(expiresAt) > now.getTime()) {
+    // An unfinished request for the same plan is reused, so the student is never asked
+    // to pay twice. A request for another plan is finished first.
+    if (Date.parse(expiresAt) > now.getTime() && (paidPlanId(pending.plan) ?? 'pro') === planId) {
       return {
         authority: pending.authority,
         priceTomans: pending.amount_tomans,
@@ -213,9 +246,14 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
         expiresAt,
         autoConfirm: Boolean(config.verifyUrl),
         instructions: instructionsFor(pending.transfer_amount_tomans, pending.reference, Boolean(config.verifyUrl)),
+        planId,
       };
     }
-    await db.query("UPDATE subscription_payments SET status = 'expired' WHERE id = $1", [pending.id]);
+    if (Date.parse(expiresAt) > now.getTime()) {
+      await db.query("UPDATE subscription_payments SET status = 'expired' WHERE id = $1", [pending.id]);
+    } else {
+      await db.query("UPDATE subscription_payments SET status = 'expired' WHERE id = $1", [pending.id]);
+    }
   }
 
   const coach = (await db.query<{ referred_by_coach_id: number | null }>(
@@ -228,10 +266,10 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
   const createdAt = now.toISOString();
   const inserted = await db.query<{ id: number }>(
     `INSERT INTO subscription_payments
-     (user_id, amount_tomans, transfer_amount_tomans, reference, authority, status, source_coach_id, created_at)
-     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
+     (user_id, amount_tomans, transfer_amount_tomans, reference, authority, status, source_coach_id, plan, created_at)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8)
      ON CONFLICT DO NOTHING RETURNING id`,
-    [userId, price, transferAmount, reference, authority, coach?.referred_by_coach_id ?? null, createdAt]
+    [userId, price, transferAmount, reference, authority, coach?.referred_by_coach_id ?? null, planId, createdAt]
   );
   if (!inserted.length) {
     const existing = (await db.query<{
@@ -256,6 +294,7 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
       expiresAt: expiryFrom(existing.created_at, config.expiryHours),
       autoConfirm: Boolean(config.verifyUrl),
       instructions: instructionsFor(existing.transfer_amount_tomans, existing.reference, Boolean(config.verifyUrl)),
+      planId,
     };
   }
   return {
@@ -268,6 +307,7 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
     expiresAt: expiryFrom(createdAt, config.expiryHours),
     autoConfirm: Boolean(config.verifyUrl),
     instructions: instructionsFor(transferAmount, reference, Boolean(config.verifyUrl)),
+    planId,
   };
 }
 
@@ -314,8 +354,9 @@ export async function submitSubscriptionReceipt(
     status: string;
     created_at: string;
     source_coach_id: number | null;
+    plan: string | null;
   }>(
-    `SELECT id, amount_tomans, transfer_amount_tomans, reference, authority, status, created_at, source_coach_id
+    `SELECT id, amount_tomans, transfer_amount_tomans, reference, authority, status, created_at, source_coach_id, plan
      FROM subscription_payments WHERE authority = $1 AND user_id = $2`,
     [input.authority, userId]
   );
@@ -402,6 +443,8 @@ interface SettleableSubscriptionPayment {
   amount_tomans: number;
   source_coach_id: number | null;
   authority: string;
+  /** The paid plan this payment buys. */
+  plan: string | null;
 }
 
 /**
@@ -435,8 +478,8 @@ async function settleSubscriptionPayment(
   await db.query(
     `INSERT INTO subscriptions
      (user_id, plan, amount_tomans, status, started_at, expires_at, source_coach_id, coach_share_tomans, admin_share_tomans, authority, created_at)
-     VALUES ($1, 'monthly', $2, 'active', $3, $4, $5, $6, $7, $8, $3)`,
-    [userId, payment.amount_tomans, startedAt, periodEnd, payment.source_coach_id, coachShare, adminShare, payment.authority]
+     VALUES ($1, $2, $3, 'active', $4, $5, $6, $7, $8, $9, $4)`,
+    [userId, payment.plan ?? 'pro', payment.amount_tomans, startedAt, periodEnd, payment.source_coach_id, coachShare, adminShare, payment.authority]
   );
   return subscriptionState(db, userId, now);
 }
@@ -459,8 +502,9 @@ export async function reviewSubscriptionPayment(
     status: string;
     tracking_number: string | null;
     sender_card_last4: string | null;
+    plan: string | null;
   }>(
-    'SELECT id, user_id, amount_tomans, source_coach_id, status, tracking_number, sender_card_last4 FROM subscription_payments WHERE authority = $1',
+    'SELECT id, user_id, amount_tomans, source_coach_id, status, tracking_number, sender_card_last4, plan FROM subscription_payments WHERE authority = $1',
     [authority]
   );
   const row = rows[0];
@@ -474,7 +518,7 @@ export async function reviewSubscriptionPayment(
   if (action === 'confirm') {
     const state = await settleSubscriptionPayment(
       db, row.user_id,
-      { id: row.id, amount_tomans: row.amount_tomans, source_coach_id: row.source_coach_id, authority },
+      { id: row.id, amount_tomans: row.amount_tomans, source_coach_id: row.source_coach_id, authority, plan: row.plan },
       row.tracking_number ?? `MANUAL-${authority}`,
       row.sender_card_last4 ?? null,
       now
