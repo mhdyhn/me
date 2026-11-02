@@ -10,8 +10,11 @@ import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLi
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
-import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
+import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
+import { aiConfig } from './ai.ts';
+import { coachInactiveInsight, studentWeeklyInsight } from './smartInsights.ts';
+import { listNotifications, markNotificationsRead } from './notifications.ts';
 import { INACTIVE_DAYS, listInactiveStudents } from './coachReports.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
 import { emptyPlan, listFormerCoachPlans, loadDiary, loadPlan, saveDiary, savePlan, validateDay, validateDiary, validateMealList, validatePlan } from './nutrition.ts';
@@ -354,6 +357,42 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       pattern: /^\/api\/me$/,
       auth: 'signed-in',
       handler: async ({ user }) => ({ status: 200, body: { user: toPublic(user!) } }),
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/me\/insight$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        return {
+          status: 200,
+          body: { insight: await studentWeeklyInsight(db, user!.id, now()) },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/notifications$/,
+      auth: 'signed-in',
+      handler: async ({ user, url }) => {
+        const limit = Number(url.searchParams.get('limit') ?? '30');
+        const notifications = await listNotifications(db, user!.id, Number.isFinite(limit) ? limit : 30);
+        return { status: 200, body: { notifications, unread: notifications.filter((item) => !item.readAt).length }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/notifications\/read$/,
+      auth: 'signed-in',
+      handler: async ({ user, body }) => {
+        const input = requireObject(body);
+        const ids = Array.isArray(input.ids) ? input.ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)) : undefined;
+        await markNotificationsRead(db, user!.id, ids, now());
+        return { status: 200, body: { ok: true } };
+      },
     },
 
     {
@@ -1132,6 +1171,32 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
 
     {
       method: 'GET',
+      pattern: /^\/api\/pay\/card-transfer\/pending$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        const pending = await pendingCardTransferRequest(db, user!.id);
+        if (!pending) {
+          return { status: 200, body: { pending: false, request: null }, headers: { 'Cache-Control': 'no-store' } };
+        }
+        const config = await cardTransferConfig(db);
+        return {
+          status: 200,
+          body: {
+            pending: true,
+            request: {
+              ...pending,
+              cardNumber: config?.cardNumber ?? '',
+              cardHolder: config?.cardHolder ?? '',
+              bankName: config?.bankName ?? '',
+            },
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/pay\/card-transfer\/availability$/,
       auth: 'signed-in',
       handler: async () => {
@@ -1141,6 +1206,31 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
           body: { available: Boolean(config), cardHolder: config?.cardHolder ?? null, bankName: config?.bankName ?? null },
           headers: { 'Cache-Control': 'no-store' },
         };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/ai$/,
+      auth: ['admin'],
+      handler: async () => {
+        const config = aiConfig();
+        return {
+          status: 200,
+          body: { enabled: config.enabled, model: config.model, reason: config.reason },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/card-transfer\/receipts$/,
+      auth: ['admin'],
+      handler: async ({ url }) => {
+        const limit = Number(url.searchParams.get('limit') ?? '40');
+        const requests = await listCardTransferRequests(db, Number.isFinite(limit) ? limit : 40);
+        return { status: 200, body: { requests }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 
@@ -1229,7 +1319,11 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       handler: async ({ user }) => {
         return {
           status: 200,
-          body: { students: await listInactiveStudents(db, user!.id, now()), inactiveDays: INACTIVE_DAYS },
+          body: {
+            students: await listInactiveStudents(db, user!.id, now()),
+            inactiveDays: INACTIVE_DAYS,
+            insight: await coachInactiveInsight(db, user!.id, now()),
+          },
           headers: { 'Cache-Control': 'no-store' },
         };
       },

@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppModal } from './InstallAppModal';
+import { NotificationBell } from './NotificationBell';
 import { useModalFocus } from './useModalFocus';
 import { useGym } from '../context/GymProvider';
 import { useSession } from '../context/SessionContext';
@@ -71,6 +72,7 @@ const personalTitles: Record<string, string> = {
   '/nutrition': 'تغذیه',
   '/settings': 'پروفایل و تنظیمات',
   '/chat': 'گفتگو با مربی',
+  '/pay/receipt': 'ثبت رسید پرداخت',
 };
 
 export function Layout() {
@@ -212,6 +214,7 @@ export function Layout() {
                 <span className="resume-dot" /> ادامهٔ تمرین
               </NavLink>
             )}
+            {user && <NotificationBell />}
             {user ? (
               <button type="button" className="account-entry" title={`خروج ${user.displayName}`} onClick={() => void signOutAndLeave()}>
                 <span className="account-entry__text">خروج {user.displayName}</span>

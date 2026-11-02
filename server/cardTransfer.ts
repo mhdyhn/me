@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
+import { adminRecipients, createNotification } from './notifications.ts';
 import { HttpError } from './http.ts';
 import { calculateCommission, isProgramPaid, toPaymentTransaction, type PaymentTransaction } from './payments.ts';
 
@@ -369,6 +370,15 @@ export async function createCardTransferRequest(
     created = existing.created_at;
   }
 
+  if (inserted.length) {
+    await createNotification(db, studentId, {
+      kind: 'payment',
+      title: 'برنامه قفل شد؛ رسید واریز را ثبت کنید',
+      body: `مبلغ ${finalTransferAmount.toLocaleString('fa-IR')} تومان را به کارت ${config.cardHolder} واریز کنید و شمارهٔ پیگیری را ثبت کنید.`,
+      link: '/pay/receipt',
+    }, now);
+  }
+
   return {
     authority: finalAuthority,
     programmeId: info.programme_id,
@@ -435,6 +445,106 @@ export async function verifyWithProvider(config: CardTransferConfig, payload: {
     console.error('Card transfer receipt verification failed:', error);
     return false;
   }
+}
+
+export interface CardTransferRequestRow {
+  id: number;
+  authority: string;
+  studentId: number;
+  studentName: string;
+  coachName: string;
+  amountTomans: number;
+  transferAmountTomans: number | null;
+  reference: string | null;
+  trackingNumber: string | null;
+  senderLast4: string | null;
+  status: string;
+  confirmedBy: string | null;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+/** The card-transfer requests of the club, the newest first, for the review list of the admin. */
+export async function listCardTransferRequests(db: Db, limit = 40): Promise<CardTransferRequestRow[]> {
+  const rows = await db.query<{
+    id: number;
+    authority: string;
+    student_id: number;
+    student_name: string;
+    coach_name: string;
+    amount_tomans: number;
+    card_transfer_amount_tomans: number | null;
+    card_transfer_reference: string | null;
+    ref_id: string | null;
+    card_transfer_sender_last4: string | null;
+    status: string;
+    card_transfer_confirmed_by: string | null;
+    created_at: string;
+    verified_at: string | null;
+  }>(
+    `SELECT t.id, t.authority, t.student_id, s.display_name AS student_name, c.display_name AS coach_name,
+            t.amount_tomans, t.card_transfer_amount_tomans, t.card_transfer_reference, t.ref_id,
+            t.card_transfer_sender_last4, t.status, t.card_transfer_confirmed_by, t.created_at, t.verified_at
+     FROM payment_transactions t
+     JOIN users s ON s.id = t.student_id
+     JOIN users c ON c.id = t.coach_id
+     WHERE t.gateway_mode = '${CARD_TRANSFER_MODE}'
+     ORDER BY t.created_at DESC, t.id DESC
+     LIMIT $1`,
+    [Math.min(100, Math.max(1, Math.floor(limit) || 40))]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    authority: row.authority,
+    studentId: row.student_id,
+    studentName: row.student_name,
+    coachName: row.coach_name,
+    amountTomans: row.amount_tomans,
+    transferAmountTomans: row.card_transfer_amount_tomans ?? null,
+    reference: row.card_transfer_reference ?? null,
+    trackingNumber: row.ref_id ?? null,
+    senderLast4: row.card_transfer_sender_last4 ?? null,
+    status: row.status,
+    confirmedBy: row.card_transfer_confirmed_by ?? null,
+    createdAt: row.created_at,
+    verifiedAt: row.verified_at ?? null,
+  }));
+}
+
+/** The open card-transfer request of a student, for the quick receipt screen. */
+export async function pendingCardTransferRequest(
+  db: Db,
+  studentId: number
+): Promise<{ authority: string; amountTomans: number; transferAmountTomans: number | null; reference: string | null; trackingNumber: string | null; status: string; createdAt: string; expiresAt: string } | null> {
+  const config = await cardTransferConfig(db);
+  if (!config) return null;
+  const rows = await db.query<{
+    authority: string;
+    amount_tomans: number;
+    card_transfer_amount_tomans: number | null;
+    card_transfer_reference: string | null;
+    ref_id: string | null;
+    status: string;
+    created_at: string;
+  }>(
+    `SELECT authority, amount_tomans, card_transfer_amount_tomans, card_transfer_reference, ref_id, status, created_at
+     FROM payment_transactions
+     WHERE student_id = $1 AND gateway_mode = '${CARD_TRANSFER_MODE}' AND status = 'pending'
+     ORDER BY id DESC LIMIT 1`,
+    [studentId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    authority: row.authority,
+    amountTomans: row.amount_tomans,
+    transferAmountTomans: row.card_transfer_amount_tomans ?? null,
+    reference: row.card_transfer_reference ?? null,
+    trackingNumber: row.ref_id ?? null,
+    status: row.status,
+    createdAt: row.created_at,
+    expiresAt: expiryFrom(row.created_at, config.expiryHours),
+  };
 }
 
 /**
@@ -530,7 +640,28 @@ export async function submitCardTransferReceipt(
     reference: row.card_transfer_reference ?? '',
   });
   if (!accepted) {
-    throw new HttpError(409, 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.');
+    // The receipt is kept on the request so a manager can settle it in seconds from the panel.
+    await db.query(
+      `UPDATE payment_transactions
+       SET ref_id = $1, card_transfer_sender_last4 = $2, card_transfer_confirmed_by = 'needs_review'
+       WHERE id = $3 AND status = 'pending'`,
+      [trackingNumber, senderCardLast4, row.id]
+    );
+    for (const adminId of await adminRecipients(db)) {
+      await createNotification(db, adminId, {
+        kind: 'payment',
+        title: 'رسید کارت‌به‌کارت در انتظار بررسی',
+        body: `${row.authority} — مبلغ ${expectedAmount.toLocaleString('fa-IR')} تومان`,
+        link: '/coach/admin/transactions',
+      }, now);
+    }
+    await createNotification(db, studentId, {
+      kind: 'payment',
+      title: 'رسید شما ثبت شد و در حال بررسی است',
+      body: 'به‌محض بررسی، برنامهٔ شما باز می‌شود.',
+      link: '/pay/receipt',
+    }, now);
+    throw new HttpError(409, 'رسید واریزی ثبت شد و در حال بررسی است؛ به‌محض بررسی، برنامهٔ شما باز می‌شود.');
   }
 
   await db.query(
@@ -619,6 +750,14 @@ export async function reviewCardTransfer(
     );
   }
   const transaction = await loadTransaction(db, row.id);
+  await createNotification(db, transaction.studentId, {
+    kind: 'payment',
+    title: action === 'confirm' ? 'رسید پرداخت شما تأیید شد' : 'رسید پرداخت شما تأیید نشد',
+    body: action === 'confirm'
+      ? 'برنامهٔ شما باز شد.'
+      : 'اگر فکر می‌کنید اشتباه شده، دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.',
+    link: '/pay/receipt',
+  }, now);
   return {
     success: action === 'confirm',
     transaction,

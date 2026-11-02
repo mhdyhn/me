@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle, RefreshCw, TrendingUp, UserX } from 'lucide-react';
+import { MessageCircle, RefreshCw, Sparkles, TrendingUp, UserX } from 'lucide-react';
 import { ApiError, api } from '../lib/api';
 import { faNumber, formatDate } from '../lib/format';
+
+interface InsightView {
+  text: string;
+  source: 'ai' | 'rules';
+}
 
 interface InactiveStudentView {
   id: number;
@@ -23,6 +28,7 @@ interface InactiveStudentView {
 export function CoachInactiveStudents() {
   const [students, setStudents] = useState<InactiveStudentView[] | null>(null);
   const [inactiveDays, setInactiveDays] = useState(7);
+  const [insight, setInsight] = useState<InsightView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,9 +36,10 @@ export function CoachInactiveStudents() {
     setLoading(true);
     setError(null);
     try {
-      const result = await api<{ students: InactiveStudentView[]; inactiveDays?: number }>('GET', '/coach/inactive-students');
+      const result = await api<{ students: InactiveStudentView[]; inactiveDays?: number; insight?: InsightView }>('GET', '/coach/inactive-students');
       setStudents(result.students ?? []);
       if (typeof result.inactiveDays === 'number') setInactiveDays(result.inactiveDays);
+      setInsight(result.insight ?? null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'گزارش بی‌تمرینی بارگذاری نشد.');
     } finally {
@@ -78,6 +85,11 @@ export function CoachInactiveStudents() {
           <RefreshCw size={15} /> تازه‌سازی
         </button>
       </header>
+      {insight && students.length > 0 && (
+        <p className="coach-inactive__insight">
+          <Sparkles size={15} /> {insight.text}
+        </p>
+      )}
       {students.length > 0 && (
         <ul className="coach-inactive__list">
           {students.map((student) => (

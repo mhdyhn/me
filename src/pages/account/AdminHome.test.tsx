@@ -22,6 +22,8 @@ describe('admin coach list loading recovery', () => {
     mocks.api.mockImplementation((_method: string, path: string) => {
       if (path === '/admin/students') return Promise.resolve({ students: [] });
       if (path === '/admin/card-transfer') return Promise.resolve({ enabled: false, source: 'off', settings: { cardNumber: '', cardHolder: '', bankName: '', expiryHours: 72, maxPerDay: 3, uniqueAmount: true, updatedAt: null } });
+      if (path === '/admin/card-transfer/receipts') return Promise.resolve({ requests: [] });
+      if (path === '/admin/ai') return Promise.resolve({ enabled: false, model: '', reason: 'کلید هوش مصنوعی تنظیم نشده است.' });
       if (path === '/admin/owner-profile-copies') return Promise.resolve({ accounts: [] });
       if (path === '/coaches') return ++attempts === 1 ? Promise.reject(new Error('offline')) : Promise.resolve({ coaches: [] });
       return Promise.resolve({});
@@ -41,6 +43,10 @@ describe('admin coach list loading recovery', () => {
       ? Promise.resolve({ students: [], nextCursor: null })
       : path === '/admin/card-transfer'
       ? Promise.resolve({ enabled: false, source: 'off', settings: { cardNumber: '', cardHolder: '', bankName: '', expiryHours: 72, maxPerDay: 3, uniqueAmount: true, updatedAt: null } })
+      : path === '/admin/card-transfer/receipts'
+      ? Promise.resolve({ requests: [] })
+      : path === '/admin/ai'
+      ? Promise.resolve({ enabled: false, model: '', reason: 'کلید هوش مصنوعی تنظیم نشده است.' })
       : path === '/admin/owner-profile-copies'
       ? Promise.resolve({ accounts: [] })
       : Promise.resolve({ coaches: [

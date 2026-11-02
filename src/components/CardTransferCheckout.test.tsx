@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { CardTransferCheckout } from './CardTransferCheckout';
 import type { AssignedMeta } from '../lib/programStore';
 
@@ -43,7 +44,7 @@ describe('card-to-card checkout', () => {
   it('shows the card, the exact amount and the reference after the request starts', async () => {
     const user = userEvent.setup();
     stubApi({ '/pay/card-transfer/start': details });
-    render(<CardTransferCheckout program={program} />);
+    render(<MemoryRouter><CardTransferCheckout program={program} /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     expect(await screen.findByText('6037 9999 1234 5678')).toBeTruthy();
@@ -60,7 +61,7 @@ describe('card-to-card checkout', () => {
       '/pay/card-transfer/receipt': { success: true, message: 'رسید واریزی تأیید شد و برنامهٔ شما باز شد.' },
       '/me/program': { program: null, isPaid: true },
     });
-    render(<CardTransferCheckout program={program} />);
+    render(<MemoryRouter><CardTransferCheckout program={program} /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     await screen.findByText('6037 9999 1234 5678');
 
@@ -79,7 +80,7 @@ describe('card-to-card checkout', () => {
       '/pay/card-transfer/start': details,
       '/pay/card-transfer/receipt': { error: 'رسید واریزی در سرویس بررسی بانکی تأیید نشد.' },
     });
-    render(<CardTransferCheckout program={program} />);
+    render(<MemoryRouter><CardTransferCheckout program={program} /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
     await screen.findByText('6037 9999 1234 5678');
     await user.type(screen.getByLabelText('شمارهٔ پیگیری رسید'), '99887766');
