@@ -10,6 +10,8 @@ export interface SubscriptionState {
 }
 
 export interface SubscriptionCheckoutDetails {
+  /** True when a bank verification service confirms the receipt at once. */
+  autoConfirm: boolean;
   authority: string;
   priceTomans: number;
   transferAmountTomans: number;

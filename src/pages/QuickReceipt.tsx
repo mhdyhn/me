@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, ClipboardPaste, CreditCard, Landmark, Receipt } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, isReviewQueued } from '../lib/api';
 import { faNumber } from '../lib/format';
 
 interface PendingRequest {
@@ -23,8 +23,9 @@ function groupedCardNumber(value: string): string {
 }
 
 /**
- * The quick path of the receipt: the student opens this screen after the transfer,
- * pastes the tracking number of the bank receipt and the programme opens at once.
+ * The quick path of the receipt: the student opens this screen after the transfer and
+ * pastes the tracking number of the bank receipt. The programme opens when the money is
+ * really there: the bank service confirms it, or a manager matches it in the statement.
  */
 export function QuickReceipt() {
   const [request, setRequest] = useState<PendingRequest | null>(null);
@@ -34,6 +35,7 @@ export function QuickReceipt() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -80,8 +82,16 @@ export function QuickReceipt() {
       setTrackingNumber('');
       setSenderCardLast4('');
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
-      await load();
+      if (isReviewQueued(caught)) {
+        // The receipt is written down; the manager still has to see the transfer.
+        setWaiting((caught as ApiError).message);
+        setTrackingNumber('');
+        setSenderCardLast4('');
+        await load();
+      } else {
+        setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
+        await load();
+      }
     } finally {
       setBusy(false);
     }
@@ -89,6 +99,18 @@ export function QuickReceipt() {
 
   if (loading) {
     return <section className="panel-card"><p className="account-muted">در حال بررسی وضعیت پرداخت…</p></section>;
+  }
+
+  if (waiting) {
+    return (
+      <section className="panel-card quick-receipt" aria-label="ثبت رسید پرداخت">
+        <p className="quick-receipt__waiting" role="status">{waiting}</p>
+        <p className="account-muted">به‌محض تأیید مدیر، برنامه باز می‌شود و همین‌جا باخبر می‌شوید.</p>
+        <div className="quick-receipt__actions">
+          <button type="button" className="button button--ghost" onClick={() => { setWaiting(null); void load(); }}>بررسی دوباره</button>
+        </div>
+      </section>
+    );
   }
 
   if (done) {

@@ -239,6 +239,7 @@ export function AiHub() {
     <div className="page-stack ai-hub-page">
       <PremiumGate
         feature="مغز هوشمند"
+        featureKey="ai_hub"
         title="مغز هوشمند برای شاگرد مستقل"
         description="با اشتراک ماهانه، آمادگی و ریکاوری، نقشهٔ عضلات، مراقبت مفاصل، تحلیل تغذیه و برنامهٔ پیشنهادی هوش مصنوعی برایت باز می‌شود."
       >

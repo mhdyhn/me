@@ -214,6 +214,8 @@ export async function migrateCardTransfers(db: Db): Promise<void> {
 }
 
 export interface CardTransferDetails {
+  /** True when a bank verification service confirms the receipt at once. */
+  autoConfirm: boolean;
   authority: string;
   programmeId: string;
   programmeTitle: string;
@@ -245,13 +247,15 @@ function expiryFrom(createdAt: string, hours: number): string {
   return new Date(base + hours * 3600_000).toISOString();
 }
 
-function instructionsFor(details: { transferAmountTomans: number; reference: string }): string[] {
+function instructionsFor(details: { transferAmountTomans: number; reference: string; autoConfirm: boolean }): string[] {
   const amount = new Intl.NumberFormat('fa-IR').format(details.transferAmountTomans);
   return [
     `مبلغ ${amount} تومان را دقیقاً به کارت زیر واریز کنید.`,
     `در توضیحات واریز، کد پیگیری «${details.reference}» را بنویسید.`,
     'پس از واریز، شمارهٔ پیگیری رسید و چهار رقم آخر کارت مبدأ را در همین صفحه ثبت کنید.',
-    'تأیید رسید و باز شدن برنامه به‌صورت خودکار انجام می‌شود.',
+    details.autoConfirm
+      ? 'تأیید رسید و باز شدن برنامه به‌صورت خودکار انجام می‌شود.'
+      : 'رسید شما ثبت می‌شود و پس از دیدنِ واریز در صورت‌حساب، برنامه باز می‌شود (معمولاً کمتر از یک روز کاری).',
   ];
 }
 
@@ -331,7 +335,8 @@ export async function createCardTransferRequest(
         cardNumber: config.cardNumber,
         cardHolder: config.cardHolder,
         expiresAt,
-        instructions: instructionsFor({ transferAmountTomans: transferAmount, reference }),
+        autoConfirm: Boolean(config.verifyUrl),
+        instructions: instructionsFor({ transferAmountTomans: transferAmount, reference, autoConfirm: Boolean(config.verifyUrl) }),
       };
     }
     await db.query("UPDATE payment_transactions SET status = 'expired' WHERE id = $1", [pending.id]);
@@ -412,7 +417,8 @@ export async function createCardTransferRequest(
     cardNumber: config.cardNumber,
     cardHolder: config.cardHolder,
     expiresAt: expiryFrom(created, config.expiryHours),
-    instructions: instructionsFor({ transferAmountTomans: finalTransferAmount, reference: finalReference }),
+    autoConfirm: Boolean(config.verifyUrl),
+    instructions: instructionsFor({ transferAmountTomans: finalTransferAmount, reference: finalReference, autoConfirm: Boolean(config.verifyUrl) }),
   };
 }
 
@@ -441,13 +447,18 @@ function normalizeSenderLast4(value: unknown): string | null {
   return cleaned;
 }
 
+export type ReceiptVerification = 'verified' | 'rejected' | 'no_service';
+
 export async function verifyWithProvider(config: CardTransferConfig, payload: {
   authority: string;
   trackingNumber: string;
   amountTomans: number;
   reference: string;
-}): Promise<boolean> {
-  if (!config.verifyUrl) return true;
+}): Promise<ReceiptVerification> {
+  // Without a bank verification service nobody can prove that the money arrived. The
+  // receipt then waits for a manager, who matches it in the statement; it is never
+  // confirmed on the word of the student alone.
+  if (!config.verifyUrl) return 'no_service';
   try {
     const response = await fetch(config.verifyUrl, {
       method: 'POST',
@@ -460,16 +471,18 @@ export async function verifyWithProvider(config: CardTransferConfig, payload: {
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!response.ok) return false;
+    if (!response.ok) return 'rejected';
     const body = (await response.json()) as { valid?: unknown };
-    return body?.valid === true;
+    return body?.valid === true ? 'verified' : 'rejected';
   } catch (error) {
     console.error('Card transfer receipt verification failed:', error);
-    return false;
+    return 'rejected';
   }
 }
 
 export interface CardTransferRequestRow {
+  /** 'program' is a sold programme, 'subscription' is a monthly subscription. */
+  kind: 'program' | 'subscription';
   id: number;
   authority: string;
   studentId: number;
@@ -515,7 +528,8 @@ export async function listCardTransferRequests(db: Db, limit = 40): Promise<Card
      LIMIT $1`,
     [Math.min(100, Math.max(1, Math.floor(limit) || 40))]
   );
-  return rows.map((row) => ({
+  const programs: CardTransferRequestRow[] = rows.map((row) => ({
+    kind: 'program',
     id: row.id,
     authority: row.authority,
     studentId: row.student_id,
@@ -531,6 +545,55 @@ export async function listCardTransferRequests(db: Db, limit = 40): Promise<Card
     createdAt: row.created_at,
     verifiedAt: row.verified_at ?? null,
   }));
+
+  // The subscription receipts live in their own table but wait in the same queue.
+  const subscriptions = await db.query<{
+    id: number;
+    authority: string;
+    user_id: number;
+    student_name: string;
+    coach_name: string | null;
+    amount_tomans: number;
+    transfer_amount_tomans: number;
+    reference: string;
+    tracking_number: string | null;
+    sender_card_last4: string | null;
+    status: string;
+    created_at: string;
+    confirmed_at: string | null;
+    source_coach_id: number | null;
+  }>(
+    `SELECT p.id, p.authority, p.user_id, s.display_name AS student_name, c.display_name AS coach_name,
+            p.amount_tomans, p.transfer_amount_tomans, p.reference, p.tracking_number, p.sender_card_last4,
+            p.status, p.created_at, p.confirmed_at, p.source_coach_id
+     FROM subscription_payments p
+     JOIN users s ON s.id = p.user_id
+     LEFT JOIN users c ON c.id = p.source_coach_id
+     ORDER BY p.created_at DESC, p.id DESC
+     LIMIT $1`,
+    [Math.min(100, Math.max(1, Math.floor(limit) || 40))]
+  );
+  const subscriptionRows: CardTransferRequestRow[] = subscriptions.map((row) => ({
+    kind: 'subscription',
+    id: row.id,
+    authority: row.authority,
+    studentId: row.user_id,
+    studentName: row.student_name,
+    coachName: row.coach_name ?? '',
+    amountTomans: row.amount_tomans,
+    transferAmountTomans: row.transfer_amount_tomans,
+    reference: row.reference,
+    trackingNumber: row.tracking_number ?? null,
+    senderLast4: row.sender_card_last4 ?? null,
+    status: row.status,
+    confirmedBy: row.tracking_number && row.status === 'pending' ? 'needs_review' : null,
+    createdAt: row.created_at,
+    verifiedAt: row.confirmed_at ?? null,
+  }));
+
+  return [...programs, ...subscriptionRows]
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+    .slice(0, Math.min(100, Math.max(1, Math.floor(limit) || 40)));
 }
 
 /** The open card-transfer request of a student, for the quick receipt screen. */
@@ -585,7 +648,7 @@ export async function submitCardTransferReceipt(
     throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است.');
   }
   if (config.verifyUrlError) {
-    throw new HttpError(503, 'تأیید خودکار رسید به‌علت تنظیم نادرست سرویس بررسی ممکن نیست؛ با پشتیبانی تماس بگیرید.');
+    throw new HttpError(503, 'سرویس بررسی خودکار رسید درست تنظیم نشده است؛ با پشتیبانی تماس بگیرید.');
   }
   const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
   const senderCardLast4 = normalizeSenderLast4(input.senderCardLast4);
@@ -647,21 +710,23 @@ export async function submitCardTransferReceipt(
   const dayStart = new Date(now.getTime() - 24 * 3600_000).toISOString();
   const confirmedToday = await db.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM payment_transactions
-     WHERE student_id = $1 AND gateway_mode = '${CARD_TRANSFER_MODE}' AND status = 'paid' AND verified_at >= $2`,
+     WHERE student_id = $1 AND gateway_mode = '${CARD_TRANSFER_MODE}'
+       AND (status = 'paid' OR (status = 'pending' AND ref_id IS NOT NULL))
+       AND created_at >= $2`,
     [studentId, dayStart]
   );
   const confirmedCount = Number(confirmedToday[0]?.count ?? '0');
   if (confirmedCount >= config.maxPerDay) {
-    throw new HttpError(429, 'تعداد پرداخت‌های کارت‌به‌کارت تأییدشدهٔ شما در ۲۴ ساعت گذشته به سقف مجاز رسیده است.');
+    throw new HttpError(429, 'تعداد درخواست‌های پرداخت کارت‌به‌کارت شما در ۲۴ ساعت گذشته به سقف مجاز رسیده است.');
   }
 
-  const accepted = await verifyWithProvider(config, {
+  const verification = await verifyWithProvider(config, {
     authority: row.authority,
     trackingNumber,
     amountTomans: expectedAmount,
     reference: row.card_transfer_reference ?? '',
   });
-  if (!accepted) {
+  if (verification !== 'verified') {
     // The receipt is kept on the request so a manager can settle it in seconds from the panel.
     await db.query(
       `UPDATE payment_transactions
@@ -683,7 +748,9 @@ export async function submitCardTransferReceipt(
       body: 'به‌محض بررسی، برنامهٔ شما باز می‌شود.',
       link: '/pay/receipt',
     }, now);
-    throw new HttpError(409, 'رسید واریزی ثبت شد و در حال بررسی است؛ به‌محض بررسی، برنامهٔ شما باز می‌شود.');
+    throw new HttpError(409, verification === 'no_service'
+      ? 'رسید واریزی ثبت شد و در صف بررسی مدیر است. به‌محض که واریز در صورت‌حساب دیده شود، برنامهٔ شما باز می‌شود.'
+      : 'رسید واریزی ثبت شد و در صف بررسی مدیر است. اگر شمارهٔ پیگیری درست نبوده، پس از بررسی می‌توانید رسید درست را دوباره ثبت کنید.');
   }
 
   await db.query(
@@ -761,8 +828,10 @@ export async function reviewCardTransfer(
     throw new HttpError(409, 'این تراکنش دیگر در انتظار بررسی نیست.');
   }
   if (action === 'confirm') {
+    // The tracking number the student wrote stays: it is what the manager matched in the
+    // statement. Only a request without a receipt gets a made-up reference.
     await db.query(
-      `UPDATE payment_transactions SET status = 'paid', ref_id = $1, verified_at = $2, card_transfer_confirmed_by = 'manual' WHERE id = $3 AND status = 'pending'`,
+      `UPDATE payment_transactions SET status = 'paid', ref_id = COALESCE(ref_id, $1), verified_at = $2, card_transfer_confirmed_by = 'manual' WHERE id = $3 AND status = 'pending'`,
       [`MANUAL-${randomUUID()}`, now.toISOString(), row.id]
     );
   } else {

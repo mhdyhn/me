@@ -124,12 +124,13 @@ describe('card-to-card payment', () => {
     expect(await db.query('SELECT * FROM payment_transactions')).toHaveLength(1);
   });
 
-  it('confirms a matching receipt automatically, unlocks the programme and records the coach share', async () => {
+  it('never opens the programme on a made-up reference: the receipt waits for a manager', async () => {
     const admin = await signIn('owner', 'owner-pass-123');
     const coach = await createCoach(admin);
     const student = await createStudent(coach.token);
     const program = await saveProgram(coach.token, student.id);
     const details = (await call('POST', '/api/pay/card-transfer/start', request(program), student.token)).json;
+    expect(details.autoConfirm).toBe(false);
 
     const wrongAmount = await call('POST', '/api/pay/card-transfer/receipt', {
       authority: details.authority, trackingNumber: '99887766', amountTomans: 99999,
@@ -137,14 +138,24 @@ describe('card-to-card payment', () => {
     expect(wrongAmount.status).toBe(400);
     expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(false);
 
-    const confirmed = await call('POST', '/api/pay/card-transfer/receipt', {
+    // A reference that was never paid still only waits; it never opens the programme.
+    const written = await call('POST', '/api/pay/card-transfer/receipt', {
       authority: details.authority, trackingNumber: '99887766', amountTomans: details.transferAmountTomans, senderCardLast4: '4321',
     }, student.token);
-    expect(confirmed.status).toBe(200);
-    expect(confirmed.json.success).toBe(true);
-    expect(confirmed.json.transaction).toMatchObject({
+    expect(written.status).toBe(409);
+    expect(String(written.json.error ?? '')).toContain('صف');
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(false);
+
+    // The receipt waits in the queue of the manager, with the amount to match.
+    const queue = await call('GET', '/api/admin/card-transfer/receipts', undefined, admin);
+    expect(queue.json.requests[0]).toMatchObject({ authority: details.authority, trackingNumber: '99887766', status: 'pending' });
+
+    // The manager matches the transfer in the statement and settles it with one tap.
+    const reviewed = await call('POST', '/api/admin/card-transfer/review', { authority: details.authority, action: 'confirm' }, admin);
+    expect(reviewed.status).toBe(200);
+    expect(reviewed.json.transaction).toMatchObject({
       status: 'paid', method: 'card_transfer', amountTomans: 99999, coachShareTomans: 89999, adminShareTomans: 10000,
-      refId: '99887766', cardTransferConfirmedBy: 'auto',
+      refId: '99887766', cardTransferConfirmedBy: 'manual',
     });
     expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(true);
 
@@ -154,6 +165,36 @@ describe('card-to-card payment', () => {
     expect(coachReport.json.transactions[0]).toMatchObject({ method: 'card_transfer', status: 'paid', amountTomans: 99999 });
     const adminReport = await call('GET', '/api/admin/transactions', undefined, admin);
     expect(adminReport.json.transactions).toHaveLength(1);
+  });
+
+  it('confirms the receipt at once when the bank service verifies it', async () => {
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://bank-verify.example.com/check');
+    const realFetch = globalThis.fetch;
+    const verifyMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      if (!String(input).includes('bank-verify.example.com')) return realFetch(input, init);
+      const sent = JSON.parse(String(init?.body ?? '{}'));
+      expect(sent.trackingNumber).toBe('99887766');
+      expect(sent.amountTomans).toBeGreaterThan(99999);
+      return new Response(JSON.stringify({ valid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', verifyMock);
+
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await createCoach(admin);
+    const student = await createStudent(coach.token);
+    const program = await saveProgram(coach.token, student.id);
+    const details = (await call('POST', '/api/pay/card-transfer/start', request(program), student.token)).json;
+    expect(details.autoConfirm).toBe(true);
+
+    const confirmed = await call('POST', '/api/pay/card-transfer/receipt', {
+      authority: details.authority, trackingNumber: '99887766', amountTomans: details.transferAmountTomans, senderCardLast4: '4321',
+    }, student.token);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.json.transaction).toMatchObject({
+      status: 'paid', method: 'card_transfer', cardTransferConfirmedBy: 'auto', refId: '99887766',
+    });
+    expect((await call('GET', '/api/me/program', undefined, student.token)).json.isPaid).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('refuses a reused receipt number, another student and a missing receipt number', async () => {
@@ -171,7 +212,7 @@ describe('card-to-card payment', () => {
     // Another student cannot confirm a receipt for someone else's request.
     expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: details.authority, trackingNumber: '55667788' }, other.token)).status).toBe(404);
 
-    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: details.authority, trackingNumber: '55667788' }, student.token)).status).toBe(200);
+    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: details.authority, trackingNumber: '55667788' }, student.token)).status).toBe(409);
     // The same receipt number cannot be used for a second programme.
     const reused = await call('POST', '/api/pay/card-transfer/receipt', { authority: otherDetails.authority, trackingNumber: '55667788' }, other.token);
     expect(reused.status).toBe(409);
@@ -193,7 +234,7 @@ describe('card-to-card payment', () => {
     // A new request after the expiry, then the daily limit of three confirmed transfers.
     vi.stubEnv('CARD_TRANSFER_MAX_PER_DAY', '1');
     const fresh = (await call('POST', '/api/pay/card-transfer/start', request(program), student.token)).json;
-    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: fresh.authority, trackingNumber: '22334455' }, student.token)).status).toBe(200);
+    expect((await call('POST', '/api/pay/card-transfer/receipt', { authority: fresh.authority, trackingNumber: '22334455' }, student.token)).status).toBe(409);
     const second = await saveProgram(coach.token, student.id, 50000, program);
     const secondDetails = (await call('POST', '/api/pay/card-transfer/start', request(second), student.token)).json;
     const limited = await call('POST', '/api/pay/card-transfer/receipt', { authority: secondDetails.authority, trackingNumber: '33445566' }, student.token);

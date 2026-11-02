@@ -2651,6 +2651,30 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .smart-report__locked > p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 13px; line-height: 1.7; color: var(--text-soft); }
 
 /* The paywall for the smart features of an independent student. */
+.card-transfer__waiting { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(250, 204, 21, .12); font-size: 13px; line-height: 1.8; }
+
+.plan-card { display: grid; gap: 8px; }
+.plan-card h3 { margin: 0; font-size: 1rem; }
+.plan-card__price { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0; }
+.plan-card__price strong { color: var(--accent); font-size: 15px; }
+.plan-card__price span { font-size: 12px; color: var(--muted); }
+.plan-card__features { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.plan-card__features li { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.7; }
+.plan-card__features svg { flex: 0 0 auto; margin-top: 4px; color: var(--accent); }
+.plan-card__others { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.plan-card__other strong { color: var(--text); }
+
+.premium-gate__plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin: 4px 0 2px; }
+.premium-gate__plan { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.premium-gate__plan.is-current { border-color: var(--accent); }
+.premium-gate__plan strong { font-size: 14px; }
+.premium-gate__plan-price { font-size: 13px; color: var(--accent); font-weight: 700; }
+.premium-gate__plan small { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.premium-gate__plan ul { display: grid; gap: 3px; margin: 6px 0 0; padding: 0; list-style: none; }
+.premium-gate__plan li { display: flex; align-items: flex-start; gap: 5px; font-size: 12px; line-height: 1.7; }
+.premium-gate__plan li svg { flex: 0 0 auto; margin-top: 4px; color: var(--accent); }
+.premium-gate__plan-current { justify-self: start; padding: 3px 9px; border-radius: 999px; background: rgba(134, 207, 255, .14); color: var(--accent); font-size: 11px; font-weight: 700; }
+
 .premium-gate { display: flex; flex-direction: column; gap: 10px; padding: 22px 18px; border-radius: var(--radius-lg, 16px); border: 1px solid rgba(217,246,111,.22); background: linear-gradient(165deg, rgba(217,246,111,.08), rgba(20,24,22,.72)); }
 .premium-gate__icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(217,246,111,.14); color: var(--accent); }
 .premium-gate h2 { margin: 0; font-size: 17px; }

@@ -74,6 +74,31 @@ describe('card-to-card checkout', () => {
     expect(receipt?.body).toMatchObject({ authority: 'CARD-1234', trackingNumber: '99887766', senderCardLast4: '4321' });
   });
 
+  it('shows the review queue instead of an error when the receipt waits for the manager', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input).replace(/^.*\/api/, '');
+      sent.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (path === '/pay/card-transfer/receipt') {
+        return new Response(JSON.stringify({ error: 'رسید واریزی ثبت شد و در صف بررسی مدیر است.' }), {
+          status: 409, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify(path === '/pay/card-transfer/start' ? details : { program: null, isPaid: false }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }));
+    render(<MemoryRouter><CardTransferCheckout program={program} /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /پرداخت کارت‌به‌کارت/ }));
+    await screen.findByText('6037 9999 1234 5678');
+    await user.type(screen.getByLabelText('شمارهٔ پیگیری رسید'), '99887766');
+    await user.click(screen.getByRole('button', { name: /ثبت رسید و فعال‌سازی برنامه/ }));
+
+    // The receipt is written down: a notice, not an error.
+    expect(await screen.findByRole('status')).toHaveTextContent('صف بررسی');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('keeps the programme locked when the server refuses the receipt', async () => {
     const user = userEvent.setup();
     stubApi({

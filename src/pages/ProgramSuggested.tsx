@@ -39,6 +39,7 @@ export function ProgramSuggested() {
       {!coached && (
         <PremiumGate
           feature="برنامهٔ پیشنهادی"
+          featureKey="smart_program"
           title="برنامهٔ پیشنهادی برای شاگرد مستقل"
           description="برنامهٔ پیشنهادی، بخشی از امکانات هوشمند میتی است: با پاسخ به چند پرسش کوتاه، برنامه‌ای می‌گیرید که با سطح، امکانات و محدودیت بدنی شما جور است."
         >

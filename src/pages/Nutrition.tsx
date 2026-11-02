@@ -106,6 +106,7 @@ export function Nutrition() {
       {user?.role === 'student' && user.coachId !== null && <CoachNutritionArchive key={`archive:${user.id}:${user.coachId}`} />}
       <PremiumGate
         feature="تغذیهٔ هوشمند"
+        featureKey="nutrition"
         title="تغذیهٔ هوشمند برای شاگرد مستقل"
         description="با اشتراک ماهانه، هدف‌های تغذیه‌ای بر پایهٔ وزن و روند تمرین پیشنهاد می‌شود، دفتر تغذیه با هوش مصنوعی تحلیل می‌شود و برنامهٔ غذایی با برنامهٔ تمرینت هماهنگ می‌ماند."
       >
