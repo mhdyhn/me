@@ -71,9 +71,15 @@ export function SubscriptionCheckout({
     setError(null);
     try {
       const result = await submitSubscriptionReceipt(details.authority, trackingNumber.trim(), senderCardLast4.trim() || undefined);
-      setDone(result.message);
       setTrackingNumber('');
       setSenderCardLast4('');
+      if (result.pending) {
+        // The money may well be real, but nobody has seen it in the statement yet: the receipt
+        // waits for a manager and the subscription stays closed.
+        setWaiting(result.message);
+        return;
+      }
+      setDone(result.message);
       onActivated?.(result.state);
     } catch (caught) {
       if (isReviewQueued(caught)) {

@@ -404,6 +404,12 @@ export async function submitSubscriptionReceipt(
     amountTomans: row.transfer_amount_tomans,
     reference: row.reference,
   });
+  if (verification === 'rejected') {
+    // The bank service answered and refused this receipt: the tracking number or the amount is
+    // wrong. Such a receipt is not put in the queue of the manager and it does not count
+    // towards the daily limit; the request stays open so the student can send the right one.
+    throw new HttpError(400, 'رسید در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری یا مبلغ را بررسی کنید و دوباره بفرستید. اگر مطمئنید واریز انجام شده است، با پشتیبانی تماس بگیرید.');
+  }
   if (verification !== 'verified') {
     // The receipt is kept on the request: a manager matches it in the bank statement and
     // settles it with one tap. A made-up reference can never open a subscription.
@@ -432,7 +438,7 @@ export async function submitSubscriptionReceipt(
       pending: true,
       message: verification === 'no_service'
         ? 'رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.'
-        : 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.',
+        : 'سرویس بررسی بانکی در دسترس نبود؛ رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.',
       state: await subscriptionState(db, userId, now),
     };
   }
