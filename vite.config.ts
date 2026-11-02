@@ -18,6 +18,26 @@ function exerciseFigurePack() {
   };
 }
 
+/**
+ * One precached asset for the animated guides too.
+ *
+ * The student browses the library in the gym, where the connection is often poor. The
+ * animations are the part of the guide that needs the network most, so they travel in one
+ * pack instead of one file per movement.
+ */
+function exerciseMotionPack() {
+  return {
+    name: 'exercise-motion-pack',
+    apply: 'build' as const,
+    generateBundle(this: { emitFile: (file: { type: 'asset'; fileName: string; source: string }) => void }) {
+      const directory = resolve('public/exercise-motion');
+      const files = readdirSync(directory).filter((name) => name.endsWith('.json')).sort();
+      const motions = Object.fromEntries(files.map((name) => [name, readFileSync(join(directory, name), 'utf8')]));
+      this.emitFile({ type: 'asset', fileName: 'exercise-motions.json', source: JSON.stringify(motions) });
+    },
+  };
+}
+
 /** Avoid extra worker-script downloads that can leave a legacy client stuck after a transient failure. */
 function inlinePwaHelpers() {
   return {
@@ -72,6 +92,7 @@ export default defineConfig(({ mode }) => {
       ...(!offlineSingleFile
         ? [
             exerciseFigurePack(),
+            exerciseMotionPack(),
             VitePWA({
               // The worker activates, but open pages refresh only after the user saves and agrees.
               registerType: 'autoUpdate',
@@ -100,7 +121,7 @@ export default defineConfig(({ mode }) => {
                 clientsClaim: true,
                 inlineWorkboxRuntime: true,
                 navigateFallback: null,
-                globPatterns: ['**/*.{js,css,html,svg,woff,woff2}', 'assets/*.webp', 'exercise-figures.json'],
+                globPatterns: ['**/*.{js,css,html,svg,woff,woff2}', 'assets/*.webp', 'exercise-figures.json', 'exercise-motions.json'],
                 globIgnores: ['app-shell-sw.js', 'exercise-figures-sw.js', 'exercise-images/**', 'assets/ExerciseModel3D-*.js', 'assets/vendor-three-*.js'],
                 importScripts: ['app-shell-sw.js', 'exercise-figures-sw.js'],
                 runtimeCaching: [

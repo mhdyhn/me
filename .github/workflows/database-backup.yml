@@ -1,0 +1,135 @@
+name: Back up the database
+
+# Takes a dump of the live database and keeps it for a while.
+#
+# The hosted database of the club is the only copy of the accounts, the programmes, the
+# payments and the training history. A plan on paper is not a backup: the dump is taken on
+# a schedule, it is checked, and a restore into a fresh database is tried before the file
+# is trusted.
+#
+# Repository secret needed (Settings → Secrets and variables → Actions → New repository secret):
+#   DATABASE_URL   the connection string of the live database, for example
+#                  postgresql://user:password@host:5432/postgres
+#
+# The dump is written to the workflow run as an artifact. Artifacts are kept for a while and
+# can be downloaded from the run page. The file is never committed to the repository and the
+# connection string never appears in the logs.
+
+on:
+  schedule:
+    # Every day at 03:20 UTC. The free hosting wakes up for this run.
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+    inputs:
+      restore_check:
+        description: 'Also restore the dump into a throwaway database and compare the tables'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The dump and the logs never carry the password: the string stays in the environment.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGCONNECT_TIMEOUT: '20'
+      PGPASSWORD: ''
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          pg_dump --version
+
+      - name: Check that the database answers
+        if: env.DATABASE_URL == ''
+        run: |
+          echo "::error title=Database backup::DATABASE_URL is not set; nothing was backed up."
+          exit 1
+
+      - name: Take the dump
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/backup"
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          FILE="$RUNNER_TEMP/backup/meety-$STAMP.dump"
+          # The dump is written to a file, never to the log, and the password stays out of
+          # the command line by living in the environment.
+          pg_dump --format=custom --no-owner --no-acl --file="$FILE" "$DATABASE_URL"
+          test -s "$FILE"
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          echo "SIZE=$(du -k "$FILE" | cut -f1)" >> "$GITHUB_ENV"
+          ls -la "$FILE"
+
+      - name: Restore into a throwaway database and compare
+        if: ${{ inputs.restore_check != false }}
+        env:
+          TEST_RESTORE_DATABASE_URL: ${{ secrets.TEST_RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TEST_RESTORE_DATABASE_URL:-}" ]; then
+            echo "::notice title=Database backup::TEST_RESTORE_DATABASE_URL is not set; the restore check was skipped."
+            exit 0
+          fi
+          umask 077
+          FILE="$RUNNER_TEMP/backup/meety-$STAMP.dump"
+          pg_restore --clean --if-exists --no-owner --no-acl --dbname="$TEST_RESTORE_DATABASE_URL" "$FILE"
+          echo "The dump was restored into the throwaway database."
+
+      - name: Compare the table counts
+        if: ${{ inputs.restore_check != false }}
+        env:
+          TEST_RESTORE_DATABASE_URL: ${{ secrets.TEST_RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TEST_RESTORE_DATABASE_URL:-}" ]; then exit 0; fi
+          # The list of tables and their row counts, from both sides, compared by name.
+          count_of() {
+            psql "$1" -At -c "SELECT table_name || '=' || (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM ' || quote_ident(table_name) || ' c', true, true, '')))[1]::text FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;" 2>/dev/null || true
+          }
+          count_of "$DATABASE_URL" > "$RUNNER_TEMP/backup/live.txt"
+          count_of "$TEST_RESTORE_DATABASE_URL" > "$RUNNER_TEMP/backup/restored.txt"
+          echo "The live database:"
+          cat "$RUNNER_TEMP/backup/live.txt"
+          echo "The restored copy:"
+          cat "$RUNNER_TEMP/backup/restored.txt"
+          if ! diff -u "$RUNNER_TEMP/backup/live.txt" "$RUNNER_TEMP/backup/restored.txt"; then
+            echo "::error title=Database backup::The restored copy does not match the live database. The dump is not trustworthy."
+            exit 1
+          fi
+          echo "The restored copy matches the live database."
+
+      - name: Keep the dump for a month
+        uses: actions/upload-artifact@v6
+        with:
+          name: meety-database-${{ env.STAMP }}
+          path: ${{ runner.temp }}/backup/*.dump
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Show the result in the summary of the run
+        if: always()
+        run: |
+          {
+            echo '### The result of the database backup'
+            echo
+            echo "- dump: \`meety-${STAMP:-unknown}.dump\`"
+            echo "- size: ${SIZE:-0} KiB"
+            echo
+            echo 'The dump is kept in the artifacts of this run for 30 days.'
+          } >> "$GITHUB_STEP_SUMMARY"

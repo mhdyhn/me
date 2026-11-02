@@ -91,9 +91,17 @@ try {
   const cache = await page.evaluate(async () => {
     const names = await caches.keys();
     const urls = (await Promise.all(names.map(async (name) => (await (await caches.open(name)).keys()).map((request) => request.url)))).flat();
-    return { entries: urls.length, illustrationFiles: urls.filter((url) => url.includes('/exercise-images/')).length, packs: urls.filter((url) => url.includes('/exercise-figures.json')).length };
+    return {
+      entries: urls.length,
+      illustrationFiles: urls.filter((url) => url.includes('/exercise-images/')).length,
+      motionFiles: urls.filter((url) => url.includes('/exercise-motion/')).length,
+      packs: urls.filter((url) => url.includes('/exercise-figures.json')).length,
+      motionPacks: urls.filter((url) => url.includes('/exercise-motions.json')).length,
+    };
   });
   if (cache.illustrationFiles !== 0 || cache.packs !== 1) throw new Error(`Unexpected precache contents: ${JSON.stringify(cache)}`);
+  // The animations travel in one pack as well, so they are available without a network.
+  if (cache.motionFiles !== 0 || cache.motionPacks !== 1) throw new Error(`Unexpected animation pack contents: ${JSON.stringify(cache)}`);
   if (!previous && requests.some((url) => url.includes('/exercise-images/'))) throw new Error('Initial install downloaded individual SVGs');
   if (requests.some((url) => /\/models\/|vendor-three-|ExerciseModel3D-/.test(url))) throw new Error('Optional 3D assets were fetched before use');
   const model = '/models/push-up-3f77e479.glb';
@@ -108,9 +116,15 @@ try {
   await page.waitForFunction(async (path) => !!(await caches.match(path)), viewedPhoto);
   await context.setOffline(true);
   const files = (await readdir('public/exercise-images')).filter((name) => name.endsWith('.svg')).sort();
-  const result = await page.evaluate(async ({ names, modelPath, jsPath }) => {
+  const motionFiles = (await readdir('public/exercise-motion')).filter((name) => name.endsWith('.json')).sort();
+  const result = await page.evaluate(async ({ names, motionNames, modelPath, jsPath }) => {
     const figures = await Promise.all(names.map(async (name) => {
       try { const response = await fetch(`/exercise-images/${name}`); return { name, status: response.status, body: await response.text() }; }
+      catch { return { name, status: 0, body: '' }; }
+    }));
+    // The animated guide must work without a network as well.
+    const motions = await Promise.all(motionNames.map(async (name) => {
+      try { const response = await fetch(`/exercise-motion/${name}`); return { name, status: response.status, body: await response.text() }; }
       catch { return { name, status: 0, body: '' }; }
     }));
     let photoAvailable = false;
@@ -125,17 +139,20 @@ try {
       modelHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
       codeAvailable = (await fetch(jsPath)).ok;
     } catch {}
-    return { figures, photoAvailable, privateApiWasCached, modelHash, codeAvailable };
-  }, { names: files, modelPath: model, jsPath: codePath });
+    return { figures, motions, photoAvailable, privateApiWasCached, modelHash, codeAvailable };
+  }, { names: files, motionNames: motionFiles, modelPath: model, jsPath: codePath });
   for (const figure of result.figures) {
     if (figure.status !== 200 || figure.body !== await readFile(`public/exercise-images/${figure.name}`, 'utf8')) throw new Error(`Offline SVG mismatch: ${figure.name}`);
+  }
+  for (const motion of result.motions) {
+    if (motion.status !== 200 || motion.body !== await readFile(`public/exercise-motion/${motion.name}`, 'utf8')) throw new Error(`Offline animation mismatch: ${motion.name}`);
   }
   if (!result.photoAvailable || result.privateApiWasCached) throw new Error('Offline photo or private API cache behavior changed');
   const modelHash = createHash('sha256').update(await readFile('public' + model)).digest('hex');
   if (result.modelHash !== modelHash || !result.codeAvailable) throw new Error('Previously viewed 3D assets are unavailable offline');
   await page.goto(base + '/program', { waitUntil: 'domcontentloaded' });
   if (!(await page.locator('#root').count())) throw new Error('Offline navigation fallback failed');
-  console.log(`PASS: current CSS/theme/icon loaded and browser storage preserved; ${files.length} exact SVGs, a previously viewed photo and optional 3D assets offline; private API not cached; ${cache.entries} precache entries; ${previous ? 'previous worker upgraded' : 'no SVG requests during install'}.`);
+  console.log(`PASS: current CSS/theme/icon loaded and browser storage preserved; ${files.length} exact SVGs, ${motionFiles.length} exact animations, a previously viewed photo and optional 3D assets offline; private API not cached; ${cache.entries} precache entries; ${previous ? 'previous worker upgraded' : 'no SVG requests during install'}.`);
 } finally {
   if (browser) await browser.close();
   await new Promise((resolve) => server.close(resolve));
