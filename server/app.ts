@@ -20,6 +20,22 @@ import { listFormerCoachBiometrics, loadBiometrics, saveBiometrics, validateBiom
 import { loadStudentProfile, loadStudentProfileForCoach, revokeStudentProfileSharing, saveStudentProfile, setStudentProfileSharing, validateStudentProfile } from './studentProfile.ts';
 import { applyPersonalChange, clearStoredProfile, findOwnerProfileCopies, getPersonalRecord, listPersonalRecords, quarantineOwnerProfileCopies, validateChange } from './personalData.ts';
 
+/** The newest published Android build of this repository; a stable "latest" address. */
+const DEFAULT_APK_URL = 'https://github.com/mhdyhn/me/releases/latest/download/meety.apk';
+
+/** Only an explicit HTTPS address without credentials may be advertised as the APK download. */
+function releaseApkUrl(): string | null {
+  const configured = process.env.ANDROID_APK_URL?.trim();
+  const candidate = configured || DEFAULT_APK_URL;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 export interface AppOptions {
   db: Db;
   /** Key for the encrypted copy of generated passwords. Required: there is no built-in default. */
@@ -259,6 +275,7 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
             stableBranch: 'main',
             deploymentBranch: branch === 'main' ? 'main' : branch ? 'other' : 'unknown',
             revision: sha && /^[a-f0-9]{7,64}$/i.test(sha) ? sha.toLowerCase() : null,
+            apkUrl: releaseApkUrl(),
           },
           headers: { 'Cache-Control': 'no-store' },
         };

@@ -24,8 +24,24 @@ export function InstallAppModal({ isOpen, onClose }: { isOpen: boolean; onClose:
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [activeTab, setActiveTab] = useState<'pwa' | 'apk' | 'ios'>('pwa');
+  const [serverApkUrl, setServerApkUrl] = useState<string | null>(null);
   const dialogRef = useModalFocus(isOpen, onClose);
-  const apkUrl = configuredApkUrl(import.meta.env.VITE_ANDROID_APK_URL);
+  // The server knows the newest published build; the build-time address is the fallback.
+  const apkUrl = serverApkUrl ?? configuredApkUrl(import.meta.env.VITE_ANDROID_APK_URL);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch('/api/release', { headers: { Accept: 'application/json' } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { apkUrl?: string } | null) => {
+        if (cancelled) return;
+        const address = configuredApkUrl(data?.apkUrl);
+        if (address) setServerApkUrl(address);
+      })
+      .catch(() => { /* The static address stays in place. */ });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   useEffect(() => {
     // Check if already installed in standalone mode safely

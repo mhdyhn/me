@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { InstallAppModal } from './InstallAppModal';
 
 describe('InstallAppModal', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
   it('offers PWA and does not advertise an unconfigured APK', async () => {
     const user = userEvent.setup();
     const handleClose = vi.fn();
@@ -38,6 +38,21 @@ describe('InstallAppModal', () => {
     expect(closeButtons[0]).toBeDefined();
     await user.click(closeButtons[0]!);
     expect(handleClose).toHaveBeenCalled();
+  });
+
+  it('prefers the newest published build the server reports', async () => {
+    vi.stubEnv('VITE_ANDROID_APK_URL', 'https://downloads.example.com/meety-v1.0.1.apk');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ apkUrl: 'https://downloads.example.com/meety-latest.apk' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<InstallAppModal isOpen={true} onClose={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: /دانلود فایل نصبی \(APK\)/ }));
+    expect(await screen.findByRole('link', { name: /دریافت فایل اندروید/ })).toHaveAttribute('href', 'https://downloads.example.com/meety-latest.apk');
+    expect(fetchMock).toHaveBeenCalledWith('/api/release', expect.anything());
   });
 
   it('offers only a configured HTTPS or same-origin APK address', async () => {

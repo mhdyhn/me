@@ -23,7 +23,25 @@ afterAll(async () => {
   await db.close();
 }, 30000);
 
+const LATEST_APK = 'https://github.com/mhdyhn/me/releases/latest/download/meety.apk';
+
 describe('public deployment identity', () => {
+  it('points the install button at the newest published Android build', async () => {
+    const response = await fetch(`${base}/api/release`);
+    const body = await response.json() as { apkUrl: string };
+    expect(body.apkUrl).toBe(LATEST_APK);
+  });
+
+  it('uses the configured Android download address and refuses an unsafe one', async () => {
+    vi.stubEnv('ANDROID_APK_URL', 'https://downloads.example.com/meety.apk');
+    const configured = await fetch(`${base}/api/release`);
+    expect((await configured.json() as { apkUrl: string }).apkUrl).toBe('https://downloads.example.com/meety.apk');
+
+    vi.stubEnv('ANDROID_APK_URL', 'javascript:alert(1)');
+    const unsafe = await fetch(`${base}/api/release`);
+    expect((await unsafe.json() as { apkUrl: string | null }).apkUrl).toBeNull();
+  });
+
   it('reports the main deployment and validated commit without caching', async () => {
     vi.stubEnv('RENDER', 'true');
     vi.stubEnv('RENDER_GIT_BRANCH', 'main');
@@ -31,7 +49,7 @@ describe('public deployment identity', () => {
     const response = await fetch(`${base}/api/release`);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'main', revision: 'a087b524e3bc999dcc46fded3af9ee9a0c76555b' });
+    expect(await response.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'main', revision: 'a087b524e3bc999dcc46fded3af9ee9a0c76555b', apkUrl: LATEST_APK });
   });
 
   it('reports other branches without exposing their names or invalid environment values', async () => {
@@ -39,7 +57,7 @@ describe('public deployment identity', () => {
     vi.stubEnv('RENDER_GIT_BRANCH', 'some-private-branch');
     vi.stubEnv('RENDER_GIT_COMMIT', 'not-a-git-commit');
     const response = await fetch(`${base}/api/release`);
-    expect(await response.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'other', revision: null });
+    expect(await response.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'other', revision: null, apkUrl: LATEST_APK });
   });
 
   it('reports unknown when Render metadata is missing or this is another environment', async () => {
@@ -47,11 +65,11 @@ describe('public deployment identity', () => {
     vi.stubEnv('RENDER_GIT_BRANCH', '');
     vi.stubEnv('RENDER_GIT_COMMIT', '');
     const missing = await fetch(`${base}/api/release`);
-    expect(await missing.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'unknown', revision: null });
+    expect(await missing.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'unknown', revision: null, apkUrl: LATEST_APK });
     vi.stubEnv('RENDER', 'false');
     vi.stubEnv('RENDER_GIT_BRANCH', 'main');
     vi.stubEnv('RENDER_GIT_COMMIT', '1234567');
     const notRender = await fetch(`${base}/api/release`);
-    expect(await notRender.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'unknown', revision: null });
+    expect(await notRender.json()).toEqual({ stableBranch: 'main', deploymentBranch: 'unknown', revision: null, apkUrl: LATEST_APK });
   });
 });

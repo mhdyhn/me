@@ -53,6 +53,7 @@ await attempt('the release endpoint', async () => {
   const { status, body } = await get('/api/release');
   const parsed = json(body);
   check('the release answers', status === 200 && typeof parsed?.revision === 'string', parsed?.revision ?? `status ${status}`);
+  check('the release points at the newest Android build', typeof parsed?.apkUrl === 'string' && parsed.apkUrl.startsWith('https://'), String(parsed?.apkUrl));
 });
 
 await attempt('the login page', async () => {
