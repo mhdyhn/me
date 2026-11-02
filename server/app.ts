@@ -11,8 +11,9 @@ import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProg
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
 import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
-import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
+import { createSubscriptionCheckout, listCoachSubscriptionShares, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { aiConfig } from './ai.ts';
+import { PAID_PLAN_IDS, PLANS } from './plans.ts';
 import { coachInactiveInsight, studentWeeklyInsight } from './smartInsights.ts';
 import { listNotifications, markNotificationsRead } from './notifications.ts';
 import { INACTIVE_DAYS, listInactiveStudents } from './coachReports.ts';
@@ -1096,6 +1097,32 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
 
     {
       method: 'GET',
+      pattern: /^\/api\/me\/plan$/,
+      auth: 'signed-in',
+      handler: async ({ user }) => {
+        const state = await subscriptionState(db, user!.id, now());
+        const plan = PLANS[state.planId];
+        return {
+          status: 200,
+          body: {
+            planId: state.planId,
+            plan,
+            features: state.features,
+            subscriptionActive: state.active,
+            expiresAt: state.expiresAt,
+            daysLeft: state.daysLeft,
+            priceTomans: state.priceTomans,
+            cardTransferAvailable: state.cardTransferAvailable,
+            // The plans a student can compare, so the paywall can show the difference.
+            plans: PAID_PLAN_IDS.map((id) => PLANS[id]),
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/me\/subscription$/,
       auth: 'signed-in',
       handler: async ({ user }) => {
@@ -1288,7 +1315,10 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
         const authority = requireText(input, 'authority', 5, 100, 'شناسهٔ تراکنش');
         const action = input.action === 'confirm' ? 'confirm' : input.action === 'reject' ? 'reject' : null;
         if (!action) throw new HttpError(400, 'عملیات بررسی رسید معتبر نیست.');
-        const result = await reviewCardTransfer(db, authority, action, now());
+        // A subscription receipt waits in the same queue as a sold programme.
+        const result = authority.startsWith('SUB-')
+          ? await reviewSubscriptionPayment(db, authority, action, now())
+          : await reviewCardTransfer(db, authority, action, now());
         return { status: 200, body: result, headers: { 'Cache-Control': 'no-store' } };
       },
     },

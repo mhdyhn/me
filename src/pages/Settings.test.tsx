@@ -7,7 +7,27 @@ const mocks = vi.hoisted(() => ({
   profile: { age: 28, sex: 'مرد', heightCm: 180, weightKg: 80, primaryGoal: 'قدرت', secondaryGoal: '', trainingDays: 4, sessionMinutes: 60, trainingExperience: 'مبتدی', sleepHours: '۷ ساعت', dailyActivity: 'متوسط', stressLevel: 3, injuries: '', equipment: '', workingWeightReferences: [] } as UserProfile,
   sessions: [] as unknown[], bodyweights: [] as unknown[], nutritionDays: [] as unknown[], nutritionGoals: {},
 }));
-vi.mock('../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
+vi.mock('../lib/api', () => ({
+  // The plan of the account is a request of its own: it must not eat the queued answers
+  // of the sharing tests.
+  api: (method: string, path: string, body?: unknown) => {
+    if (path === '/me/plan') {
+      return Promise.resolve({
+        planId: 'coach',
+        plan: { id: 'coach', title: 'پلن همراه مربی', tagline: '', priceTomans: 0, periodDays: null, audience: 'coach', features: [] },
+        features: ['exercise_guide', 'progress_report', 'coach_program', 'coach_nutrition', 'coach_chat', 'nutrition', 'ai_hub'],
+        subscriptionActive: false,
+        expiresAt: null,
+        daysLeft: 0,
+        priceTomans: 99000,
+        cardTransferAvailable: true,
+        plans: [],
+      });
+    }
+    return mocks.api(method, path, body);
+  },
+  ApiError: class ApiError extends Error {},
+}));
 vi.mock('../context/GymProvider', () => ({
   useGym: () => ({
     profile: mocks.profile, loading: mocks.loading,

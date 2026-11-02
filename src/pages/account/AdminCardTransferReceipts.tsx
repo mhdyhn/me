@@ -4,6 +4,8 @@ import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 
 interface CardTransferRequest {
+  /** 'program' is a sold programme, 'subscription' is a monthly subscription. */
+  kind: 'program' | 'subscription';
   id: number;
   authority: string;
   studentId: number;
@@ -87,7 +89,10 @@ export function AdminCardTransferReceipts() {
             <article key={item.id} className="admin-card-transfer-receipts__item">
               <div>
                 <strong>{item.studentName}</strong>
-                <span className="account-muted">مربی: {item.coachName}</span>
+                <span className="account-muted">
+                  {item.kind === 'subscription' ? 'اشتراک ماهانه' : 'برنامهٔ تمرینی'}
+                  {item.coachName ? ` · مربی: ${item.coachName}` : ''}
+                </span>
                 <span className="account-muted">
                   {faNumber(item.transferAmountTomans ?? item.amountTomans ?? 0)} تومان · {dateLabel(item.createdAt)}
                 </span>

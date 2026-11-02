@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Copy, CreditCard, Landmark } from 'lucide-react';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, isReviewQueued } from '../lib/api';
 import { loadAssignedProgram } from '../lib/assignedProgram';
 import { faNumber } from '../lib/format';
 import type { AssignedMeta } from '../lib/programStore';
 
 export interface CardTransferDetails {
+  /** True when a bank verification service confirms the receipt at once. */
+  autoConfirm: boolean;
   authority: string;
   programmeId: string;
   programmeTitle: string;
@@ -26,7 +28,8 @@ function groupedCardNumber(value: string): string {
 
 /**
  * Card-to-card payment: the student transfers the exact amount, then submits the bank
- * receipt. The server confirms the receipt automatically and unlocks the programme.
+ * receipt. The programme opens only when the money is really there: the bank verification
+ * service confirms the receipt, or a manager matches it in the statement.
  */
 export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
   const [details, setDetails] = useState<CardTransferDetails | null>(null);
@@ -35,6 +38,7 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function start() {
@@ -88,10 +92,28 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
       setSenderCardLast4('');
       await loadAssignedProgram();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
+      if (isReviewQueued(caught)) {
+        // The receipt is written down; the manager still has to see the transfer.
+        setWaiting((caught as ApiError).message);
+        setTrackingNumber('');
+        setSenderCardLast4('');
+        await loadAssignedProgram();
+      } else {
+        setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  if (waiting) {
+    return (
+      <section className="card-transfer card-transfer--active" aria-label="پرداخت کارت‌به‌کارت">
+        <p className="card-transfer__waiting" role="status">{waiting}</p>
+        <p className="account-muted">به‌محض تأیید مدیر، برنامه باز می‌شود.</p>
+        <button type="button" className="button button--ghost" onClick={() => { setWaiting(null); void loadAssignedProgram(); }}>بررسی دوبارهٔ وضعیت برنامه</button>
+      </section>
+    );
   }
 
   if (done) {
@@ -108,7 +130,7 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
       <section className="card-transfer" aria-label="پرداخت کارت‌به‌کارت">
         <p className="account-muted">
           تنها روش پرداخت میتی، کارت‌به‌کارت است؛ مبلغ را کارت‌به‌کارت واریز کنید و رسید را همین‌جا ثبت کنید.
-          تأیید رسید خودکار است و برنامه بلافاصله باز می‌شود.
+          پس از دیدنِ واریز در صورت‌حساب، برنامه باز می‌شود.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button type="button" className="button button--secondary" disabled={busy} onClick={() => void start()}>
@@ -185,7 +207,7 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
         </button>
       </form>
       <p className="card-transfer__note">
-        این پرداخت واقعی است: مبلغ در گزارش مالی مربی و مدیر ثبت می‌شود و برنامه پس از تأیید رسید باز می‌شود.
+        این پرداخت واقعی است: مبلغ در گزارش مالی مربی و مدیر ثبت می‌شود و برنامه پس از بررسیِ رسید باز می‌شود.
         {' '}اگر این صفحه در دسترس نیست، <Link to="/pay/receipt">رسید را از صفحهٔ ثبت سریع واریز کنید</Link>.
       </p>
     </section>

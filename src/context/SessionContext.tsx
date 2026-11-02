@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ApiError, TOKEN_KEY, USER_KEY, UNAUTHORIZED_EVENT, api, clearStoredUser, clearToken, getStoredUser, getToken, setStoredUser, setToken, type PublicUser } from '../lib/api';
 import { SCOPE_KEY, clearAccountScope, ensureAccountScope, isOfflineBuild, scopeMatchesAccount } from '../lib/accountScope';
 import { db } from '../lib/db';
+import { clearPlanCache } from '../lib/plans';
 import { cancelAssignedProgramLoad, loadAssignedProgram } from '../lib/assignedProgram';
 import { loadStoredProgram } from '../lib/programPersistence';
 import { setActiveProgram, setAssignedMeta, setAssignedProgram, setAssignedProgramLoadState } from '../lib/programStore';
@@ -159,6 +160,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (username: string, password: string) => {
     refreshGeneration.current++;
+    // The plan belongs to the account: the cache of the previous account must not be reused.
+    clearPlanCache();
     const result = await api<{ token: string; user: PublicUser }>('POST', '/auth/login', { username, password });
     setToken(result.token);
     setStoredUser(result.user);
@@ -192,6 +195,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     clearToken();
     clearStoredUser();
     clearAccountScope();
+    clearPlanCache();
     setUser(null);
     setStatus('signed-out');
   }, []);

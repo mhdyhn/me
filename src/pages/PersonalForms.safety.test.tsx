@@ -12,7 +12,26 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('../context/GymProvider', () => ({ useGym: () => mocks.gym }));
 vi.mock('../context/SessionContext', () => ({ useSession: () => ({ user: mocks.user }) }));
-vi.mock('../lib/api', () => ({ ApiError: class extends Error {}, api: mocks.api }));
+vi.mock('../lib/api', () => ({
+  ApiError: class extends Error {},
+  // The plan is a request of its own and must not eat the queued answers of the other calls.
+  api: (method: string, path: string, body?: unknown) => {
+    if (path === '/me/plan') {
+      return Promise.resolve({
+        planId: 'coach',
+        plan: { id: 'coach', title: 'پلن همراه مربی', tagline: '', priceTomans: 0, periodDays: null, audience: 'coach', features: [] },
+        features: ['exercise_guide', 'progress_report', 'coach_program', 'coach_nutrition', 'coach_chat', 'nutrition', 'ai_hub'],
+        subscriptionActive: false,
+        expiresAt: null,
+        daysLeft: 0,
+        priceTomans: 99000,
+        cardTransferAvailable: true,
+        plans: [],
+      });
+    }
+    return mocks.api(method, path, body);
+  },
+}));
 vi.mock('./account/MealDiary', () => ({ MealDiary: () => null }));
 vi.mock('./account/StudentNutrition', () => ({ StudentNutritionPlan: () => null, CoachNutritionArchive: () => null }));
 vi.mock('../components/PersonalDataPanel', () => ({ PersonalDataPanel: () => null }));
@@ -36,7 +55,9 @@ it('starts with no weight or protein target and can save only a calorie target',
   mocks.gym = { ...mocks.gym, profile: blankProfile, nutritionGoals: blankNutritionGoals };
   mocks.saveGoals.mockResolvedValue(true);
   render(<Nutrition />);
-  expect(screen.getByRole('spinbutton', { name: /پروتئین/ })).toHaveValue(null);
+  // The plan of the account decides whether the smart nutrition is open, so the form
+  // arrives one tick later than the page.
+  expect(await screen.findByRole('spinbutton', { name: /پروتئین/ })).toHaveValue(null);
   expect(screen.getByText(/برای دیدن بازهٔ تقریبی پروتئین/)).toBeInTheDocument();
   fireEvent.change(screen.getByRole('spinbutton', { name: /هدف کالری/ }), { target: { value: '1800' } });
   const button = screen.getByRole('button', { name: /ذخیرهٔ هدف‌ها/ });
@@ -48,7 +69,7 @@ it('starts with no weight or protein target and can save only a calorie target',
 it('locks daily targets during a slow local save and ignores repeated submits', async () => {
   const request = deferred(); mocks.saveGoals.mockReturnValue(request.promise);
   render(<Nutrition />);
-  const protein = screen.getByRole('spinbutton', { name: /پروتئین/ });
+  const protein = await screen.findByRole('spinbutton', { name: /پروتئین/ });
   fireEvent.change(protein, { target: { value: '120' } });
   const button = screen.getByRole('button', { name: /ذخیرهٔ هدف‌ها/ });
   fireEvent.submit(button.closest('form')!); fireEvent.submit(button.closest('form')!);
@@ -63,7 +84,7 @@ it('locks daily targets during a slow local save and ignores repeated submits', 
 it('locks today’s note until the save resolves and allows retry after failure', async () => {
   const request = deferred(); mocks.saveDay.mockReturnValue(request.promise);
   render(<Nutrition />);
-  const note = screen.getByRole('textbox', { name: /یادداشت خوراک/ });
+  const note = await screen.findByRole('textbox', { name: /یادداشت خوراک/ });
   fireEvent.change(note, { target: { value: 'یادداشت باقی بماند' } });
   const button = screen.getByRole('button', { name: /ذخیرهٔ ثبت امروز/ });
   fireEvent.submit(button.closest('form')!); fireEvent.submit(button.closest('form')!);

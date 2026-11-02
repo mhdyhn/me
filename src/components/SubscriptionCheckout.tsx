@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Copy, CreditCard, Landmark, Sparkles } from 'lucide-react';
-import { ApiError } from '../lib/api';
+import { ApiError, isReviewQueued } from '../lib/api';
 import { faNumber } from '../lib/format';
 import {
   startSubscriptionCheckout,
@@ -14,8 +14,9 @@ function groupedCardNumber(value: string): string {
 }
 
 /**
- * Buying the optional student subscription with card-to-card. The receipt is confirmed by
- * the server automatically; there is no test mode and no fake payment.
+ * Buying the optional student subscription with card-to-card. The receipt is only trusted
+ * when the money really arrived: either the bank verification service confirms it, or a
+ * manager matches it in the statement. There is no test mode and no fake payment.
  */
 export function SubscriptionCheckout({
   priceTomans,
@@ -30,6 +31,7 @@ export function SubscriptionCheckout({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function start() {
@@ -68,10 +70,26 @@ export function SubscriptionCheckout({
       setSenderCardLast4('');
       onActivated?.(result.state);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
+      if (isReviewQueued(caught)) {
+        // The receipt is written down; the manager still has to see the transfer.
+        setWaiting((caught as ApiError).message);
+        setTrackingNumber('');
+        setSenderCardLast4('');
+      } else {
+        setError(caught instanceof ApiError ? caught.message : 'ثبت رسید ممکن نشد. دوباره تلاش کنید.');
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  if (waiting) {
+    return (
+      <section className="card-transfer card-transfer--active" aria-label="خرید اشتراک">
+        <p className="card-transfer__waiting" role="status">{waiting}</p>
+        <p className="account-muted">به‌محض تأیید مدیر، اشتراک شما فعال می‌شود.</p>
+      </section>
+    );
   }
 
   if (done) {
@@ -87,7 +105,7 @@ export function SubscriptionCheckout({
       <section className="card-transfer" aria-label="خرید اشتراک">
         <p className="account-muted">
           اشتراک ماهانهٔ هوشمند: {faNumber(priceTomans)} تومان. با کارت‌به‌کارت بپردازید و رسید را ثبت کنید؛
-          تأیید رسید خودکار است و امکانات هوشمند بلافاصله باز می‌شود.
+          پس از دیدنِ واریز در صورت‌حساب، اشتراک شما باز می‌شود.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button type="button" className="button button--secondary" disabled={busy} onClick={() => void start()}>
@@ -164,7 +182,7 @@ export function SubscriptionCheckout({
         </button>
       </form>
       <p className="card-transfer__note">
-        <Sparkles size={13} /> این پرداخت واقعی است؛ مبلغ در گزارش مالی ثبت می‌شود و اشتراک شما پس از تأیید رسید باز می‌شود.
+        <Sparkles size={13} /> این پرداخت واقعی است؛ مبلغ در گزارش مالی ثبت می‌شود و اشتراک شما پس از بررسیِ رسید باز می‌شود.
       </p>
     </section>
   );

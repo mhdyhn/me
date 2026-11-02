@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Download, Info, LockKeyhole, Plus, Save, ShieldCheck, Smartphone, Trash2, UserRound } from 'lucide-react';
+import { PlanCard } from '../components/PlanCard';
 import { SectionHeading } from '../components/SectionHeading';
 import { RouteLoading } from '../components/RouteLoading';
 import { InstallAppModal } from '../components/InstallAppModal';
@@ -274,6 +275,7 @@ export function Settings() {
         </form>
 
         <aside className="settings-aside page-stack page-stack--tight">
+          <PlanCard />
           <section className="panel-card install-card" style={{ border: '1px solid rgba(217, 246, 111, 0.25)', background: 'linear-gradient(135deg, rgba(217, 246, 111, 0.06), transparent)' }}>
             <div className="card-topline">
               <div>

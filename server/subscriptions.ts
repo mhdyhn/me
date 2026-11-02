@@ -8,6 +8,9 @@ import {
   uniqueTransferAmount,
   verifyWithProvider,
 } from './cardTransfer.ts';
+import { adminRecipients, createNotification } from './notifications.ts';
+import { planIdForUser, unlockedFeatures, type FeatureKey, type PlanId } from './plans.ts';
+import { findUserById } from './users.ts';
 
 /**
  * The optional student subscription.
@@ -31,6 +34,10 @@ export const SUBSCRIPTION_PERIOD_DAYS = 30;
 export interface SubscriptionState {
   /** The monthly price in tomans. */
   priceTomans: number;
+  /** The plan of this account right now. */
+  planId: PlanId;
+  /** The features the plan opens. */
+  features: FeatureKey[];
   /** Whether the smart features are open right now. */
   active: boolean;
   /** When the current period ends. */
@@ -106,6 +113,8 @@ interface SubscriptionRow {
 
 /** The current subscription of a user, or `null` when there is none. */
 export async function subscriptionState(db: Db, userId: number, now = new Date()): Promise<SubscriptionState> {
+  const user = await findUserById(db, userId);
+  if (!user) throw new HttpError(404, 'حساب یافت نشد.');
   const rows = await db.query<SubscriptionRow & { coach_name: string | null }>(
     `SELECT s.expires_at, s.amount_tomans, s.source_coach_id, s.coach_share_tomans, s.status, c.display_name AS coach_name
      FROM subscriptions s LEFT JOIN users c ON c.id = s.source_coach_id
@@ -116,9 +125,13 @@ export async function subscriptionState(db: Db, userId: number, now = new Date()
   const row = rows[0];
   const expiresAt = row?.expires_at ?? null;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((Date.parse(expiresAt) - now.getTime()) / 86_400_000)) : 0;
+  const active = Boolean(row);
+  const planId = planIdForUser(user, active);
   return {
     priceTomans: subscriptionPriceTomans(),
-    active: Boolean(row),
+    planId,
+    features: unlockedFeatures(user, active),
+    active,
     expiresAt,
     daysLeft,
     referralCoachName: row?.coach_name ?? null,
@@ -127,6 +140,8 @@ export async function subscriptionState(db: Db, userId: number, now = new Date()
 }
 
 export interface SubscriptionCheckout {
+  /** True when a bank verification service confirms the receipt at once. */
+  autoConfirm: boolean;
   authority: string;
   priceTomans: number;
   transferAmountTomans: number;
@@ -143,13 +158,15 @@ function expiryFrom(createdAt: string, hours: number): string {
   return new Date(base + hours * 3600_000).toISOString();
 }
 
-function instructionsFor(amount: number, reference: string): string[] {
+function instructionsFor(amount: number, reference: string, autoConfirm: boolean): string[] {
   const money = new Intl.NumberFormat('fa-IR').format(amount);
   return [
     `مبلغ ${money} تومان را دقیقاً به کارت زیر واریز کنید.`,
     `در توضیحات واریز، کد پیگیری «${reference}» را بنویسید.`,
     'پس از واریز، شمارهٔ پیگیری رسید را در همین صفحه ثبت کنید.',
-    'تأیید رسید خودکار است و اشتراک شما بلافاصله فعال می‌شود.',
+    autoConfirm
+      ? 'رسید شما با سرویس بانکی بررسی و اشتراک فعال می‌شود.'
+      : 'رسید شما در صف بررسی مدیر می‌نشیند و اشتراک پس از تأیید واریز فعال می‌شود.',
   ];
 }
 
@@ -165,6 +182,9 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
   const state = await subscriptionState(db, userId, now);
   if (state.active) {
     throw new HttpError(409, 'اشتراک شما فعال است؛ تا پایان این دوره نیازی به خرید دوباره نیست.');
+  }
+  if (state.planId === 'coach') {
+    throw new HttpError(409, 'شما پلن «همراه مربی» را دارید؛ برنامهٔ تمرینی و غذایی مربی برایتان باز است و اشتراک لازم نیست.');
   }
   const price = subscriptionPriceTomans();
   const pending = (await db.query<{
@@ -191,7 +211,8 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
         cardNumber: config.cardNumber,
         cardHolder: config.cardHolder,
         expiresAt,
-        instructions: instructionsFor(pending.transfer_amount_tomans, pending.reference),
+        autoConfirm: Boolean(config.verifyUrl),
+        instructions: instructionsFor(pending.transfer_amount_tomans, pending.reference, Boolean(config.verifyUrl)),
       };
     }
     await db.query("UPDATE subscription_payments SET status = 'expired' WHERE id = $1", [pending.id]);
@@ -233,7 +254,8 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
       cardNumber: config.cardNumber,
       cardHolder: config.cardHolder,
       expiresAt: expiryFrom(existing.created_at, config.expiryHours),
-      instructions: instructionsFor(existing.transfer_amount_tomans, existing.reference),
+      autoConfirm: Boolean(config.verifyUrl),
+      instructions: instructionsFor(existing.transfer_amount_tomans, existing.reference, Boolean(config.verifyUrl)),
     };
   }
   return {
@@ -244,7 +266,8 @@ export async function createSubscriptionCheckout(db: Db, userId: number, now = n
     cardNumber: config.cardNumber,
     cardHolder: config.cardHolder,
     expiresAt: expiryFrom(createdAt, config.expiryHours),
-    instructions: instructionsFor(transferAmount, reference),
+    autoConfirm: Boolean(config.verifyUrl),
+    instructions: instructionsFor(transferAmount, reference, Boolean(config.verifyUrl)),
   };
 }
 
@@ -269,7 +292,7 @@ export async function submitSubscriptionReceipt(
   const config = await cardTransferConfig(db);
   if (!config) throw new HttpError(503, 'خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.');
   if (config.verifyUrlError) {
-    throw new HttpError(503, 'تأیید خودکار رسید به‌علت تنظیم نادرست سرویس بررسی ممکن نیست؛ با پشتیبانی تماس بگیرید.');
+    throw new HttpError(503, 'سرویس بررسی خودکار رسید درست تنظیم نشده است؛ با پشتیبانی تماس بگیرید.');
   }
   const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
   const senderLast4 = typeof input.senderCardLast4 === 'string' && input.senderCardLast4.trim()
@@ -334,45 +357,144 @@ export async function submitSubscriptionReceipt(
   if (Number(confirmedToday[0]?.count ?? '0') >= config.maxPerDay) {
     throw new HttpError(429, 'تعداد پرداخت‌های کارت‌به‌کارت تأییدشدهٔ شما در ۲۴ ساعت گذشته به سقف مجاز رسیده است.');
   }
-  const accepted = await verifyWithProvider(config, {
+  const verification = await verifyWithProvider(config, {
     authority: row.authority,
     trackingNumber,
     amountTomans: row.transfer_amount_tomans,
     reference: row.reference,
   });
-  if (!accepted) {
-    throw new HttpError(409, 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.');
+  if (verification !== 'verified') {
+    // The receipt is kept on the request: a manager matches it in the bank statement and
+    // settles it with one tap. A made-up reference can never open a subscription.
+    await db.query(
+      `UPDATE subscription_payments SET tracking_number = $1, sender_card_last4 = $2 WHERE id = $3 AND status = 'pending'`,
+      [trackingNumber, senderLast4, row.id]
+    );
+    for (const adminId of await adminRecipients(db)) {
+      await createNotification(db, adminId, {
+        kind: 'payment',
+        title: 'رسید اشتراک در انتظار بررسی',
+        body: `${row.authority} — مبلغ ${row.amount_tomans.toLocaleString('fa-IR')} تومان`,
+        link: '/coach/admin/transactions',
+      }, now);
+    }
+    await createNotification(db, userId, {
+      kind: 'payment',
+      title: 'رسید اشتراک شما ثبت شد و در حال بررسی است',
+      body: 'به‌محض بررسی، اشتراک شما فعال می‌شود.',
+      link: '/progress',
+    }, now);
+    throw new HttpError(409, verification === 'no_service'
+      ? 'رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.'
+      : 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.');
   }
 
-  const coachShare = row.source_coach_id ? referralShareTomans(row.amount_tomans) : 0;
-  const adminShare = row.amount_tomans - coachShare;
-  const startedAt = now.toISOString();
-  const periodEnd = new Date(now.getTime() + SUBSCRIPTION_PERIOD_DAYS * 86_400_000).toISOString();
-  // Only one request may claim this payment. The same receipt that arrives twice at the same
-  // moment must not open two months of subscription and pay the coach twice.
-  const claimed = await db.query<{ id: number }>(
-    `UPDATE subscription_payments SET status = 'paid', tracking_number = $1, sender_card_last4 = $2, confirmed_at = $3
-     WHERE id = $4 AND status = 'pending' RETURNING id`,
-    [trackingNumber, senderLast4, startedAt, row.id]
-  );
-  if (!claimed.length) {
-    // Another request confirmed the same transfer a moment earlier. Its subscription row
-    // may still be on its way, so we wait a moment for it.
-    const state = await waitForSubscription(db, userId, row.authority, now);
-    return { success: true, message: 'این پرداخت پیش‌تر تأیید شده و اشتراک شما فعال است.', state };
-  }
-  await db.query(
-    `INSERT INTO subscriptions
-     (user_id, plan, amount_tomans, status, started_at, expires_at, source_coach_id, coach_share_tomans, admin_share_tomans, authority, created_at)
-     VALUES ($1, 'monthly', $2, 'active', $3, $4, $5, $6, $7, $8, $3)`,
-    [userId, row.amount_tomans, startedAt, periodEnd, row.source_coach_id, coachShare, adminShare, row.authority]
-  );
-  const state = await subscriptionState(db, userId, now);
+  const state = await settleSubscriptionPayment(db, userId, row, trackingNumber, senderLast4, now);
   return {
     success: true,
     message: 'رسید واریزی تأیید شد و اشتراک هوشمند شما فعال شد.',
     state,
   };
+}
+
+interface SettleableSubscriptionPayment {
+  id: number;
+  amount_tomans: number;
+  source_coach_id: number | null;
+  authority: string;
+}
+
+/**
+ * Turns a paid subscription request into an active month.
+ *
+ * Only one request may claim this payment. The same receipt that arrives twice at the same
+ * moment must not open two months of subscription and pay the coach twice.
+ */
+async function settleSubscriptionPayment(
+  db: Db,
+  userId: number,
+  payment: SettleableSubscriptionPayment,
+  trackingNumber: string,
+  senderCardLast4: string | null,
+  now: Date
+): Promise<SubscriptionState> {
+  const coachShare = payment.source_coach_id ? referralShareTomans(payment.amount_tomans) : 0;
+  const adminShare = payment.amount_tomans - coachShare;
+  const startedAt = now.toISOString();
+  const periodEnd = new Date(now.getTime() + SUBSCRIPTION_PERIOD_DAYS * 86_400_000).toISOString();
+  const claimed = await db.query<{ id: number }>(
+    `UPDATE subscription_payments SET status = 'paid', tracking_number = $1, sender_card_last4 = $2, confirmed_at = $3
+     WHERE id = $4 AND status = 'pending' RETURNING id`,
+    [trackingNumber, senderCardLast4, startedAt, payment.id]
+  );
+  if (!claimed.length) {
+    // Another request confirmed the same transfer a moment earlier. Its subscription row
+    // may still be on its way, so we wait a moment for it.
+    return waitForSubscription(db, userId, payment.authority, now);
+  }
+  await db.query(
+    `INSERT INTO subscriptions
+     (user_id, plan, amount_tomans, status, started_at, expires_at, source_coach_id, coach_share_tomans, admin_share_tomans, authority, created_at)
+     VALUES ($1, 'monthly', $2, 'active', $3, $4, $5, $6, $7, $8, $3)`,
+    [userId, payment.amount_tomans, startedAt, periodEnd, payment.source_coach_id, coachShare, adminShare, payment.authority]
+  );
+  return subscriptionState(db, userId, now);
+}
+
+/**
+ * The manager settles a subscription receipt that the automatic check could not close.
+ * The receipt is only trusted when the money really arrived in the bank statement.
+ */
+export async function reviewSubscriptionPayment(
+  db: Db,
+  authority: string,
+  action: 'confirm' | 'reject',
+  now = new Date()
+): Promise<{ success: boolean; message: string; state: SubscriptionState }> {
+  const rows = await db.query<{
+    id: number;
+    user_id: number;
+    amount_tomans: number;
+    source_coach_id: number | null;
+    status: string;
+    tracking_number: string | null;
+    sender_card_last4: string | null;
+  }>(
+    'SELECT id, user_id, amount_tomans, source_coach_id, status, tracking_number, sender_card_last4 FROM subscription_payments WHERE authority = $1',
+    [authority]
+  );
+  const row = rows[0];
+  if (!row) throw new HttpError(404, 'درخواست خرید اشتراک یافت نشد.');
+  if (row.status === 'paid') {
+    return { success: true, message: 'این پرداخت پیش‌تر تأیید شده است.', state: await subscriptionState(db, row.user_id, now) };
+  }
+  if (row.status !== 'pending') {
+    throw new HttpError(409, 'این درخواست دیگر در انتظار بررسی نیست.');
+  }
+  if (action === 'confirm') {
+    const state = await settleSubscriptionPayment(
+      db, row.user_id,
+      { id: row.id, amount_tomans: row.amount_tomans, source_coach_id: row.source_coach_id, authority },
+      row.tracking_number ?? `MANUAL-${authority}`,
+      row.sender_card_last4 ?? null,
+      now
+    );
+    await createNotification(db, row.user_id, {
+      kind: 'payment',
+      title: 'رسید اشتراک شما تأیید شد',
+      body: 'اشتراک ماهانهٔ شما فعال شد.',
+      link: '/progress',
+    }, now);
+    return { success: true, message: 'رسید با بررسی پشتیبانی تأیید شد و اشتراک فعال شد.', state };
+  }
+  await db.query("UPDATE subscription_payments SET status = 'canceled' WHERE id = $1 AND status = 'pending'", [row.id]);
+  await createNotification(db, row.user_id, {
+    kind: 'payment',
+    title: 'رسید اشتراک شما تأیید نشد',
+    body: 'اگر فکر می‌کنید اشتباه شده، دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.',
+    link: '/progress',
+  }, now);
+  return { success: false, message: 'رسید رد شد و پرداخت لغو گردید.', state: await subscriptionState(db, row.user_id, now) };
 }
 
 /** Waits a short moment for the subscription of a payment that another request has confirmed. */

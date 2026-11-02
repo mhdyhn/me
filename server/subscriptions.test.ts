@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
+import { ensureAdmin } from './bootstrap.ts';
 import { createSession } from './auth.ts';
 import { openDatabase, type Db } from './db.ts';
 import { keyFromSecret } from './secrets.ts';
@@ -27,6 +28,7 @@ beforeEach(async () => {
   vi.stubEnv('CARD_TRANSFER_VERIFY_URL', '');
   vi.stubEnv('SUBSCRIPTION_PRICE_TOMANS', '99000');
   db = await openDatabase('memory');
+  await ensureAdmin(db, 'owner', 'owner-pass-123', clock);
   server = createServer(createApp({ db, secretKey: key, now: () => clock }));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -42,6 +44,10 @@ async function account(username: string, role: Role, coachId: number | null = nu
   const id = await insertUser(db, { username, passwordHash: 'unused-in-test', role, displayName: username, coachId, selfRegistered, mustChangePassword: false, now: clock });
   const token = (await createSession(db, id, 0, clock))!;
   return { id, token };
+}
+
+async function signIn(username: string, password: string): Promise<string> {
+  return (await call('POST', '/api/auth/login', { username, password })).json.token as string;
 }
 
 async function call(method: string, path: string, body?: unknown, session?: Session) {
@@ -61,7 +67,7 @@ describe('the optional student subscription', () => {
     expect(state.json.expiresAt).toBeNull();
   });
 
-  it('buys one month with card-to-card and confirms the receipt automatically', async () => {
+  it('keeps the month closed until a manager matches the receipt', async () => {
     const student = await account('buyer', 'student', null, true);
     const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
     expect(checkout.status).toBe(201);
@@ -75,6 +81,65 @@ describe('the optional student subscription', () => {
     }, student);
     expect(wrong.status).toBe(400);
 
+    // A reference nobody sent is only written down; the month stays closed.
+    const receipt = await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '123456789012',
+    }, student);
+    expect(receipt.status).toBe(409);
+    expect(String(receipt.json.error ?? '')).toContain('صف');
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
+
+    // The manager matches the transfer in the statement and settles it.
+    const admin = await signIn('owner', 'owner-pass-123');
+    const reviewed = await call('POST', '/api/admin/card-transfer/review', {
+      authority: checkout.json.authority, action: 'confirm',
+    }, { id: 0, token: admin });
+    expect(reviewed.status).toBe(200);
+
+    const state = await call('GET', '/api/me/subscription', undefined, student);
+    expect(state.json.active).toBe(true);
+    expect(state.json.daysLeft).toBe(30);
+    expect(new Date(state.json.expiresAt).getTime()).toBeGreaterThan(clock.getTime());
+  });
+
+  it('cancels the payment and tells the student when the manager rejects the receipt', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-rejected', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '44556677',
+    }, student);
+
+    const rejected = await call('POST', '/api/admin/card-transfer/review', {
+      authority: checkout.json.authority, action: 'reject',
+    }, { id: 0, token: admin });
+    expect(rejected.status).toBe(200);
+    expect(rejected.json.success).toBe(false);
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
+    const rows = await db.query<{ status: string }>(
+      'SELECT status FROM subscription_payments WHERE authority = $1', [checkout.json.authority]
+    );
+    expect(rows[0].status).toBe('canceled');
+    // The student hears about it in the app.
+    const notifications = await call('GET', '/api/notifications', undefined, student);
+    expect(notifications.json.notifications.some((item: { title: string }) => item.title.includes('تأیید نشد'))).toBe(true);
+  });
+
+  it('activates the month at once when the bank service verifies the receipt', async () => {
+    vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/subscription');
+    const nativeFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://verify.example.com/')) {
+        return new Response(JSON.stringify({ valid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (!String(input).startsWith(base + '/')) throw new Error('Unexpected external request');
+      return nativeFetch(input, init);
+    });
+
+    const student = await account('buyer-auto', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    expect(checkout.json.autoConfirm).toBe(true);
+
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
@@ -82,20 +147,19 @@ describe('the optional student subscription', () => {
     expect(receipt.json.success).toBe(true);
     expect(receipt.json.state.active).toBe(true);
     expect(receipt.json.state.daysLeft).toBe(30);
-
-    const state = await call('GET', '/api/me/subscription', undefined, student);
-    expect(state.json.active).toBe(true);
-    expect(new Date(state.json.expiresAt).getTime()).toBeGreaterThan(clock.getTime());
+    vi.restoreAllMocks();
   });
 
   it('refuses a second purchase while the subscription is running and replays a receipt', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
     const student = await account('buyer-two', 'student', null, true);
     const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
     expect(checkout.status).toBe(201);
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
-    expect(receipt.status).toBe(200);
+    expect(receipt.status).toBe(409);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
 
     const again = await call('POST', '/api/me/subscription/checkout', undefined, student);
     expect(again.status).toBe(409);
@@ -108,9 +172,11 @@ describe('the optional student subscription', () => {
   });
 
   it('does not accept the same receipt number for another payment', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
     const student = await account('buyer-three', 'student', null, true);
     const first = await call('POST', '/api/me/subscription/checkout', undefined, student);
     await call('POST', '/api/me/subscription/receipt', { authority: first.json.authority, trackingNumber: '555000111' }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: first.json.authority, action: 'confirm' }, { id: 0, token: admin });
     // The subscription is active now, so a second purchase is refused before the receipt check.
     const blocked = await call('POST', '/api/me/subscription/checkout', undefined, student);
     expect(blocked.status).toBe(409);
@@ -133,11 +199,20 @@ describe('the optional student subscription', () => {
     }, referred);
     expect(accept.status).toBe(200);
 
+    const admin = await signIn('owner', 'owner-pass-123');
+    // While the coach's programme is open the student is on the free coach plan. Once the
+    // student returns to their own programme the smart plan is theirs, and the coach who
+    // referred them keeps the referral share of the subscription.
+    expect((await call('GET', '/api/me/plan', undefined, referred)).json.planId).toBe('coach');
+    await call('POST', '/api/me/coach-access/withdraw', { accountId: referred.id }, referred);
+    await call('POST', '/api/me/personal-program/activate', { accountId: referred.id }, referred);
+    expect((await call('GET', '/api/me/plan', undefined, referred)).json.planId).toBe('free');
     const checkout = await call('POST', '/api/me/subscription/checkout', undefined, referred);
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '987654321',
     }, referred);
-    expect(receipt.status).toBe(200);
+    expect(receipt.status).toBe(409);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
     const rows = await db.query<{ coach_share_tomans: number; admin_share_tomans: number; source_coach_id: number }>(
       'SELECT coach_share_tomans, admin_share_tomans, source_coach_id FROM subscriptions WHERE user_id = $1',
       [referred.id]
@@ -147,6 +222,7 @@ describe('the optional student subscription', () => {
     const independent = await account('independent-two', 'student', null, true);
     const otherCheckout = await call('POST', '/api/me/subscription/checkout', undefined, independent);
     await call('POST', '/api/me/subscription/receipt', { authority: otherCheckout.json.authority, trackingNumber: '987654322' }, independent);
+    await call('POST', '/api/admin/card-transfer/review', { authority: otherCheckout.json.authority, action: 'confirm' }, { id: 0, token: admin });
     const otherRows = await db.query<{ coach_share_tomans: number; source_coach_id: number | null }>(
       'SELECT coach_share_tomans, source_coach_id FROM subscriptions WHERE user_id = $1',
       [independent.id]

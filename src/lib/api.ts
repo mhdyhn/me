@@ -112,6 +112,14 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * True when the receipt was written down and now waits for the manager to match it in the
+ * bank statement. The receipt is safe; the programme or the subscription opens later.
+ */
+export function isReviewQueued(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && error.message.includes('صف بررسی');
+}
+
 export function getToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }

@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { GymProvider } from '../src/context/GymProvider';
 import { SessionProvider } from '../src/context/SessionContext';
@@ -39,6 +39,31 @@ const completedSession = (
   }],
 });
 
+function planResponse(features: string[]) {
+  const list = features.map((key) => ({ key, label: key }));
+  return {
+    planId: 'independent',
+    plan: { id: 'independent', title: 'پلن استقلال', tagline: '', priceTomans: 99000, periodDays: 30, audience: 'independent', features: list },
+    features,
+    subscriptionActive: true,
+    expiresAt: null,
+    daysLeft: 30,
+    priceTomans: 99000,
+    cardTransferAvailable: true,
+    plans: [],
+  };
+}
+
+/** The plan decides which parts of the app are open; the tests open the smart parts. */
+function stubPlanApi(features: string[]) {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input).includes('/api/me/plan')) {
+      return new Response(JSON.stringify(planResponse(features)), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ error: 'not mocked' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }));
+}
+
 function renderPage(path: string) {
   return render(
     <GymProvider>
@@ -60,12 +85,16 @@ function renderPage(path: string) {
 }
 
 beforeEach(async () => {
+  stubPlanApi(['ai_hub', 'nutrition', 'smart_program', 'exercise_guide', 'progress_report']);
   await db.sessions.clear();
   await db.bodyweights.clear();
   await db.nutritionDays.clear();
   await db.preferences.clear();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('exercise name map', () => {
   // The dashboard reads the light map, the exercise pages read the catalogue, so
