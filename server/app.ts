@@ -13,7 +13,9 @@ import { calculateCommission, listAllTransactions, listCoachTransactions, normal
 import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { aiConfig } from './ai.ts';
-import { PAID_PLAN_IDS, PLANS } from './plans.ts';
+import { isPaidPlan, PLANS } from './plans.ts';
+import { editablePlanPrices, savePlanPrices } from './planPrices.ts';
+import { parseStatement, reviewReceipts, summarise, type ReceiptCandidate } from './receiptAssistant.ts';
 import { coachInactiveInsight, studentWeeklyInsight } from './smartInsights.ts';
 import { listNotifications, markNotificationsRead } from './notifications.ts';
 import { INACTIVE_DAYS, listInactiveStudents } from './coachReports.ts';
@@ -1101,7 +1103,12 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       auth: 'signed-in',
       handler: async ({ user }) => {
         const state = await subscriptionState(db, user!.id, now());
-        const plan = PLANS[state.planId];
+        const base = PLANS[state.planId];
+        // The price of the plan the account is on comes from the panel, not from the code.
+        const plan = {
+          ...base,
+          priceTomans: state.subscriptionPlanId ? state.priceTomans : base.priceTomans,
+        };
         return {
           status: 200,
           body: {
@@ -1114,7 +1121,15 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
             priceTomans: state.priceTomans,
             cardTransferAvailable: state.cardTransferAvailable,
             // The plans a student can compare, so the paywall can show the difference.
-            plans: PAID_PLAN_IDS.map((id) => PLANS[id]),
+            plans: (await editablePlanPrices(db)).map((plan) => ({
+              id: plan.id,
+              title: plan.title,
+              tagline: plan.tagline,
+              priceTomans: plan.priceTomans,
+              periodDays: PLANS[plan.id].periodDays,
+              audience: PLANS[plan.id].audience,
+              features: PLANS[plan.id].features,
+            })),
           },
           headers: { 'Cache-Control': 'no-store' },
         };
@@ -1135,8 +1150,13 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       method: 'POST',
       pattern: /^\/api\/me\/subscription\/checkout$/,
       auth: ['student'],
-      handler: async ({ user }) => {
-        const details = await createSubscriptionCheckout(db, user!.id, now());
+      handler: async ({ user, body }) => {
+        const input = body ? requireObject(body) : {};
+        const requested = typeof input.planId === 'string' ? input.planId : 'pro';
+        if (!isPaidPlan(requested)) {
+          throw new HttpError(400, 'این پلن قابل خرید نیست.');
+        }
+        const details = await createSubscriptionCheckout(db, user!.id, requested, now());
         return { status: 201, body: details, headers: { 'Cache-Control': 'no-store' } };
       },
     },
@@ -1247,6 +1267,64 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
           body: { enabled: config.enabled, model: config.model, reason: config.reason },
           headers: { 'Cache-Control': 'no-store' },
         };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/admin\/receipt-assistant$/,
+      auth: ['admin'],
+      handler: async ({ body }) => {
+        const input = requireObject(body);
+        const statement = typeof input.statement === 'string' ? input.statement : '';
+        if (!statement.trim()) {
+          throw new HttpError(400, 'صورت‌حساب بانک را وارد کنید.');
+        }
+        if (statement.length > 200_000) {
+          throw new HttpError(413, 'صورت‌حساب بیش از حد بزرگ است.');
+        }
+        // Only the receipts that wait for a decision take part in the review.
+        const requests = (await listCardTransferRequests(db, 60)).filter((request) =>
+          request.status === 'pending' && Boolean(request.trackingNumber)
+        );
+        const candidates: ReceiptCandidate[] = requests.map((request) => ({
+          authority: request.authority,
+          kind: request.kind,
+          studentName: request.studentName,
+          amountTomans: request.amountTomans,
+          transferAmountTomans: request.transferAmountTomans,
+          reference: request.reference,
+          trackingNumber: request.trackingNumber,
+          senderLast4: request.senderLast4,
+        }));
+        const rows = parseStatement(statement);
+        const assessments = await reviewReceipts(rows, candidates);
+        return {
+          status: 200,
+          body: { rows, assessments, summary: summarise(assessments) },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/plans$/,
+      auth: ['admin'],
+      handler: async () => {
+        const plans = await editablePlanPrices(db);
+        return { status: 200, body: { plans }, headers: { 'Cache-Control': 'no-store' } };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/admin\/plans$/,
+      auth: ['admin'],
+      handler: async ({ body }) => {
+        const input = requireObject(body);
+        const prices = await savePlanPrices(db, input as Record<string, unknown>, now());
+        return { status: 200, body: { plans: prices }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 

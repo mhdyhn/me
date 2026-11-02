@@ -19,10 +19,16 @@ function groupedCardNumber(value: string): string {
  * manager matches it in the statement. There is no test mode and no fake payment.
  */
 export function SubscriptionCheckout({
+  planId,
   priceTomans,
+  planTitle,
   onActivated,
 }: {
+  /** The paid plan the student picked. */
+  planId: string;
   priceTomans: number;
+  /** The name of the plan, shown to the student while he pays. */
+  planTitle?: string;
   onActivated?: (state: SubscriptionState) => void;
 }) {
   const [details, setDetails] = useState<SubscriptionCheckoutDetails | null>(null);
@@ -39,7 +45,7 @@ export function SubscriptionCheckout({
     setError(null);
     setDone(null);
     try {
-      setDetails(await startSubscriptionCheckout());
+      setDetails(await startSubscriptionCheckout(planId));
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'شروع خرید اشتراک ممکن نشد. دوباره تلاش کنید.');
     } finally {
@@ -104,7 +110,7 @@ export function SubscriptionCheckout({
     return (
       <section className="card-transfer" aria-label="خرید اشتراک">
         <p className="account-muted">
-          اشتراک ماهانهٔ هوشمند: {faNumber(priceTomans)} تومان. با کارت‌به‌کارت بپردازید و رسید را ثبت کنید؛
+          اشتراک ماهانهٔ {planTitle ? `«${planTitle}» ` : ''}: {faNumber(priceTomans)} تومان. با کارت‌به‌کارت بپردازید و رسید را ثبت کنید؛
           پس از دیدنِ واریز در صورت‌حساب، اشتراک شما باز می‌شود.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}

@@ -57,6 +57,11 @@ export function PlanCard() {
           ))}
         </div>
       )}
+      {plan.plans.length > 0 && plan.planId !== 'coach' && (
+        <p className="account-muted plan-card__hint">
+          پلن دیگری می‌خواهی؟ از بخش‌های پولیِ برنامه، پلن‌ها را ببین و همان را بخر.
+        </p>
+      )}
     </section>
   );
 }

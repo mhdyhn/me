@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, Lock, Sparkles } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
-import { clearPlanCache, loadPlan, type FeatureKey, type PlanState } from '../lib/plans';
+import { clearPlanCache, loadPlan, type FeatureKey, type PlanId, type PlanState } from '../lib/plans';
 import { loadSubscription, type SubscriptionState } from '../lib/subscription';
 import { SubscriptionCheckout } from './SubscriptionCheckout';
 import { faNumber } from '../lib/format';
@@ -35,6 +35,8 @@ export function PremiumGate({
   const [plan, setPlan] = useState<PlanState | null>(null);
   const [state, setState] = useState<SubscriptionState | null>(null);
   const [loading, setLoading] = useState(true);
+  // The plan the student picked; the middle one is the usual choice.
+  const [chosenPlanId, setChosenPlanId] = useState<PlanId>('pro');
 
   const [attempt, setAttempt] = useState(0);
 
@@ -70,7 +72,10 @@ export function PremiumGate({
     );
   }
 
-  const price = state?.priceTomans ?? plan.priceTomans ?? 99000;
+  // The paid plans the club offers, cheapest first. The student picks the one he wants.
+  const paidPlans = plan.plans.filter((item) => item.priceTomans > 0);
+  const chosen = paidPlans.find((item) => item.id === chosenPlanId) ?? paidPlans[0] ?? plan.plan;
+  const price = chosen.priceTomans || state?.priceTomans || plan.priceTomans || 99000;
 
   return (
     <section className="premium-gate" aria-label={`${feature} با اشتراک`}>
@@ -79,12 +84,18 @@ export function PremiumGate({
       <p>{description}</p>
       <p className="account-muted">
         این بخش برای شاگردی است که برنامه‌اش را مربی تعیین نکرده و می‌خواهد خودش از امکانات هوشمند
-        استفاده کند. با اشتراک ماهانهٔ {faNumber(price)} تومان باز می‌شود.
+        استفاده کند. پلنی را که می‌خواهی انتخاب کن و اشتراک ماهانه‌اش را بخر.
       </p>
-      {plan.plans.length > 0 && (
+      {paidPlans.length > 0 && (
         <div className="premium-gate__plans" aria-label="تفاوت پلن‌ها">
-          {plan.plans.map((item) => (
-            <div key={item.id} className={`premium-gate__plan${item.id === plan.planId ? ' is-current' : ''}`}>
+          {paidPlans.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`premium-gate__plan premium-gate__plan--pick${item.id === chosen.id ? ' is-current' : ''}`}
+              aria-pressed={item.id === chosen.id}
+              onClick={() => setChosenPlanId(item.id)}
+            >
               <strong>{item.title}</strong>
               <span className="premium-gate__plan-price">
                 {item.priceTomans === 0 ? 'رایگان' : `${faNumber(item.priceTomans)} تومان / ماه`}
@@ -95,8 +106,10 @@ export function PremiumGate({
                   <li key={itemFeature.key}><Check size={12} /> {itemFeature.label}</li>
                 ))}
               </ul>
-              {item.id === plan.planId && <span className="premium-gate__plan-current">پلن فعلی شما</span>}
-            </div>
+              <span className="premium-gate__plan-current">
+                {item.id === chosen.id ? 'پلن انتخابی شما' : 'انتخاب این پلن'}
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -104,7 +117,9 @@ export function PremiumGate({
         <p className="account-muted">خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.</p>
       ) : (
         <SubscriptionCheckout
+          planId={chosen.id}
           priceTomans={price}
+          planTitle={chosen.title}
           onActivated={(next) => {
             setState(next);
             clearPlanCache();
