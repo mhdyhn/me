@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DatabaseError, describeConnection, type ConnectionSummary, type Db } from './db.ts';
 import { changeOwnPassword, createSession, deleteSession, generatePassword, generateUsername, hashPassword, resetUserPassword, verifyPassword } from './auth.ts';
-import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
+import { HttpError, SESSIONS_BODY_BYTES, CHAT_BODY_BYTES, NUTRITION_BODY_BYTES, STATEMENT_BODY_BYTES, clearSessionCookie, readCookie, readJsonBody, requireObject, requireText, SESSION_COOKIE, SESSION_HEADER, sessionCookie } from './http.ts';
 import { assertPhoneAvailable, countStudents, deleteUnclaimedStudent, deleteUser, findLoginCandidates, findUserById, findUserBySession, insertUser, listCoachSummaries, listAdminStudents, listStudents, setUnclaimedStudentActive, setUserActive, toPublic, updateCoachIban, type Role, type StoredUser } from './users.ts';
 import { limitRegistration, normalizeUsername, registerAccount } from './registration.ts';
 import { makeClientAddressResolver } from './clientAddress.ts';
@@ -1661,7 +1661,7 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       const nutritionWrite = request.method === 'PUT' && (path === '/api/me/diary' || /^\/api\/students\/\d+\/nutrition$/.test(path));
-      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' || path === '/api/me/profile' ? SESSIONS_BODY_BYTES : nutritionWrite ? NUTRITION_BODY_BYTES : undefined;
+      const limit = path.endsWith('/chat') ? CHAT_BODY_BYTES : path === '/api/admin/receipt-assistant' ? STATEMENT_BODY_BYTES : path === '/api/me/sessions' || path === '/api/me/personal-data/batch' || path === '/api/me/profile' ? SESSIONS_BODY_BYTES : nutritionWrite ? NUTRITION_BODY_BYTES : undefined;
       const body = request.method === 'GET' ? {} : await readJsonBody(request, limit);
       const result = await dispatch(request, body);
       send(response, result.status, result.body, result.headers);

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { PlanCard } from './PlanCard';
 import { clearPlanCache } from '../lib/plans';
@@ -57,6 +57,34 @@ describe('the plan card of the student', () => {
     expect(screen.getByText('پلن کامل')).toBeTruthy();
     expect(screen.getByText(/۱۴۹٬۰۰۰/)).toBeTruthy();
     expect(screen.getByText(/۳۰ روز از اشتراک فعلی باقی مانده/)).toBeTruthy();
+  });
+
+  it('lets an independent student open the checkout of another plan', async () => {
+    stubPlan({
+      planId: 'basic',
+      plan: { id: 'basic', title: 'پلن پایه', tagline: 'برنامه‌ساز هوشمند', priceTomans: 49000, periodDays: 30, audience: 'independent', features: [{ key: 'smart_program', label: 'برنامه‌ساز هوشمند' }] },
+      features: ['smart_program'],
+      subscriptionActive: true,
+      expiresAt: '2026-11-30T08:00:00.000Z',
+      daysLeft: 30,
+      priceTomans: 49000,
+      cardTransferAvailable: true,
+      plans: [
+        { id: 'basic', title: 'پلن پایه', tagline: '', priceTomans: 49000, periodDays: 30, audience: 'independent', features: [] },
+        { id: 'pro', title: 'پلن حرفه‌ای', tagline: '', priceTomans: 99000, periodDays: 30, audience: 'independent', features: [] },
+        { id: 'full', title: 'پلن کامل', tagline: '', priceTomans: 149000, periodDays: 30, audience: 'independent', features: [] },
+      ],
+    });
+
+    render(<PlanCard />);
+    await waitFor(() => expect(screen.getByText('پلن پایه')).toBeTruthy());
+    // The student picks the middle plan and the checkout opens right here.
+    fireEvent.click(screen.getByRole('button', { name: /پلن حرفه‌ای/ }));
+    expect(await screen.findByText(/اشتراک ماهانهٔ/)).toBeTruthy();
+    // The plan the student picked is named in the checkout, next to its price.
+    expect(screen.getAllByText(/پلن حرفه‌ای/).length).toBeGreaterThan(1);
+    // The price of the chosen plan is shown on the button and in the checkout.
+    expect(screen.getAllByText(/۹۹٬۰۰۰/).length).toBeGreaterThanOrEqual(2);
   });
 
   it('shows nothing to a coach', async () => {

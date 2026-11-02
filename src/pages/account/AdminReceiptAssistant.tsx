@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Sparkles, X } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 
@@ -111,14 +112,16 @@ export function AdminReceiptAssistant() {
   }
 
   return (
-    <section className="panel-card admin-receipt-assistant" aria-label="دستیار بررسی رسید">
-      <header>
-        <h3><Sparkles size={17} /> دستیار بررسی رسید</h3>
-        <p className="account-muted">
-          صورت‌حسابِ حسابِ باشگاه را اینجا بچسبان؛ دستیار آن را با رسیدهای در انتظار تطبیق می‌دهد و
-          برای هر رسید می‌گوید قطعی است، مشکوک است یا در صورت‌حساب نیست. تصمیم نهایی با شماست.
-        </p>
-      </header>
+    <CollapsiblePanel
+      title="دستیار بررسی رسید"
+      subtitle="صورت‌حساب بانک را بچسبان تا با رسیدها تطبیق داده شود"
+      icon={<Sparkles size={18} />}
+      headingId="admin-receipt-assistant-heading"
+    >
+      <p className="account-muted">
+        صورت‌حسابِ حسابِ باشگاه را اینجا بچسبان؛ دستیار آن را با رسیدهای در انتظار تطبیق می‌دهد و
+        برای هر رسید می‌گوید قطعی است، مشکوک است یا در صورت‌حساب نیست. تصمیم نهایی با شماست.
+      </p>
 
       <label className="field-control">
         <span>صورت‌حساب بانک (متن یا CSV)</span>
@@ -203,6 +206,6 @@ export function AdminReceiptAssistant() {
           </ul>
         </details>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

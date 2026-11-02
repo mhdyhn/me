@@ -4,6 +4,7 @@ import { useSession } from '../context/SessionContext';
 import { ApiError, api, getStoredUser, getToken } from '../lib/api';
 import { registrationLink, validRegistrationToken } from '../lib/coachRegistrationLink';
 import { formatDate } from '../lib/format';
+import { CollapsiblePanel } from './CollapsiblePanel';
 import { confirmModal } from './ConfirmModal';
 
 /** Each coach can share one revocable link with multiple students. */
@@ -86,8 +87,13 @@ export function CoachInvitations() {
     finally { setBusy(false); }
   }
 
-  return <details className="coach-invitations panel-card">
-    <summary><Link2 size={18} /><span><strong>لینک ثبت‌نام شاگرد</strong><small>ثبت‌نام مستقیم با معرفی تو</small></span></summary>
+  return <CollapsiblePanel
+    title="لینک ثبت‌نام شاگرد"
+    subtitle="ثبت‌نام مستقیم با معرفی تو"
+    icon={<Link2 size={18} />}
+    headingId="coach-invitations-heading"
+    className="coach-invitations"
+  >
     <p>لینک اختصاصی خودت را برای شاگردها بفرست. هر نفر ثبت‌نام یا وارد حسابش می‌شود و پس از دیدن نام تو، اتصال را تأیید می‌کند. یک لینک تا زمان غیرفعال‌شدن برای چند شاگرد قابل استفاده است.</p>
     <div className="coach-invitations__actions">
       <button type="button" className="button button--primary button--small" disabled={busy} onClick={() => void create()}>{link ? 'نمایش دوبارهٔ لینک' : 'دریافت لینک ثبت‌نام'}</button>
@@ -109,5 +115,5 @@ export function CoachInvitations() {
       {legacyCode && <div className="coach-invitations__code"><span>تا {formatDate(legacyExpires, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} معتبر است.</span><code dir="ltr">{legacyCode}</code><button type="button" className="button button--secondary button--small" onClick={() => void copyLegacy()}>{legacyCopied ? 'کد کپی شد' : 'کپی کد'}</button></div>}
     </details>
     {notice && <p role="status">{notice}</p>}{error && <p className="form-error" role="alert">{error}</p>}
-  </details>;
+  </CollapsiblePanel>;
 }

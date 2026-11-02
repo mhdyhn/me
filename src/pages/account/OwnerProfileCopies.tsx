@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
@@ -49,8 +50,12 @@ export function OwnerProfileCopies() {
   };
 
   return (
-    <section className="panel-card" aria-labelledby="owner-profile-copies-heading">
-      <div className="admin-students-heading"><div><span className="eyebrow">حریم خصوصی</span><h3 id="owner-profile-copies-heading">پروفایل تو در حساب‌های دیگر</h3></div><ShieldCheck size={18} className="icon-accent" /></div>
+    <CollapsiblePanel
+      title="پروفایل تو در حساب‌های دیگر"
+      subtitle="نسخه‌های کپی‌شدهٔ پروفایل، برای حریم خصوصی"
+      icon={<ShieldCheck size={18} />}
+      headingId="owner-profile-copies-heading"
+    >
       <p className="account-muted">اگر نسخه‌ای از پروفایل شخصی تو در حساب شاگردی ذخیره شده باشد، این‌جا دیده و پاک می‌شود. فقط نسخه‌هایی کپی‌شده حذف می‌شوند؛ پروفایل واقعی هر شاگرد دست‌نخورده می‌ماند.</p>
       {error && <p className="form-error" role="alert">{error}</p>}
       {message && <p className="field-hint" role="status">{message}</p>}
@@ -70,6 +75,6 @@ export function OwnerProfileCopies() {
           </button>
         </>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

@@ -6,6 +6,7 @@ vi.mock('../../lib/api', () => ({ api: mocks.api, ApiError: class ApiError exten
 vi.mock('../../components/ConfirmModal', () => ({ confirmModal: mocks.confirm }));
 
 import { OwnerProfileCopies } from './OwnerProfileCopies';
+import { openSection } from '../../test/openSection';
 
 const copy = { userId: 9, username: 'student.one', displayName: 'شاگرد یک', role: 'student' };
 
@@ -18,6 +19,7 @@ afterEach(cleanup);
 describe('owner profile copies in the admin panel', () => {
   it('checks the accounts only when the owner asks for it', async () => {
     render(<OwnerProfileCopies />);
+    openSection(/پروفایل تو در حساب‌های دیگر/);
     expect(mocks.api).not.toHaveBeenCalled();
     mocks.api.mockResolvedValue({ accounts: [copy] });
     fireEvent.click(screen.getByRole('button', { name: /بررسی نسخه‌های تکراری/ }));
@@ -28,6 +30,7 @@ describe('owner profile copies in the admin panel', () => {
   it('says nothing is wrong when no copy exists', async () => {
     mocks.api.mockResolvedValue({ accounts: [] });
     render(<OwnerProfileCopies />);
+    openSection(/پروفایل تو در حساب‌های دیگر/);
     fireEvent.click(screen.getByRole('button', { name: /بررسی نسخه‌های تکراری/ }));
     expect(await screen.findByText(/هیچ نسخهٔ تکراری/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /پاک‌کردن نسخه‌های تکراری/ })).not.toBeInTheDocument();
@@ -37,6 +40,7 @@ describe('owner profile copies in the admin panel', () => {
     mocks.api.mockResolvedValueOnce({ accounts: [copy] }).mockResolvedValueOnce({ removed: [copy] });
     mocks.confirm.mockResolvedValue(true);
     render(<OwnerProfileCopies />);
+    openSection(/پروفایل تو در حساب‌های دیگر/);
     fireEvent.click(screen.getByRole('button', { name: /بررسی نسخه‌های تکراری/ }));
     await screen.findByText('student.one');
     fireEvent.click(screen.getByRole('button', { name: /پاک‌کردن نسخه‌های تکراری/ }));
@@ -48,6 +52,7 @@ describe('owner profile copies in the admin panel', () => {
     mocks.api.mockResolvedValue({ accounts: [copy] });
     mocks.confirm.mockResolvedValue(false);
     render(<OwnerProfileCopies />);
+    openSection(/پروفایل تو در حساب‌های دیگر/);
     fireEvent.click(screen.getByRole('button', { name: /بررسی نسخه‌های تکراری/ }));
     await screen.findByText('student.one');
     fireEvent.click(screen.getByRole('button', { name: /پاک‌کردن نسخه‌های تکراری/ }));

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
 import { AdminCardTransfer } from './AdminCardTransfer';
+import { openSection } from '../../test/openSection';
 
 const settings = {
   cardNumber: '6037999912345678',
@@ -24,6 +25,7 @@ describe('the card-transfer settings of the admin panel', () => {
       .mockResolvedValueOnce({ enabled: true })
       .mockResolvedValueOnce({ enabled: true, source: 'panel', settings });
     render(<AdminCardTransfer />);
+    openSection(/پرداخت کارت‌به‌کارت/);
     expect(await screen.findByText('غیرفعال')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('شمارهٔ کارت مقصد'), { target: { value: '6037999912345678' } });
     fireEvent.change(screen.getByLabelText('نام صاحب کارت'), { target: { value: 'شرکت میتی' } });
@@ -43,6 +45,7 @@ describe('the card-transfer settings of the admin panel', () => {
   it('shows the card the students pay to when the payment is already on', async () => {
     mocks.api.mockResolvedValueOnce({ enabled: true, source: 'panel', settings });
     render(<AdminCardTransfer />);
+    openSection(/پرداخت کارت‌به‌کارت/);
     expect(await screen.findByText('فعال')).toBeInTheDocument();
     expect((screen.getByLabelText('شمارهٔ کارت مقصد') as HTMLInputElement).value).toBe('6037999912345678');
   });

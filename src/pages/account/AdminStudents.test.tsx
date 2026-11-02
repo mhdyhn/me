@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({ api: vi.fn(), confirm: vi.fn() }));
 vi.mock('../../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
 vi.mock('../../components/ConfirmModal', () => ({ confirmModal: mocks.confirm }));
 import { AdminStudents } from './AdminStudents';
+import { openSection } from '../../test/openSection';
 
 const student = { id: 8, username: 'sara.fit', role: 'student', displayName: 'سارا', coachId: null, selfRegistered: true, isActive: true, mustChangePassword: false };
 beforeEach(() => { mocks.api.mockReset(); mocks.confirm.mockReset(); });
@@ -16,7 +17,9 @@ describe('admin support for independent students', () => {
     mocks.api.mockResolvedValueOnce({ students: [student] }).mockResolvedValueOnce({ students: [student] }).mockResolvedValueOnce({ username: 'sara.fit', password: 'new-password' });
     mocks.confirm.mockResolvedValue(true);
     render(<MemoryRouter><AdminStudents /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: 'همهٔ شاگردها' })).toBeInTheDocument();
+    openSection(/همهٔ شاگردها/);
+    // The title of the section; the search form has a button with the same words.
+    expect(document.getElementById('admin-students-heading')).toBeInTheDocument();
     expect(await screen.findByText('سارا')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('نام کاربری یا شمارهٔ موبایل'), { target: { value: 'sara.fit' } });
     fireEvent.click(screen.getByRole('button', { name: /جست‌وجو/ }));
@@ -30,6 +33,7 @@ describe('admin support for independent students', () => {
   it('loads the next page without losing existing student cards', async () => {
     mocks.api.mockResolvedValueOnce({ students: [student], nextCursor: 8 }).mockResolvedValueOnce({ students: [{ ...student, id: 7, username: 'other.fit', displayName: 'شاگرد دستی', selfRegistered: false, coachName: 'مربی' }], nextCursor: null });
     render(<MemoryRouter><AdminStudents /></MemoryRouter>);
+    openSection(/همهٔ شاگردها/);
     expect(await screen.findByText('سارا')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'نمایش شاگردهای بیشتر' }));
     expect(await screen.findByText('شاگرد دستی')).toBeInTheDocument();

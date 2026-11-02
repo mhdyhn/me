@@ -53,8 +53,8 @@ export async function submitSubscriptionReceipt(
   authority: string,
   trackingNumber: string,
   senderCardLast4?: string
-): Promise<{ success: boolean; message: string; state: SubscriptionState }> {
-  const response = await api<{ success: boolean; message: string; state: SubscriptionState }>(
+): Promise<{ success: boolean; pending: boolean; message: string; state: SubscriptionState }> {
+  const response = await api<{ success: boolean; pending?: boolean; message: string; state: SubscriptionState }>(
     'POST',
     '/me/subscription/receipt',
     { authority, trackingNumber, ...(senderCardLast4 ? { senderCardLast4 } : {}) }
@@ -62,5 +62,5 @@ export async function submitSubscriptionReceipt(
   if (!response || response.success !== true) {
     throw new ApiError(409, response?.message ?? 'رسید واریزی تأیید نشد.');
   }
-  return response;
+  return { ...response, pending: response.pending ?? false };
 }

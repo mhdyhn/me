@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Save, Wallet } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 
@@ -77,11 +78,12 @@ export function AdminPlans() {
   }
 
   return (
-    <section className="panel-card admin-plans" aria-label="قیمت پلن‌ها">
-      <header className="panel-card__head">
-        <Wallet size={16} />
-        <h2>قیمت پلن‌ها</h2>
-      </header>
+    <CollapsiblePanel
+      title="قیمت پلن‌ها"
+      subtitle="قیمت هر پلن، از همین‌جا عوض می‌شود"
+      icon={<Wallet size={18} />}
+      headingId="admin-plans-heading"
+    >
       <p className="account-muted">
         قیمت هر پلن را اینجا بنویس و ذخیره کن؛ بی‌درنگی روی صفحهٔ خرید شاگردها اعمال می‌شود.
         دسترسی‌های هر پلن ثابت است و از اینجا تغییر نمی‌کند.
@@ -118,6 +120,6 @@ export function AdminPlans() {
           <Save size={15} /> {busy ? 'در حال ذخیره…' : 'ذخیرهٔ قیمت‌ها'}
         </button>
       </form>
-    </section>
+    </CollapsiblePanel>
   );
 }

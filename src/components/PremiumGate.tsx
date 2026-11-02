@@ -113,7 +113,10 @@ export function PremiumGate({
           ))}
         </div>
       )}
-      {state?.cardTransferAvailable === false || plan?.cardTransferAvailable === false ? (
+      {paidPlans.length === 0 ? (
+        // No paid plan is on sale at the moment, so there is nothing to buy.
+        <p className="account-muted">در حال حاضر پلن پولی برای خرید در دسترس نیست.</p>
+      ) : state?.cardTransferAvailable === false || plan?.cardTransferAvailable === false ? (
         <p className="account-muted">خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.</p>
       ) : (
         <SubscriptionCheckout
