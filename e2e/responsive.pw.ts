@@ -216,6 +216,27 @@ for (const width of [320, 360, 681, 768]) {
   });
 }
 
+for (const width of [320, 360, 1280]) {
+  test(`the notification panel stays inside the screen at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mockAccount(page, student);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/program', { waitUntil: 'domcontentloaded' });
+    await page.locator('.notification-bell__button').click();
+    const panel = page.getByRole('dialog', { name: 'اعلان‌ها' });
+    await expect(panel).toBeVisible();
+    // The panel must hang from the button and stay whole inside the viewport.
+    await expectWithinViewport(page, '.notification-bell__panel');
+    const box = (await panel.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(800 + 1);
+    await expectNoPageOverflow(page);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const width of [320, 360]) {
   test(`unpaid programme and its payment button fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
