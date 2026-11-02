@@ -38,6 +38,8 @@ export const TABLES = [
   'student_biometrics',
   'student_coach_biometrics',
   'payment_transactions',
+  'card_transfer_settings',
+  'notifications',
   'subscriptions',
   'subscription_payments',
   'app_data_migrations',

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Check, Copy, CreditCard, Landmark } from 'lucide-react';
 import { ApiError, api } from '../lib/api';
 import { loadAssignedProgram } from '../lib/assignedProgram';
@@ -185,6 +186,7 @@ export function CardTransferCheckout({ program }: { program: AssignedMeta }) {
       </form>
       <p className="card-transfer__note">
         این پرداخت واقعی است: مبلغ در گزارش مالی مربی و مدیر ثبت می‌شود و برنامه پس از تأیید رسید باز می‌شود.
+        {' '}اگر این صفحه در دسترس نیست، <Link to="/pay/receipt">رسید را از صفحهٔ ثبت سریع واریز کنید</Link>.
       </p>
     </section>
   );

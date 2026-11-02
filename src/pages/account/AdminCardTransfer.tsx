@@ -84,7 +84,7 @@ export function AdminCardTransfer() {
   }
 
   const enabled = state?.enabled ?? false;
-  const shownCard = state?.settings.cardNumber.replace(/(.{4})/g, '$1 ').trim() ?? '';
+  const shownCard = (state?.settings?.cardNumber ?? '').replace(/(.{4})/g, '$1 ').trim();
 
   return (
     <section className="panel-card admin-card-transfer" aria-label="تنظیمات پرداخت کارت‌به‌کارت">

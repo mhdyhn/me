@@ -24,6 +24,7 @@ const Nutrition = lazy(() => import('./pages/Nutrition').then((module) => ({ def
 const Program = lazy(() => import('./pages/Program').then((module) => ({ default: module.Program })));
 const ProgramEditor = lazy(() => import('./pages/ProgramEditor').then((module) => ({ default: module.ProgramEditor })));
 const ProgramSuggested = lazy(() => import('./pages/ProgramSuggested').then((module) => ({ default: module.ProgramSuggested })));
+const QuickReceipt = lazy(() => import('./pages/QuickReceipt').then((module) => ({ default: module.QuickReceipt })));
 const Progress = lazy(() => import('./pages/Progress').then((module) => ({ default: module.Progress })));
 const AiHub = lazy(() => import('./pages/AiHub').then((module) => ({ default: module.AiHub })));
 const Settings = lazy(() => import('./pages/Settings').then((module) => ({ default: module.Settings })));
@@ -111,6 +112,7 @@ export function App() {
               <Route path="program" element={<Program />} />
               <Route path="program/edit" element={<ProgramEditorRoute />} />
               <Route path="program/suggested" element={<ProgramSuggested />} />
+              <Route path="pay/receipt" element={<QuickReceipt />} />
               <Route path="exercises" element={<ExerciseLibrary />} />
               <Route path="exercise/:exerciseId" element={<ExerciseRoute />} />
               <Route path="workout/:templateId" element={<Workout />} />

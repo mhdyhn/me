@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ProgressChart } from '../components/ProgressChart';
 import { PersianDateInput } from '../components/PersianDateInput';
 import { SectionHeading } from '../components/SectionHeading';
+import { SmartInsight } from '../components/SmartInsight';
 import { SmartProgressReport } from '../components/SmartProgressReport';
 import { RouteLoading } from '../components/RouteLoading';
 import { useGym } from '../context/GymProvider';
@@ -179,6 +180,7 @@ export function Progress() {
         </section>
       )}
 
+      <SmartInsight />
       <SmartProgressReport />
 
       <div className="progress-summary-cards">

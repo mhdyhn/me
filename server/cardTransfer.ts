@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from './db.ts';
+import { adminRecipients, createNotification } from './notifications.ts';
 import { HttpError } from './http.ts';
 import { calculateCommission, isProgramPaid, toPaymentTransaction, type PaymentTransaction } from './payments.ts';
 
@@ -134,14 +135,15 @@ export async function saveCardTransferSettings(
   };
 }
 
+/** The card number of the club as a column of another query; no extra round trip. */
+export const CARD_TRANSFER_CARD_SQL = '(SELECT card_number FROM card_transfer_settings WHERE id = 1)';
+
 /**
- * Reads the card-transfer configuration; `null` means the feature is switched off.
- * The settings the admin saved in the panel win; the environment is the fallback.
+ * The card-transfer configuration of the environment alone; `null` means there is none.
+ * It reads no database, so a hot route can use it without an extra query.
  */
-export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<CardTransferConfig | null> {
-  const saved = await cardTransferSettings(db);
-  const rawCardNumber = saved ? saved.cardNumber : toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
-  const cardNumber = rawCardNumber;
+export function cardTransferEnvConfig(env: NodeJS.ProcessEnv = process.env): CardTransferConfig | null {
+  const cardNumber = toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
   if (!/^\d{16}$/.test(cardNumber)) return null;
   const rawVerifyUrl = (env.CARD_TRANSFER_VERIFY_URL ?? '').trim();
   let verifyUrl: string | null = null;
@@ -157,13 +159,34 @@ export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = proces
   }
   return {
     cardNumber,
-    cardHolder: (saved ? saved.cardHolder : (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim()) || 'میتی',
-    bankName: saved ? saved.bankName : (env.CARD_TRANSFER_BANK_NAME ?? '').trim(),
-    expiryHours: saved ? saved.expiryHours : positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
-    maxPerDay: saved ? saved.maxPerDay : positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
-    uniqueAmount: saved ? saved.uniqueAmount : (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
+    cardHolder: (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim() || 'میتی',
+    bankName: (env.CARD_TRANSFER_BANK_NAME ?? '').trim(),
+    expiryHours: positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
+    maxPerDay: positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
+    uniqueAmount: (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
     verifyUrl,
     verifyUrlError,
+  };
+}
+
+/**
+ * Reads the card-transfer configuration; `null` means the feature is switched off.
+ * The settings the admin saved in the panel win; the environment is the fallback.
+ */
+export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<CardTransferConfig | null> {
+  const saved = await cardTransferSettings(db);
+  const fromEnv = cardTransferEnvConfig(env);
+  if (!saved) return fromEnv;
+  if (!/^\d{16}$/.test(saved.cardNumber)) return null;
+  return {
+    cardNumber: saved.cardNumber,
+    cardHolder: saved.cardHolder || 'میتی',
+    bankName: saved.bankName,
+    expiryHours: saved.expiryHours,
+    maxPerDay: saved.maxPerDay,
+    uniqueAmount: saved.uniqueAmount,
+    verifyUrl: fromEnv?.verifyUrl ?? null,
+    verifyUrlError: fromEnv?.verifyUrlError ?? null,
   };
 }
 
@@ -245,7 +268,7 @@ export async function createCardTransferRequest(
 ): Promise<CardTransferDetails> {
   const config = await cardTransferConfig(db);
   if (!config) {
-    throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است؛ از پرداخت آنلاین استفاده کنید.');
+    throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است. لطفاً به مربی خود اطلاع دهید.');
   }
   const rows = await db.query<{
     coach_id: number;
@@ -369,6 +392,15 @@ export async function createCardTransferRequest(
     created = existing.created_at;
   }
 
+  if (inserted.length) {
+    await createNotification(db, studentId, {
+      kind: 'payment',
+      title: 'برنامه قفل شد؛ رسید واریز را ثبت کنید',
+      body: `مبلغ ${finalTransferAmount.toLocaleString('fa-IR')} تومان را به کارت ${config.cardHolder} واریز کنید و شمارهٔ پیگیری را ثبت کنید.`,
+      link: '/pay/receipt',
+    }, now);
+  }
+
   return {
     authority: finalAuthority,
     programmeId: info.programme_id,
@@ -435,6 +467,106 @@ export async function verifyWithProvider(config: CardTransferConfig, payload: {
     console.error('Card transfer receipt verification failed:', error);
     return false;
   }
+}
+
+export interface CardTransferRequestRow {
+  id: number;
+  authority: string;
+  studentId: number;
+  studentName: string;
+  coachName: string;
+  amountTomans: number;
+  transferAmountTomans: number | null;
+  reference: string | null;
+  trackingNumber: string | null;
+  senderLast4: string | null;
+  status: string;
+  confirmedBy: string | null;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+/** The card-transfer requests of the club, the newest first, for the review list of the admin. */
+export async function listCardTransferRequests(db: Db, limit = 40): Promise<CardTransferRequestRow[]> {
+  const rows = await db.query<{
+    id: number;
+    authority: string;
+    student_id: number;
+    student_name: string;
+    coach_name: string;
+    amount_tomans: number;
+    card_transfer_amount_tomans: number | null;
+    card_transfer_reference: string | null;
+    ref_id: string | null;
+    card_transfer_sender_last4: string | null;
+    status: string;
+    card_transfer_confirmed_by: string | null;
+    created_at: string;
+    verified_at: string | null;
+  }>(
+    `SELECT t.id, t.authority, t.student_id, s.display_name AS student_name, c.display_name AS coach_name,
+            t.amount_tomans, t.card_transfer_amount_tomans, t.card_transfer_reference, t.ref_id,
+            t.card_transfer_sender_last4, t.status, t.card_transfer_confirmed_by, t.created_at, t.verified_at
+     FROM payment_transactions t
+     JOIN users s ON s.id = t.student_id
+     JOIN users c ON c.id = t.coach_id
+     WHERE t.gateway_mode = '${CARD_TRANSFER_MODE}'
+     ORDER BY t.created_at DESC, t.id DESC
+     LIMIT $1`,
+    [Math.min(100, Math.max(1, Math.floor(limit) || 40))]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    authority: row.authority,
+    studentId: row.student_id,
+    studentName: row.student_name,
+    coachName: row.coach_name,
+    amountTomans: row.amount_tomans,
+    transferAmountTomans: row.card_transfer_amount_tomans ?? null,
+    reference: row.card_transfer_reference ?? null,
+    trackingNumber: row.ref_id ?? null,
+    senderLast4: row.card_transfer_sender_last4 ?? null,
+    status: row.status,
+    confirmedBy: row.card_transfer_confirmed_by ?? null,
+    createdAt: row.created_at,
+    verifiedAt: row.verified_at ?? null,
+  }));
+}
+
+/** The open card-transfer request of a student, for the quick receipt screen. */
+export async function pendingCardTransferRequest(
+  db: Db,
+  studentId: number
+): Promise<{ authority: string; amountTomans: number; transferAmountTomans: number | null; reference: string | null; trackingNumber: string | null; status: string; createdAt: string; expiresAt: string } | null> {
+  const config = await cardTransferConfig(db);
+  if (!config) return null;
+  const rows = await db.query<{
+    authority: string;
+    amount_tomans: number;
+    card_transfer_amount_tomans: number | null;
+    card_transfer_reference: string | null;
+    ref_id: string | null;
+    status: string;
+    created_at: string;
+  }>(
+    `SELECT authority, amount_tomans, card_transfer_amount_tomans, card_transfer_reference, ref_id, status, created_at
+     FROM payment_transactions
+     WHERE student_id = $1 AND gateway_mode = '${CARD_TRANSFER_MODE}' AND status = 'pending'
+     ORDER BY id DESC LIMIT 1`,
+    [studentId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    authority: row.authority,
+    amountTomans: row.amount_tomans,
+    transferAmountTomans: row.card_transfer_amount_tomans ?? null,
+    reference: row.card_transfer_reference ?? null,
+    trackingNumber: row.ref_id ?? null,
+    status: row.status,
+    createdAt: row.created_at,
+    expiresAt: expiryFrom(row.created_at, config.expiryHours),
+  };
 }
 
 /**
@@ -530,7 +662,28 @@ export async function submitCardTransferReceipt(
     reference: row.card_transfer_reference ?? '',
   });
   if (!accepted) {
-    throw new HttpError(409, 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.');
+    // The receipt is kept on the request so a manager can settle it in seconds from the panel.
+    await db.query(
+      `UPDATE payment_transactions
+       SET ref_id = $1, card_transfer_sender_last4 = $2, card_transfer_confirmed_by = 'needs_review'
+       WHERE id = $3 AND status = 'pending'`,
+      [trackingNumber, senderCardLast4, row.id]
+    );
+    for (const adminId of await adminRecipients(db)) {
+      await createNotification(db, adminId, {
+        kind: 'payment',
+        title: 'رسید کارت‌به‌کارت در انتظار بررسی',
+        body: `${row.authority} — مبلغ ${expectedAmount.toLocaleString('fa-IR')} تومان`,
+        link: '/coach/admin/transactions',
+      }, now);
+    }
+    await createNotification(db, studentId, {
+      kind: 'payment',
+      title: 'رسید شما ثبت شد و در حال بررسی است',
+      body: 'به‌محض بررسی، برنامهٔ شما باز می‌شود.',
+      link: '/pay/receipt',
+    }, now);
+    throw new HttpError(409, 'رسید واریزی ثبت شد و در حال بررسی است؛ به‌محض بررسی، برنامهٔ شما باز می‌شود.');
   }
 
   await db.query(
@@ -619,6 +772,14 @@ export async function reviewCardTransfer(
     );
   }
   const transaction = await loadTransaction(db, row.id);
+  await createNotification(db, transaction.studentId, {
+    kind: 'payment',
+    title: action === 'confirm' ? 'رسید پرداخت شما تأیید شد' : 'رسید پرداخت شما تأیید نشد',
+    body: action === 'confirm'
+      ? 'برنامهٔ شما باز شد.'
+      : 'اگر فکر می‌کنید اشتباه شده، دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.',
+    link: '/pay/receipt',
+  }, now);
   return {
     success: action === 'confirm',
     transaction,

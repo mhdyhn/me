@@ -6,6 +6,7 @@ import { HttpError } from './http.ts';
 import { migrateNutrition } from './nutrition.ts';
 import { migrateSessions } from './sessions.ts';
 import { migratePayments } from './payments.ts';
+import { migrateNotifications } from './notifications.ts';
 import { migrateCardTransfers } from './cardTransfer.ts';
 import { migrateSubscriptions } from './subscriptions.ts';
 import { migrateBiometrics } from './biometrics.ts';
@@ -680,6 +681,7 @@ async function migrate(db: Db): Promise<void> {
   await migrateNutrition(db);
   await migrateSessions(db);
   await migratePayments(db);
+  await migrateNotifications(db);
   await migrateCardTransfers(db);
   await migrateSubscriptions(db);
   await migrateBiometrics(db);
