@@ -48,9 +48,12 @@ export function CoachInactiveStudents() {
     }
   }, []);
 
+  // The report is fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     void load();
-  }, [load]);
+  }, [opened, load]);
 
   if (error) {
     return (
@@ -60,6 +63,7 @@ export function CoachInactiveStudents() {
         icon={<UserX size={18} />}
         headingId="coach-inactive-heading"
         defaultOpen
+        onToggle={(next) => { if (next) setOpened(true); }}
       >
         <p className="form-error" role="alert">{error}</p>
         <button type="button" className="button button--ghost button--small" disabled={loading} onClick={() => void load()}>
@@ -76,6 +80,7 @@ export function CoachInactiveStudents() {
         subtitle="در حال بررسیِ تمرینِ شاگردها…"
         icon={<UserX size={18} />}
         headingId="coach-inactive-heading"
+        onToggle={(next) => { if (next) setOpened(true); }}
       >
         <p className="account-muted" role="status">در حال بررسیِ تمرینِ شاگردها…</p>
       </CollapsiblePanel>
@@ -93,6 +98,7 @@ export function CoachInactiveStudents() {
       icon={<UserX size={18} />}
       headingId="coach-inactive-heading"
       badge={students.length > 0 ? faNumber(students.length) : undefined}
+      onToggle={(next) => { if (next) setOpened(true); }}
     >
       <div className="coach-inactive__head">
         <button type="button" className="button button--ghost button--small" disabled={loading} onClick={() => void load()}>

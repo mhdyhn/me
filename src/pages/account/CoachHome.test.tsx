@@ -102,8 +102,9 @@ describe('coach student list filters', () => {
     });
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
     expect(await screen.findByText('شاگردان بی‌تمرین')).toBeInTheDocument();
-    // The report folds away, so the manager opens it before reading it.
+    // The report folds away, so the manager opens it before reading it; the report itself
+    // is fetched the first time the section opens.
     openSection(/شاگردان بی‌تمرین/);
-    expect(screen.getByText(/هنوز هیچ تمرینی ثبت نشده/)).toBeInTheDocument();
+    expect(await screen.findByText(/هنوز هیچ تمرینی ثبت نشده/)).toBeInTheDocument();
   });
 });

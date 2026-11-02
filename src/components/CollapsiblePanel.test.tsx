@@ -71,6 +71,17 @@ describe('a panel that folds away', () => {
     expect(screen.getByText('محتوای بخش')).toBeTruthy();
   });
 
+  it('tells the parent when it opens, so a section can fetch its data then', () => {
+    const onToggle = vi.fn();
+    render(
+      <CollapsiblePanel title="بخش" onToggle={onToggle}>
+        <p>محتوای بخش</p>
+      </CollapsiblePanel>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /بخش/ }));
+    expect(onToggle).toHaveBeenCalledWith(true);
+  });
+
   it('shows the count on the title', () => {
     render(
       <CollapsiblePanel title="رسیدها" badge="۳">

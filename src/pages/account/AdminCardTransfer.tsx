@@ -54,9 +54,12 @@ export function AdminCardTransfer() {
     }
   }
 
+  // The settings are fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     void load();
-  }, []);
+  }, [opened]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,6 +96,7 @@ export function AdminCardTransfer() {
       subtitle="تنها روش پرداخت میتی"
       icon={<Landmark size={18} />}
       headingId="admin-card-transfer-heading"
+      onToggle={(next) => { if (next) setOpened(true); }}
       badge={
         <span className={`admin-card-transfer__status ${enabled ? 'is-on' : 'is-off'}`}>
           {enabled ? <><ShieldCheck size={14} /> فعال</> : 'غیرفعال'}

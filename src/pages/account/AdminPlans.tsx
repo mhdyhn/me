@@ -49,9 +49,12 @@ export function AdminPlans() {
     }
   }
 
+  // The prices are fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     void load();
-  }, []);
+  }, [opened]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,6 +86,7 @@ export function AdminPlans() {
       subtitle="قیمت هر پلن، از همین‌جا عوض می‌شود"
       icon={<Wallet size={18} />}
       headingId="admin-plans-heading"
+      onToggle={(next) => { if (next) setOpened(true); }}
     >
       <p className="account-muted">
         قیمت هر پلن را اینجا بنویس و ذخیره کن؛ بی‌درنگی روی صفحهٔ خرید شاگردها اعمال می‌شود.

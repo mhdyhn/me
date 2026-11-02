@@ -38,7 +38,12 @@ export function AdminStudents() {
     }
   }
 
-  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The list is fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (!opened) return;
+    void load();
+  }, [opened]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,6 +88,7 @@ export function AdminStudents() {
       icon={<Users size={18} />}
       headingId="admin-students-heading"
       badge={students ? faNumber(students.length) : undefined}
+      onToggle={(next) => { if (next) setOpened(true); }}
     >
       <p className="account-muted">حساب‌ها از جدیدترین نمایش داده می‌شوند؛ می‌توانی بقیه را ببینی یا نام کاربری یا شمارهٔ موبایل را جست‌وجو کنی. پیش از بازیابی رمز، هویت صاحب حساب را خارج از برنامه بررسی کن.</p>
       {credentials && <CredentialsCard credentials={credentials} onDone={() => setCredentials(null)} />}
