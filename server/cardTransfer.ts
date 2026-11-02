@@ -21,6 +21,8 @@ export interface CardTransferConfig {
   /** Sixteen digit Shetab card number the student pays to. */
   cardNumber: string;
   cardHolder: string;
+  /** The bank of the destination card, shown to the student. */
+  bankName: string;
   expiryHours: number;
   maxPerDay: number;
   /** Ask for a unique amount so the transfer can be found in the bank statement. */
@@ -58,9 +60,88 @@ function positiveNumber(raw: string | undefined, fallback: number): number {
   return Math.min(Math.floor(value), 1000);
 }
 
-/** Reads the card-transfer configuration; `null` means the feature is switched off. */
-export function cardTransferConfig(env: NodeJS.ProcessEnv = process.env): CardTransferConfig | null {
-  const cardNumber = toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
+/** The card-transfer settings the admin saved in the panel. */
+export interface CardTransferSettings {
+  /** Empty when the feature is switched off. */
+  cardNumber: string;
+  cardHolder: string;
+  bankName: string;
+  expiryHours: number;
+  maxPerDay: number;
+  uniqueAmount: boolean;
+  updatedAt: string | null;
+}
+
+interface SettingsRow {
+  card_number: string;
+  card_holder: string;
+  bank_name: string;
+  expiry_hours: number;
+  max_per_day: number;
+  unique_amount: number;
+  updated_at: string;
+}
+
+/** The settings saved in the panel; null when the admin never saved any. */
+export async function cardTransferSettings(db: Db): Promise<CardTransferSettings | null> {
+  const rows = await db.query<SettingsRow>('SELECT * FROM card_transfer_settings WHERE id = 1');
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    cardNumber: toEnglishDigits(row.card_number).replace(/[\s-]/g, ''),
+    cardHolder: row.card_holder.trim(),
+    bankName: row.bank_name.trim(),
+    expiryHours: row.expiry_hours,
+    maxPerDay: row.max_per_day,
+    uniqueAmount: row.unique_amount !== 0,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** Saves the panel settings. An empty card number switches the feature off. */
+export async function saveCardTransferSettings(
+  db: Db,
+  input: { cardNumber: string; cardHolder: string; bankName: string; expiryHours: number; maxPerDay: number; uniqueAmount: boolean },
+  now = new Date()
+): Promise<CardTransferSettings> {
+  const cardNumber = toEnglishDigits(input.cardNumber ?? '').replace(/[\s-]/g, '');
+  if (cardNumber && !/^\d{16}$/.test(cardNumber)) {
+    throw new HttpError(400, 'شمارهٔ کارت باید ۱۶ رقم و بدون فاصله باشد.');
+  }
+  const cardHolder = (input.cardHolder ?? '').trim();
+  if (cardNumber && !cardHolder) {
+    throw new HttpError(400, 'نام صاحب کارت را هم بنویسید.');
+  }
+  const expiryHours = Math.min(720, Math.max(1, Math.floor(Number(input.expiryHours) || 72)));
+  const maxPerDay = Math.min(50, Math.max(1, Math.floor(Number(input.maxPerDay) || 3)));
+  const updatedAt = now.toISOString();
+  await db.query(
+    `INSERT INTO card_transfer_settings (id, card_number, card_holder, bank_name, expiry_hours, max_per_day, unique_amount, updated_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO UPDATE SET card_number = EXCLUDED.card_number, card_holder = EXCLUDED.card_holder,
+       bank_name = EXCLUDED.bank_name, expiry_hours = EXCLUDED.expiry_hours, max_per_day = EXCLUDED.max_per_day,
+       unique_amount = EXCLUDED.unique_amount, updated_at = EXCLUDED.updated_at`,
+    [cardNumber, cardHolder, (input.bankName ?? '').trim(), expiryHours, maxPerDay, input.uniqueAmount ? 1 : 0, updatedAt]
+  );
+  return {
+    cardNumber,
+    cardHolder,
+    bankName: (input.bankName ?? '').trim(),
+    expiryHours,
+    maxPerDay,
+    uniqueAmount: input.uniqueAmount,
+    updatedAt,
+  };
+}
+
+/**
+ * Reads the card-transfer configuration; `null` means the feature is switched off.
+ * The settings the admin saved in the panel win; the environment is the fallback.
+ */
+export async function cardTransferConfig(db: Db, env: NodeJS.ProcessEnv = process.env): Promise<CardTransferConfig | null> {
+  const saved = await cardTransferSettings(db);
+  const rawCardNumber = saved ? saved.cardNumber : toEnglishDigits(env.CARD_TRANSFER_CARD_NUMBER ?? '').replace(/[\s-]/g, '');
+  const cardNumber = rawCardNumber;
   if (!/^\d{16}$/.test(cardNumber)) return null;
   const rawVerifyUrl = (env.CARD_TRANSFER_VERIFY_URL ?? '').trim();
   let verifyUrl: string | null = null;
@@ -76,10 +157,11 @@ export function cardTransferConfig(env: NodeJS.ProcessEnv = process.env): CardTr
   }
   return {
     cardNumber,
-    cardHolder: (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim() || 'میتی',
-    expiryHours: positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
-    maxPerDay: positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
-    uniqueAmount: (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
+    cardHolder: (saved ? saved.cardHolder : (env.CARD_TRANSFER_CARD_HOLDER ?? '').trim()) || 'میتی',
+    bankName: saved ? saved.bankName : (env.CARD_TRANSFER_BANK_NAME ?? '').trim(),
+    expiryHours: saved ? saved.expiryHours : positiveNumber(env.CARD_TRANSFER_EXPIRY_HOURS, 72),
+    maxPerDay: saved ? saved.maxPerDay : positiveNumber(env.CARD_TRANSFER_MAX_PER_DAY, 3),
+    uniqueAmount: saved ? saved.uniqueAmount : (env.CARD_TRANSFER_UNIQUE_AMOUNT ?? 'on').trim().toLowerCase() !== 'off',
     verifyUrl,
     verifyUrlError,
   };
@@ -95,6 +177,16 @@ export async function migrateCardTransfers(db: Db): Promise<void> {
       ON payment_transactions(ref_id) WHERE gateway_mode = 'card_transfer' AND ref_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_payment_card_transfer_student
       ON payment_transactions(student_id, gateway_mode, status);
+    CREATE TABLE IF NOT EXISTS card_transfer_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      card_number TEXT NOT NULL DEFAULT '',
+      card_holder TEXT NOT NULL DEFAULT '',
+      bank_name TEXT NOT NULL DEFAULT '',
+      expiry_hours INTEGER NOT NULL DEFAULT 72,
+      max_per_day INTEGER NOT NULL DEFAULT 3,
+      unique_amount INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -151,7 +243,7 @@ export async function createCardTransferRequest(
   expected: { id: string; version: number },
   now = new Date()
 ): Promise<CardTransferDetails> {
-  const config = cardTransferConfig();
+  const config = await cardTransferConfig(db);
   if (!config) {
     throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است؛ از پرداخت آنلاین استفاده کنید.');
   }
@@ -356,7 +448,7 @@ export async function submitCardTransferReceipt(
   input: CardTransferReceiptInput,
   now = new Date()
 ): Promise<{ success: boolean; transaction: PaymentTransaction; message: string }> {
-  const config = cardTransferConfig();
+  const config = await cardTransferConfig(db);
   if (!config) {
     throw new HttpError(503, 'پرداخت کارت‌به‌کارت هنوز فعال نشده است.');
   }

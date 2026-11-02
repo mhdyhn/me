@@ -19,9 +19,13 @@ describe('admin coach list loading recovery', () => {
 
   it('retries the coach list and shows the empty state only after a successful response', async () => {
     let attempts = 0;
-    mocks.api.mockImplementation((_method: string, path: string) => path === '/admin/students'
-      ? Promise.resolve({ students: [] })
-      : ++attempts === 1 ? Promise.reject(new Error('offline')) : Promise.resolve({ coaches: [] }));
+    mocks.api.mockImplementation((_method: string, path: string) => {
+      if (path === '/admin/students') return Promise.resolve({ students: [] });
+      if (path === '/admin/card-transfer') return Promise.resolve({ enabled: false, source: 'off', settings: { cardNumber: '', cardHolder: '', bankName: '', expiryHours: 72, maxPerDay: 3, uniqueAmount: true, updatedAt: null } });
+      if (path === '/admin/owner-profile-copies') return Promise.resolve({ accounts: [] });
+      if (path === '/coaches') return ++attempts === 1 ? Promise.reject(new Error('offline')) : Promise.resolve({ coaches: [] });
+      return Promise.resolve({});
+    });
     render(<MemoryRouter><AdminHome /></MemoryRouter>);
 
     expect(await screen.findByText('فهرست مربی‌ها بارگذاری نشد.')).toBeInTheDocument();
@@ -35,6 +39,10 @@ describe('admin coach list loading recovery', () => {
   it('prioritizes pending coaches and filters direct and manual accounts by name or username', async () => {
     mocks.api.mockImplementation((_method: string, path: string) => path === '/admin/students'
       ? Promise.resolve({ students: [], nextCursor: null })
+      : path === '/admin/card-transfer'
+      ? Promise.resolve({ enabled: false, source: 'off', settings: { cardNumber: '', cardHolder: '', bankName: '', expiryHours: 72, maxPerDay: 3, uniqueAmount: true, updatedAt: null } })
+      : path === '/admin/owner-profile-copies'
+      ? Promise.resolve({ accounts: [] })
       : Promise.resolve({ coaches: [
         { id: 2, username: 'manual-coach', displayName: 'مربی دستی', isActive: true, selfRegistered: false, studentCount: 0 },
         { id: 3, username: 'direct-coach', displayName: 'مربی مستقیم', isActive: false, selfRegistered: true, pendingApproval: true, studentCount: 0 },

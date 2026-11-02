@@ -161,7 +161,7 @@ export async function studentProgrammeView(db: Db, user: StoredUser, _now: Date)
   /** Whether the student can pay by card transfer. */
   cardTransferAvailable?: boolean;
 }> {
-  const cardTransferAvailable = cardTransferConfig() !== null;
+  const cardTransferAvailable = (await cardTransferConfig(db)) !== null;
   if (user.coachId === null || user.personalProgramMode) return { program: null, coachName: null, isPaid: true, cardTransferAvailable };
   const row = (await db.query<{
     coach_name: string | null;

@@ -7,6 +7,7 @@ import { faNumber } from '../../lib/format';
 import { PanelPage, CredentialsCard, RequireRole } from './AccountShell';
 import { PersonCard } from './PersonCard';
 import { AdminStudents } from './AdminStudents';
+import { AdminCardTransfer } from './AdminCardTransfer';
 import { OwnerProfileCopies } from './OwnerProfileCopies';
 
 interface CoachSummary extends PublicUser {
@@ -368,6 +369,7 @@ function AdminCoaches() {
         </ul>
       )}
       <AdminStudents />
+      <AdminCardTransfer />
       <OwnerProfileCopies />
     </PanelPage>
   );

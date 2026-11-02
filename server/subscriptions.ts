@@ -122,7 +122,7 @@ export async function subscriptionState(db: Db, userId: number, now = new Date()
     expiresAt,
     daysLeft,
     referralCoachName: row?.coach_name ?? null,
-    cardTransferAvailable: cardTransferConfig() !== null,
+    cardTransferAvailable: (await cardTransferConfig(db)) !== null,
   };
 }
 
@@ -158,7 +158,7 @@ function instructionsFor(amount: number, reference: string): string[] {
  * An unfinished request is reused, so the student is never asked to pay twice.
  */
 export async function createSubscriptionCheckout(db: Db, userId: number, now = new Date()): Promise<SubscriptionCheckout> {
-  const config = cardTransferConfig();
+  const config = await cardTransferConfig(db);
   if (!config) {
     throw new HttpError(503, 'خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.');
   }
@@ -266,7 +266,7 @@ export async function submitSubscriptionReceipt(
   input: SubscriptionReceiptInput,
   now = new Date()
 ): Promise<{ success: boolean; message: string; state: SubscriptionState }> {
-  const config = cardTransferConfig();
+  const config = await cardTransferConfig(db);
   if (!config) throw new HttpError(503, 'خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.');
   if (config.verifyUrlError) {
     throw new HttpError(503, 'تأیید خودکار رسید به‌علت تنظیم نادرست سرویس بررسی ممکن نیست؛ با پشتیبانی تماس بگیرید.');
