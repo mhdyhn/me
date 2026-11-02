@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
 
 import { CoachInactiveStudents } from './CoachInactiveStudents';
+import { openSection } from '../test/openSection';
 
 const inactive = [
   {
@@ -37,6 +38,7 @@ describe('the coach report of inactive students', () => {
   it('lists the students who stopped training with their links', async () => {
     mocks.api.mockResolvedValue({ students: inactive, inactiveDays: 7 });
     render(<MemoryRouter><CoachInactiveStudents /></MemoryRouter>);
+    openSection(/شاگردان بی‌تمرین/);
 
     expect(await screen.findByText('سارا رضایی')).toBeInTheDocument();
     expect(screen.getByText('نوید راستین')).toBeInTheDocument();
@@ -52,6 +54,7 @@ describe('the coach report of inactive students', () => {
   it('says so when every student trained recently', async () => {
     mocks.api.mockResolvedValue({ students: [], inactiveDays: 7 });
     render(<MemoryRouter><CoachInactiveStudents /></MemoryRouter>);
+    openSection(/شاگردان بی‌تمرین/);
 
     expect(await screen.findByText(/هیچ شاگردی در ۷ روز اخیر بی‌تمرین نبوده است/)).toBeInTheDocument();
   });
@@ -59,6 +62,7 @@ describe('the coach report of inactive students', () => {
   it('offers a retry when the report does not load', async () => {
     mocks.api.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ students: [], inactiveDays: 7 });
     render(<MemoryRouter><CoachInactiveStudents /></MemoryRouter>);
+    openSection(/شاگردان بی‌تمرین/);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('گزارش بی‌تمرینی بارگذاری نشد.');
     fireEvent.click(screen.getByRole('button', { name: /تلاش دوباره/ }));

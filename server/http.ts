@@ -18,6 +18,11 @@ export const SESSIONS_BODY_BYTES = 256 * 1024;
 export const NUTRITION_BODY_BYTES = 192 * 1024;
 /** Chat messages can carry photos, voice notes, or short clips. */
 export const CHAT_BODY_BYTES = 6 * 1024 * 1024;
+/**
+ * A bank statement of the club's account. A month of a busy account holds a few hundred
+ * lines, so the room for the text is generous; the body still has a firm ceiling.
+ */
+export const STATEMENT_BODY_BYTES = 512 * 1024;
 
 /** Reads the request body as JSON. An empty body is treated as an empty object. */
 export async function readJsonBody(request: IncomingMessage, limit = MAX_BODY_BYTES): Promise<unknown> {

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CreditCard, Landmark, Save, ShieldCheck } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 
@@ -53,9 +54,12 @@ export function AdminCardTransfer() {
     }
   }
 
+  // The settings are fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     void load();
-  }, []);
+  }, [opened]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,19 +91,22 @@ export function AdminCardTransfer() {
   const shownCard = (state?.settings?.cardNumber ?? '').replace(/(.{4})/g, '$1 ').trim();
 
   return (
-    <section className="panel-card admin-card-transfer" aria-label="تنظیمات پرداخت کارت‌به‌کارت">
-      <header className="admin-card-transfer__head">
-        <div>
-          <h3><Landmark size={17} /> پرداخت کارت‌به‌کارت</h3>
-          <p className="account-muted">
-            تنها روش پرداخت میتی. کارتی را که شاگردها به آن واریز می‌کنند اینجا ثبت کنید؛
-            تغییرها بدون استقرار تازه و بلافاصله اعمال می‌شود.
-          </p>
-        </div>
+    <CollapsiblePanel
+      title="پرداخت کارت‌به‌کارت"
+      subtitle="تنها روش پرداخت میتی"
+      icon={<Landmark size={18} />}
+      headingId="admin-card-transfer-heading"
+      onToggle={(next) => { if (next) setOpened(true); }}
+      badge={
         <span className={`admin-card-transfer__status ${enabled ? 'is-on' : 'is-off'}`}>
           {enabled ? <><ShieldCheck size={14} /> فعال</> : 'غیرفعال'}
         </span>
-      </header>
+      }
+    >
+      <p className="account-muted">
+        کارتی را که شاگردها به آن واریز می‌کنند اینجا ثبت کنید؛
+        تغییرها بدون استقرار تازه و بلافاصله اعمال می‌شود.
+      </p>
 
       {state?.source === 'environment' && (
         <p className="account-muted">این تنظیم هنوز از متغیرهای محیطی خوانده می‌شود؛ با ذخیرهٔ این فرم، تنظیم پنل جایگزین آن می‌شود.</p>
@@ -180,6 +187,6 @@ export function AdminCardTransfer() {
           {' '}سقف روزانه: {faNumber(state?.settings.maxPerDay ?? 0)} رسید.
         </p>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

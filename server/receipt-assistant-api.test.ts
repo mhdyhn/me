@@ -105,6 +105,23 @@ describe('the receipt assistant of the manager', () => {
     expect(result.json.assessments[0].verdict).toBe('missing');
   });
 
+  it('takes a long statement and refuses one that is out of measure', async () => {
+    const adminToken = await signIn('owner', 'owner-pass-123');
+    await pendingSubscription('99887766');
+
+    // A month of a busy account: many lines, but still a normal body.
+    const longStatement = Array.from({ length: 4000 }, (_, index) => `1404/08/12  ${99000 + index}  99887766`).join('\n');
+    expect(longStatement.length).toBeGreaterThan(100_000);
+    const ok = await call('POST', '/api/admin/receipt-assistant', { statement: longStatement }, adminToken);
+    expect(ok.status).toBe(200);
+    expect(ok.json.assessments).toHaveLength(1);
+
+    // A body that is far past the measure is turned away, not read into the memory.
+    const huge = 'x'.repeat(3_000_000);
+    const tooBig = await call('POST', '/api/admin/receipt-assistant', { statement: huge }, adminToken);
+    expect(tooBig.status).toBe(413);
+  });
+
   it('refuses an empty statement and keeps the door shut for the students', async () => {
     const adminToken = await signIn('owner', 'owner-pass-123');
     expect((await call('POST', '/api/admin/receipt-assistant', { statement: '  ' }, adminToken)).status).toBe(400);

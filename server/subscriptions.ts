@@ -328,7 +328,7 @@ export async function submitSubscriptionReceipt(
   userId: number,
   input: SubscriptionReceiptInput,
   now = new Date()
-): Promise<{ success: boolean; message: string; state: SubscriptionState }> {
+): Promise<{ success: boolean; pending: boolean; message: string; state: SubscriptionState }> {
   const config = await cardTransferConfig(db);
   if (!config) throw new HttpError(503, 'خرید اشتراک با کارت‌به‌کارت هنوز فعال نشده است.');
   if (config.verifyUrlError) {
@@ -364,7 +364,7 @@ export async function submitSubscriptionReceipt(
   if (!row) throw new HttpError(404, 'درخواست خرید اشتراک یافت نشد.');
   if (row.status === 'paid') {
     const state = await subscriptionState(db, userId, now);
-    return { success: true, message: 'این پرداخت پیش‌تر تأیید شده و اشتراک شما فعال است.', state };
+    return { success: true, pending: false, message: 'این پرداخت پیش‌تر تأیید شده و اشتراک شما فعال است.', state };
   }
   if (row.status !== 'pending') {
     throw new HttpError(409, 'این درخواست خرید دیگر معتبر نیست؛ یک درخواست تازه بسازید.');
@@ -425,14 +425,22 @@ export async function submitSubscriptionReceipt(
       body: 'به‌محض بررسی، اشتراک شما فعال می‌شود.',
       link: '/progress',
     }, now);
-    throw new HttpError(409, verification === 'no_service'
-      ? 'رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.'
-      : 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.');
+    // The receipt is on the request and a manager settles it. This is a good news, not a
+    // conflict: the request is answered with 200 so the app does not show it as a failure.
+    return {
+      success: true,
+      pending: true,
+      message: verification === 'no_service'
+        ? 'رسید واریزی ثبت شد و در صف بررسی است. پس از دیدنِ واریز در صورت‌حساب، اشتراک شما فعال می‌شود.'
+        : 'رسید واریزی در سرویس بررسی بانکی تأیید نشد؛ شمارهٔ پیگیری را بررسی کنید یا با پشتیبانی تماس بگیرید.',
+      state: await subscriptionState(db, userId, now),
+    };
   }
 
   const state = await settleSubscriptionPayment(db, userId, row, trackingNumber, senderLast4, now);
   return {
     success: true,
+    pending: false,
     message: 'رسید واریزی تأیید شد و اشتراک هوشمند شما فعال شد.',
     state,
   };

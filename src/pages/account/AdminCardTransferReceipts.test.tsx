@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../../lib/api', () => ({ api: mocks.api, ApiError: class ApiError extends Error {} }));
 import { AdminCardTransferReceipts } from './AdminCardTransferReceipts';
+import { openSection } from '../../test/openSection';
 
 const requests = [
   {
@@ -29,6 +30,7 @@ describe('the card-transfer receipts of the manager', () => {
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ requests: [requests[1]] });
     render(<AdminCardTransferReceipts />);
+    openSection(/رسیدهای کارت‌به‌کارت/);
     expect(await screen.findByText('سارا')).toBeInTheDocument();
     expect(screen.getByText('123456789012')).toBeInTheDocument();
     expect(screen.getByText('تأییدشده')).toBeInTheDocument();
@@ -39,6 +41,7 @@ describe('the card-transfer receipts of the manager', () => {
   it('says when there is nothing to review', async () => {
     mocks.api.mockResolvedValueOnce({ requests: [] });
     render(<AdminCardTransferReceipts />);
+    openSection(/رسیدهای کارت‌به‌کارت/);
     expect(await screen.findByText(/هنوز پرداخت کارت‌به‌کارتی ثبت نشده است/)).toBeInTheDocument();
   });
 });

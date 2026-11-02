@@ -2257,6 +2257,27 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .admin-card-transfer-receipts__item > div:first-child { display: grid; gap: 2px; font-size: 13px; }
 .admin-card-transfer-receipts__actions { display: flex; align-items: center; gap: 6px; }
 
+/* A panel that folds away: the admin and coach panels keep many sections. */
+.collapsible-panel { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.collapsible-panel__head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 13px 15px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.collapsible-panel__head:hover { background: var(--surface-soft); }
+.collapsible-panel__head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.collapsible-panel__icon { display: grid; place-items: center; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px; background: var(--surface-soft); color: var(--accent); }
+.collapsible-panel__text { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.collapsible-panel__text strong { font-size: 14px; }
+.collapsible-panel__text small { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.collapsible-panel__badge { flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(134, 207, 255, .14); color: var(--accent); font-size: 12px; font-weight: 700; }
+.collapsible-panel__chevron { flex: 0 0 auto; display: grid; place-items: center; color: var(--muted); }
+.collapsible-panel__body { display: grid; gap: 12px; padding: 0 15px 15px; border-top: 1px solid var(--line-soft); padding-top: 13px; }
+.collapsible-panel__body > :first-child { margin-top: 0; }
+.collapsible-panel__body > :last-child { margin-bottom: 0; }
+.collapsible-panel__body .admin-card-transfer__status { margin: 0; }
+@media (max-width: 560px) {
+  .collapsible-panel__head { padding: 12px 13px; gap: 8px; }
+  .collapsible-panel__body { padding: 0 13px 13px; }
+  .collapsible-panel__text small { display: none; }
+}
+
 /* The receipt assistant of the manager. */
 .admin-receipt-assistant { display: grid; gap: 12px; }
 .admin-receipt-assistant header h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 4px; font-size: 1rem; }
@@ -2558,11 +2579,7 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .coach-connection__confirm strong svg { flex: none; }
 .coach-connection__confirm > .button { justify-self: start; }
 .coach-invitations { margin: 0 0 14px; }
-.coach-invitations summary { display: flex; align-items: center; gap: 10px; color: #5b2e91; cursor: pointer; list-style: none; }
-.coach-invitations summary::-webkit-details-marker { display: none; }
-.coach-invitations summary span { display: grid; gap: 3px; }
-.coach-invitations summary strong { color: var(--text); font-size: 13px; }
-.coach-invitations summary small { color: #655b6d; font-size: 11px; }
+.coach-invitations .collapsible-panel__head { color: #5b2e91; }
 .coach-invitations > p { margin-top: 12px; }
 .coach-invitations__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .coach-invitations__code { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; min-width: 0; margin-top: 12px; padding: 12px; border: 1px solid #e4d8ec; border-radius: 10px; background: #faf7fc; color: #5e5368; font-size: 12px; }
@@ -2689,8 +2706,13 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 .plan-card__features { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .plan-card__features li { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.7; }
 .plan-card__features svg { flex: 0 0 auto; margin-top: 4px; color: var(--accent); }
-.plan-card__others { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.plan-card__others { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .plan-card__other strong { color: var(--text); }
+/* A paid plan the student may change to. */
+button.plan-card__other { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); color: var(--muted); font: inherit; font-size: 12px; text-align: start; cursor: pointer; }
+button.plan-card__other:hover { border-color: var(--accent); }
+button.plan-card__other.is-current { border-color: var(--accent); background: rgba(134, 207, 255, .08); }
+button.plan-card__other:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .premium-gate__plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin: 4px 0 2px; }
 .premium-gate__plan { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }

@@ -3,17 +3,21 @@ import { Check, Sparkles } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
 import { loadPlan, type PlanState } from '../lib/plans';
 import { faNumber } from '../lib/format';
+import { SubscriptionCheckout } from './SubscriptionCheckout';
 
 /**
  * The plan of the account.
  *
- * The two students of the club are not on the same plan: a student with a coach has the
+ * The students of the club are not on the same plan: a student with a coach has the
  * coach's training and nutrition programme, an independent student opens the smart parts
- * with the monthly plan. The card says plainly which one is open.
+ * with the monthly plan. The card says plainly which one is open, and an independent
+ * student can pick another paid plan right here.
  */
 export function PlanCard() {
   const { user } = useSession();
   const [plan, setPlan] = useState<PlanState | null>(null);
+  // The paid plan the student picked to change to; empty until he picks one.
+  const [changing, setChanging] = useState<string | null>(null);
 
   useEffect(() => {
     void loadPlan().then(setPlan);
@@ -25,6 +29,11 @@ export function PlanCard() {
   const price = plan.plan.priceTomans === 0
     ? 'رایگان'
     : `${faNumber(plan.plan.priceTomans)} تومان در ماه`;
+
+  // The paid plans on sale, and the one the student may change to.
+  const paidPlans = plan.plans.filter((item) => item.priceTomans > 0);
+  const otherPlans = paidPlans.filter((item) => item.id !== plan.planId);
+  const chosen = changing ? paidPlans.find((item) => item.id === changing) ?? null : null;
 
   return (
     <section className="panel-card plan-card" aria-label="پلن شما">
@@ -47,19 +56,42 @@ export function PlanCard() {
           <li key={feature.key}><Check size={13} /> {feature.label}</li>
         ))}
       </ul>
-      {plan.plans.length > 0 && (
+      {otherPlans.length > 0 && (
         <div className="plan-card__others">
           <span className="field-hint">پلن‌های دیگر:</span>
-          {plan.plans.filter((item) => item.id !== plan.planId).map((item) => (
-            <span key={item.id} className="plan-card__other">
-              <strong>{item.title}</strong> — {item.priceTomans === 0 ? 'رایگان' : `${faNumber(item.priceTomans)} تومان در ماه`}
-            </span>
+          {otherPlans.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`plan-card__other${changing === item.id ? ' is-current' : ''}`}
+              aria-pressed={changing === item.id}
+              onClick={() => setChanging(changing === item.id ? null : item.id)}
+            >
+              <strong>{item.title}</strong> — {faNumber(item.priceTomans)} تومان در ماه
+            </button>
           ))}
         </div>
       )}
-      {plan.plans.length > 0 && plan.planId !== 'coach' && (
+      {chosen && (
+        <SubscriptionCheckout
+          planId={chosen.id}
+          priceTomans={chosen.priceTomans}
+          planTitle={chosen.title}
+          onActivated={(next) => {
+            setChanging(null);
+            void loadPlan(true).then(setPlan);
+            void next;
+          }}
+        />
+      )}
+      {otherPlans.length > 0 && !chosen && (
         <p className="account-muted plan-card__hint">
           پلن دیگری می‌خواهی؟ از بخش‌های پولیِ برنامه، پلن‌ها را ببین و همان را بخر.
+        </p>
+      )}
+      {plan.planId === 'coach' && (
+        <p className="account-muted plan-card__hint">
+          برنامهٔ تمرینی و غذاییِ مربی برایت باز است؛ پلن دیگری لازم نیست.
         </p>
       )}
     </section>

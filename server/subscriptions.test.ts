@@ -85,8 +85,11 @@ describe('the optional student subscription', () => {
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
-    expect(receipt.status).toBe(409);
-    expect(String(receipt.json.error ?? '')).toContain('صف');
+    // The receipt is accepted and waits in the queue; that is good news, not a conflict.
+    expect(receipt.status).toBe(200);
+    expect(receipt.json.success).toBe(true);
+    expect(receipt.json.pending).toBe(true);
+    expect(String(receipt.json.message ?? '')).toContain('صف');
     expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
 
     // The manager matches the transfer in the statement and settles it.
@@ -158,7 +161,8 @@ describe('the optional student subscription', () => {
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
-    expect(receipt.status).toBe(409);
+    expect(receipt.status).toBe(200);
+    expect(receipt.json.pending).toBe(true);
     await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
 
     const again = await call('POST', '/api/me/subscription/checkout', undefined, student);
@@ -187,6 +191,7 @@ describe('the optional student subscription', () => {
       authority: second.json.authority, trackingNumber: '555000111',
     }, other);
     expect(replay.status).toBe(409);
+    expect(String(replay.json.error ?? '')).toContain('قبلاً ثبت شده');
   });
 
   it('gives the referring coach a share only for a student who came through their link', async () => {
@@ -211,7 +216,8 @@ describe('the optional student subscription', () => {
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '987654321',
     }, referred);
-    expect(receipt.status).toBe(409);
+    expect(receipt.status).toBe(200);
+    expect(receipt.json.pending).toBe(true);
     await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
     const rows = await db.query<{ coach_share_tomans: number; admin_share_tomans: number; source_coach_id: number }>(
       'SELECT coach_share_tomans, admin_share_tomans, source_coach_id FROM subscriptions WHERE user_id = $1',

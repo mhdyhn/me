@@ -12,6 +12,7 @@ vi.mock('./AccountShell', () => ({
 }));
 
 import { CoachHome } from './CoachHome';
+import { openSection } from '../../test/openSection';
 
 const students = [
   { id: 21, username: 'sara.fit', role: 'student', displayName: 'سارا رضایی', coachId: 1, mustChangePassword: false, isActive: true, password: null },
@@ -101,6 +102,9 @@ describe('coach student list filters', () => {
     });
     render(<MemoryRouter><CoachHome /></MemoryRouter>);
     expect(await screen.findByText('شاگردان بی‌تمرین')).toBeInTheDocument();
-    expect(screen.getByText(/هنوز هیچ تمرینی ثبت نشده/)).toBeInTheDocument();
+    // The report folds away, so the manager opens it before reading it; the report itself
+    // is fetched the first time the section opens.
+    openSection(/شاگردان بی‌تمرین/);
+    expect(await screen.findByText(/هنوز هیچ تمرینی ثبت نشده/)).toBeInTheDocument();
   });
 });

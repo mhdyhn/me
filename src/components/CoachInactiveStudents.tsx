@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageCircle, RefreshCw, Sparkles, TrendingUp, UserX } from 'lucide-react';
+import { CollapsiblePanel } from './CollapsiblePanel';
 import { ApiError, api } from '../lib/api';
 import { faNumber, formatDate } from '../lib/format';
 
@@ -47,44 +48,63 @@ export function CoachInactiveStudents() {
     }
   }, []);
 
+  // The report is fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     void load();
-  }, [load]);
+  }, [opened, load]);
 
   if (error) {
     return (
-      <section className="coach-inactive" aria-label="شاگردان بی‌تمرین">
+      <CollapsiblePanel
+        title="شاگردان بی‌تمرین"
+        subtitle="گزارش بررسی‌نشده"
+        icon={<UserX size={18} />}
+        headingId="coach-inactive-heading"
+        defaultOpen
+        onToggle={(next) => { if (next) setOpened(true); }}
+      >
         <p className="form-error" role="alert">{error}</p>
         <button type="button" className="button button--ghost button--small" disabled={loading} onClick={() => void load()}>
           <RefreshCw size={15} /> تلاش دوباره
         </button>
-      </section>
+      </CollapsiblePanel>
     );
   }
 
   if (students === null) {
     return (
-      <section className="coach-inactive" aria-label="شاگردان بی‌تمرین">
+      <CollapsiblePanel
+        title="شاگردان بی‌تمرین"
+        subtitle="در حال بررسیِ تمرینِ شاگردها…"
+        icon={<UserX size={18} />}
+        headingId="coach-inactive-heading"
+        onToggle={(next) => { if (next) setOpened(true); }}
+      >
         <p className="account-muted" role="status">در حال بررسیِ تمرینِ شاگردها…</p>
-      </section>
+      </CollapsiblePanel>
     );
   }
 
   return (
-    <section className="coach-inactive" aria-label="شاگردان بی‌تمرین">
-      <header className="coach-inactive__head">
-        <div>
-          <h3 className="coach-inactive__title"><UserX size={17} /> شاگردان بی‌تمرین</h3>
-          <p className="coach-inactive__hint">
-            {students.length === 0
-              ? `هیچ شاگردی در ${faNumber(inactiveDays)} روز اخیر بی‌تمرین نبوده است.`
-              : `${faNumber(students.length)} شاگرد در ${faNumber(inactiveDays)} روز اخیر تمرینی ثبت نکرده‌اند.`}
-          </p>
-        </div>
+    <CollapsiblePanel
+      title="شاگردان بی‌تمرین"
+      subtitle={
+        students.length === 0
+          ? `هیچ شاگردی در ${faNumber(inactiveDays)} روز اخیر بی‌تمرین نبوده است.`
+          : `${faNumber(students.length)} شاگرد در ${faNumber(inactiveDays)} روز اخیر تمرینی ثبت نکرده‌اند.`
+      }
+      icon={<UserX size={18} />}
+      headingId="coach-inactive-heading"
+      badge={students.length > 0 ? faNumber(students.length) : undefined}
+      onToggle={(next) => { if (next) setOpened(true); }}
+    >
+      <div className="coach-inactive__head">
         <button type="button" className="button button--ghost button--small" disabled={loading} onClick={() => void load()}>
           <RefreshCw size={15} /> تازه‌سازی
         </button>
-      </header>
+      </div>
       {insight && students.length > 0 && (
         <p className="coach-inactive__insight">
           <Sparkles size={15} /> {insight.text}
@@ -119,6 +139,6 @@ export function CoachInactiveStudents() {
           ))}
         </ul>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

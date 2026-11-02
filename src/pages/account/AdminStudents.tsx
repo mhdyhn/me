@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Ban, CheckCircle, KeyRound, Search } from 'lucide-react';
+import { Ban, CheckCircle, KeyRound, Search, Users } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { confirmModal } from '../../components/ConfirmModal';
 import { ApiError, api, type Credentials, type PublicUser } from '../../lib/api';
+import { faNumber } from '../../lib/format';
 import { CredentialsCard } from './AccountShell';
 import { PersonCard } from './PersonCard';
 
@@ -36,7 +38,12 @@ export function AdminStudents() {
     }
   }
 
-  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The list is fetched the first time the section is opened, not when the panel loads.
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (!opened) return;
+    void load();
+  }, [opened]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,8 +82,14 @@ export function AdminStudents() {
   }
 
   return (
-    <section className="independent-accounts panel-card" aria-labelledby="admin-students-heading">
-      <div className="admin-students-heading"><div><span className="eyebrow">مدیریت حساب‌ها</span><h3 id="admin-students-heading">همهٔ شاگردها</h3></div><span>ساخته‌شده دستی و ثبت‌نام مستقیم</span></div>
+    <CollapsiblePanel
+      title="همهٔ شاگردها"
+      subtitle="ساخته‌شده دستی و ثبت‌نام مستقیم"
+      icon={<Users size={18} />}
+      headingId="admin-students-heading"
+      badge={students ? faNumber(students.length) : undefined}
+      onToggle={(next) => { if (next) setOpened(true); }}
+    >
       <p className="account-muted">حساب‌ها از جدیدترین نمایش داده می‌شوند؛ می‌توانی بقیه را ببینی یا نام کاربری یا شمارهٔ موبایل را جست‌وجو کنی. پیش از بازیابی رمز، هویت صاحب حساب را خارج از برنامه بررسی کن.</p>
       {credentials && <CredentialsCard credentials={credentials} onDone={() => setCredentials(null)} />}
       <form className="independent-accounts__search" onSubmit={(event) => void search(event)}>
@@ -98,6 +111,6 @@ export function AdminStudents() {
         </li>)}
       </ul>}
       {nextCursor !== null && <button type="button" className="button button--secondary button--small" disabled={loading} onClick={() => void load(activeSearch, nextCursor)}>نمایش شاگردهای بیشتر</button>}
-    </section>
+    </CollapsiblePanel>
   );
 }

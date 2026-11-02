@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Receipt, X } from 'lucide-react';
+import { CollapsiblePanel } from '../../components/CollapsiblePanel';
 import { ApiError, api } from '../../lib/api';
 import { faNumber } from '../../lib/format';
 
@@ -69,14 +70,20 @@ export function AdminCardTransferReceipts() {
     }
   }
 
+  // Only the receipts that wait for a decision are worth the space in the title.
+  const waiting = requests.filter((item) => item.status === 'pending' && Boolean(item.trackingNumber)).length;
+
   return (
-    <section className="panel-card admin-card-transfer-receipts" aria-label="رسیدهای کارت‌به‌کارت">
-      <header>
-        <h3><Receipt size={17} /> رسیدهای کارت‌به‌کارت</h3>
-        <p className="account-muted">
-          رسیدی که بررسی خودکار نتوانسته ببندد، اینجا می‌نشیند؛ با یک کلیک تأیید یا رد می‌شود و شاگرد باخبر می‌شود.
-        </p>
-      </header>
+    <CollapsiblePanel
+      title="رسیدهای کارت‌به‌کارت"
+      subtitle="رسیدِ بررسی‌نشده با یک کلیک تأیید یا رد می‌شود"
+      icon={<Receipt size={18} />}
+      headingId="admin-card-transfer-receipts-heading"
+      badge={waiting > 0 ? faNumber(waiting) : undefined}
+    >
+      <p className="account-muted">
+        رسیدی که بررسی خودکار نتوانسته ببندد، اینجا می‌نشیند؛ با یک کلیک تأیید یا رد می‌شود و شاگرد باخبر می‌شود.
+      </p>
 
       {error && <p className="form-error" role="alert">{error}</p>}
       {loading && <p className="account-muted">در حال بارگذاری رسیدها…</p>}
@@ -124,6 +131,6 @@ export function AdminCardTransferReceipts() {
           );
         })}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
