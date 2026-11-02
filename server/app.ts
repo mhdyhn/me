@@ -10,7 +10,7 @@ import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLi
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
-import { cardTransferConfig, createCardTransferRequest, reviewCardTransfer, submitCardTransferReceipt } from './cardTransfer.ts';
+import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { INACTIVE_DAYS, listInactiveStudents } from './coachReports.ts';
 import { encryptSecret, type SecretKey } from './secrets.ts';
@@ -1135,12 +1135,57 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       pattern: /^\/api\/pay\/card-transfer\/availability$/,
       auth: 'signed-in',
       handler: async () => {
-        const config = cardTransferConfig();
+        const config = await cardTransferConfig(db);
         return {
           status: 200,
-          body: { available: Boolean(config), cardHolder: config?.cardHolder ?? null },
+          body: { available: Boolean(config), cardHolder: config?.cardHolder ?? null, bankName: config?.bankName ?? null },
           headers: { 'Cache-Control': 'no-store' },
         };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/card-transfer$/,
+      auth: ['admin'],
+      handler: async () => {
+        const settings = await cardTransferSettings(db);
+        const config = await cardTransferConfig(db);
+        return {
+          status: 200,
+          body: {
+            enabled: Boolean(config),
+            source: settings ? 'panel' : config ? 'environment' : 'off',
+            settings: settings ?? {
+              cardNumber: config?.cardNumber ?? '',
+              cardHolder: config?.cardHolder ?? '',
+              bankName: config?.bankName ?? '',
+              expiryHours: config?.expiryHours ?? 72,
+              maxPerDay: config?.maxPerDay ?? 3,
+              uniqueAmount: config?.uniqueAmount ?? true,
+              updatedAt: null,
+            },
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'PUT',
+      pattern: /^\/api\/admin\/card-transfer$/,
+      auth: ['admin'],
+      handler: async ({ body }) => {
+        const input = requireObject(body);
+        const settings = await saveCardTransferSettings(db, {
+          cardNumber: typeof input.cardNumber === 'string' ? input.cardNumber : '',
+          cardHolder: typeof input.cardHolder === 'string' ? input.cardHolder : '',
+          bankName: typeof input.bankName === 'string' ? input.bankName : '',
+          expiryHours: Number(input.expiryHours),
+          maxPerDay: Number(input.maxPerDay),
+          uniqueAmount: input.uniqueAmount !== false,
+        }, now());
+        return { status: 200, body: { enabled: Boolean(settings.cardNumber), settings }, headers: { 'Cache-Control': 'no-store' } };
       },
     },
 

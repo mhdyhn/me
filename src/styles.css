@@ -2209,6 +2209,20 @@ html[dir='rtl'] svg.lucide-arrow-up-right { transform: scaleX(-1); }
 .coach-student-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, .45fr) auto; align-items: end; gap: 12px; margin: 16px 0; padding: 14px; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--surface-soft); }
 .coach-student-filters .field { margin: 0; }
 .coach-student-filters .account-muted { margin: 0 0 9px; white-space: nowrap; }
+.admin-card-transfer { display: grid; gap: 12px; }
+.admin-card-transfer__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-card-transfer__head h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 4px; font-size: 1rem; }
+.admin-card-transfer__head p { margin: 0; font-size: 13px; line-height: 1.7; }
+.admin-card-transfer__status { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.admin-card-transfer__status.is-on { color: var(--accent); background: rgba(134, 207, 255, .12); }
+.admin-card-transfer__status.is-off { color: var(--muted); background: var(--surface-soft); }
+.admin-card-transfer__form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; align-items: end; }
+.admin-card-transfer__form .field { margin: 0; }
+.admin-card-transfer__toggle { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; font-size: 13px; }
+.admin-card-transfer__toggle input { width: 18px; height: 18px; }
+.admin-card-transfer__form .form-error, .admin-card-transfer__form .form-success { grid-column: 1 / -1; margin: 0; }
+.admin-card-transfer__form .button { grid-column: 1 / -1; justify-self: start; }
+
 .suggested-program { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .suggested-program__questions { display: grid; gap: 12px; }
 .suggested-program__question { margin: 0; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface-soft); }
