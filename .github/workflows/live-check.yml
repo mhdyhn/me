@@ -26,7 +26,16 @@ jobs:
         with:
           node-version: 22
 
+      - name: Wait for the new version to be online
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          node tools/wait-for-deploy.mjs 2>&1 | tee deploy-wait.txt
+
       - name: Check the app that is online
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
         run: |
           set -o pipefail
           node tools/check-live-app.mjs 2>&1 | tee live-check.txt
@@ -38,6 +47,8 @@ jobs:
             echo '### The result of the live check'
             echo
             echo '```'
+            cat deploy-wait.txt 2>/dev/null || echo 'The wait did not write anything.'
+            echo
             cat live-check.txt 2>/dev/null || echo 'The check did not write anything.'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
