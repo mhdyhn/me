@@ -183,7 +183,10 @@ export function Dashboard() {
               <EmptyState
                 title="برنامهٔ خودت را شروع کن"
                 detail="یک الگو انتخاب کن یا برنامهٔ شخصی خودت را بساز."
-                action={<Link to="/program" className="button button--primary">ساخت برنامهٔ شخصی <ArrowLeft size={15} /></Link>}
+                action={<>
+                  <Link to="/program" className="button button--primary">ساخت برنامهٔ شخصی <ArrowLeft size={15} /></Link>
+                  <Link to="/program/suggested" className="button button--ghost">برنامهٔ پیشنهادی میتی <ArrowLeft size={15} /></Link>
+                </>}
               />
             ) : (
               <EmptyState
