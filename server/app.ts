@@ -11,7 +11,7 @@ import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProg
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
 import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
-import { createSubscriptionCheckout, listCoachSubscriptionShares, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
+import { createSubscriptionCheckout, listCoachSubscriptionShares, listSubscriptionPayments, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { aiConfig } from './ai.ts';
 import { isPaidPlan, PLANS } from './plans.ts';
 import { editablePlanPrices, savePlanPrices } from './planPrices.ts';
@@ -1442,7 +1442,16 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       pattern: /^\/api\/admin\/transactions$/,
       auth: ['admin'],
       handler: async () => {
-        return { status: 200, body: { transactions: await listAllTransactions(db) }, headers: { 'Cache-Control': 'no-store' } };
+        return {
+          status: 200,
+          body: {
+            transactions: await listAllTransactions(db),
+            // The subscriptions have their own ledger; without them the books of the club
+            // would not show the money that arrived.
+            subscriptionPayments: await listSubscriptionPayments(db),
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
       },
     },
 

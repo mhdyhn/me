@@ -302,6 +302,75 @@ describe('the optional student subscription', () => {
     expect(report.json.subscriptionShares[0]).toMatchObject({ studentName: 'referred-student', coachShareTomans: 9900, amountTomans: 99000 });
   });
 
+  it('shows the income of the subscriptions in the financial report of the manager', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-report', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '11223344',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    // The subscriptions have their own ledger: without this the books of the club would not
+    // show the money that arrived.
+    const report = await call('GET', '/api/admin/transactions', undefined, { id: 0, token: admin });
+    expect(report.status).toBe(200);
+    expect(report.json.subscriptionPayments).toHaveLength(1);
+    expect(report.json.subscriptionPayments[0]).toMatchObject({
+      studentName: 'buyer-report',
+      amountTomans: 99000,
+      coachShareTomans: 0,
+      adminShareTomans: 99000,
+      coachName: null,
+      status: 'active',
+    });
+    expect(report.json.subscriptionPayments[0].trackingNumber).toBe('11223344');
+  });
+
+  it('keeps a month that has ended in the books of the manager', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-expired', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '44556677',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+    // The month ends, but the money arrived when it started.
+    await db.query("UPDATE subscriptions SET expires_at = '2026-10-01T08:00:00Z' WHERE user_id = $1", [student.id]);
+
+    const report = await call('GET', '/api/admin/transactions', undefined, { id: 0, token: admin });
+    expect(report.json.subscriptionPayments).toHaveLength(1);
+    expect(report.json.subscriptionPayments[0]).toMatchObject({ status: 'expired', amountTomans: 99000 });
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.active).toBe(false);
+  });
+
+  it('shows the referral share of a coach in the financial report of the manager', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const coach = await account('coach-report', 'coach');
+    const referred = await account('referred-report', 'student', null, true);
+    const link = await call('POST', '/api/coach/registration-link', { accountId: coach.id }, coach);
+    await call('POST', '/api/me/coach-registration-link/accept', {
+      token: link.json.token, accountId: referred.id, consent: true,
+    }, referred);
+    await call('POST', '/api/me/coach-access/withdraw', { accountId: referred.id }, referred);
+    await call('POST', '/api/me/personal-program/activate', { accountId: referred.id }, referred);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, referred);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '55667788',
+    }, referred);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    const report = await call('GET', '/api/admin/transactions', undefined, { id: 0, token: admin });
+    expect(report.json.subscriptionPayments).toHaveLength(1);
+    expect(report.json.subscriptionPayments[0]).toMatchObject({
+      studentName: 'referred-report',
+      coachName: 'coach-report',
+      amountTomans: 99000,
+      coachShareTomans: 9900,
+      adminShareTomans: 89100,
+    });
+  });
+
   it('opens one month when the same receipt arrives twice at the same moment', async () => {
     vi.stubEnv('CARD_TRANSFER_VERIFY_URL', 'https://verify.example.com/receipt');
     const student = await account('double-receipt', 'student', null, true);

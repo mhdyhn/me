@@ -95,6 +95,25 @@ export interface TransactionsResponse {
   testTransactions?: TestPaymentTransaction[];
   /** The referral shares of the subscriptions of the students this coach referred. */
   subscriptionShares?: SubscriptionShare[];
+  /** The income of the club from the subscriptions; the subscriptions have their own ledger. */
+  subscriptionPayments?: SubscriptionPayment[];
+}
+
+export interface SubscriptionPayment {
+  id: number;
+  studentId: number;
+  studentName: string;
+  /** The paid plan this subscription bought. */
+  plan: string | null;
+  amountTomans: number;
+  coachShareTomans: number;
+  adminShareTomans: number;
+  /** The coach who referred the student, when the subscription came through one. */
+  coachName: string | null;
+  status: string;
+  trackingNumber: string | null;
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface Credentials {

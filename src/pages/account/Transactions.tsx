@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
-import { ApiError, api, type PaymentTransaction, type TransactionsResponse } from '../../lib/api';
+import { ApiError, api, type PaymentTransaction, type SubscriptionPayment, type TransactionsResponse } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { PaymentPractice } from '../../components/PaymentPractice';
 import { faNumber } from '../../lib/format';
@@ -156,32 +156,86 @@ function AdminTransactionsView() {
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!report && !loadError && <p className="account-muted">در حال بارگذاری تراکنش‌ها…</p>}
       {report && <>
-        <FinancialReport transactions={report.transactions} isCoach={false} />
+        <FinancialReport transactions={report.transactions} isCoach={false} subscriptions={report.subscriptionPayments} />
       </>}
       <SampleCalculation />
     </PanelPage>
   );
 }
 
-function FinancialReport({ transactions, isCoach }: { transactions: PaymentTransaction[]; isCoach: boolean }) {
+function FinancialReport({ transactions, isCoach, subscriptions }: { transactions: PaymentTransaction[]; isCoach: boolean; subscriptions?: SubscriptionPayment[] }) {
   const paid = transactions.filter((t) => t.status === 'paid');
   const volume = paid.reduce((sum, t) => sum + t.amountTomans, 0);
   const coachShare = paid.reduce((sum, t) => sum + t.coachShareTomans, 0);
   const adminShare = paid.reduce((sum, t) => sum + t.adminShareTomans, 0);
+  // The subscriptions live in their own ledger; the money of the club is the sum of both.
+  // A month that has ended still belongs in the books: the money arrived when it started.
+  const subscriptionRows = subscriptions ?? [];
+  const subscriptionVolume = subscriptionRows.reduce((sum, row) => sum + row.amountTomans, 0);
+  const subscriptionCoachShare = subscriptionRows.reduce((sum, row) => sum + row.coachShareTomans, 0);
+  const subscriptionAdminShare = subscriptionRows.reduce((sum, row) => sum + row.adminShareTomans, 0);
+  const hasSubscriptions = subscriptionRows.length > 0;
   return (
     <section className="financial-report" aria-label="گزارش مالی">
       <h2>گزارش مالی</h2>
       <p className="account-muted">این اعداد بر اساس تراکنش‌های ثبت‌شدهٔ موفق‌اند و به‌تنهایی تأیید واریز یا تسویهٔ بانکی نیستند.</p>
       <div className="financial-report__stats">
-        {!isCoach && <Metric label="کل مبلغ" value={`${faNumber(volume)} تومان`} />}
-        {!isCoach && <Metric label="سهم باشگاه" value={`${faNumber(adminShare)} تومان`} />}
-        <Metric label={isCoach ? 'سهم شما' : 'سهم مربیان'} value={`${faNumber(coachShare)} تومان`} />
-        <Metric label="تراکنش‌های موفق" value={`${faNumber(paid.length)} عدد`} />
+        {!isCoach && <Metric label="کل مبلغ" value={`${faNumber(volume + subscriptionVolume)} تومان`} />}
+        {!isCoach && <Metric label="سهم باشگاه" value={`${faNumber(adminShare + subscriptionAdminShare)} تومان`} />}
+        <Metric label={isCoach ? 'سهم شما' : 'سهم مربیان'} value={`${faNumber(coachShare + subscriptionCoachShare)} تومان`} />
+        <Metric label="تراکنش‌های موفق" value={`${faNumber(paid.length + subscriptionRows.length)} عدد`} />
       </div>
+      {hasSubscriptions && (
+        <p className="account-muted">این جمع‌ها شامل فروشِ برنامه‌ها و اشتراک‌های هوشمند است.</p>
+      )}
       <h3>تراکنش‌ها</h3>
       {transactions.length === 0 ? <p className="account-muted">هنوز تراکنشی ثبت نشده است.</p> :
         <TransactionList transactions={transactions} isCoach={isCoach} />}
+      {hasSubscriptions && (
+        <>
+          <h3>اشتراک‌های هوشمند</h3>
+          <SubscriptionPaymentList payments={subscriptionRows ?? []} />
+        </>
+      )}
     </section>
+  );
+}
+
+/** The income of the club from the subscriptions; each row shows the two shares. */
+function SubscriptionPaymentList({ payments }: { payments: SubscriptionPayment[] }) {
+  if (payments.length === 0) {
+    return <p className="account-muted">هنوز اشتراکِ فعالی ثبت نشده است.</p>;
+  }
+  return (
+    <div className="transaction-list">
+      {payments.map((row) => (
+        <article key={row.id} className="panel-card" style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div className="transaction-card__identity">
+            <div className="transaction-card__names">
+              <span style={{ fontWeight: 600 }}>شاگرد: {row.studentName}</span>
+              {row.coachName && <span className="badge">معرفی‌شده توسط: {row.coachName}</span>}
+            </div>
+            <div className="account-muted transaction-card__meta">
+              <span>{new Date(row.createdAt).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              <span>اشتراک تا: {new Date(row.expiresAt).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              {row.trackingNumber && <span>کد پیگیری: <code dir="ltr">{row.trackingNumber}</code></span>}
+            </div>
+          </div>
+          <div style={{ textAlign: 'end', display: 'grid', gap: 4 }}>
+            <div>
+              <strong style={{ fontSize: 16 }}>{faNumber(row.amountTomans)} تومان</strong>
+              <span style={{ display: 'block', fontSize: 12 }}>سهم باشگاه: {faNumber(row.adminShareTomans)} تومان</span>
+              <span style={{ display: 'block', fontSize: 12, color: '#4ade80' }}>سهم مربی معرف: {faNumber(row.coachShareTomans)} تومان</span>
+            </div>
+            <div>
+              {row.status === 'active'
+                ? <span className="badge" style={{ background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80' }}><CheckCircle2 size={13} /> فعال</span>
+                : <span className="badge" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }}><Clock size={13} /> دوره تمام شده</span>}
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 

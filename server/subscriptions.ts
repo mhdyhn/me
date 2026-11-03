@@ -599,3 +599,73 @@ export async function listCoachSubscriptionShares(db: Db, coachId: number): Prom
     expiresAt: row.expires_at,
   }));
 }
+
+export interface SubscriptionPaymentRow {
+  id: number;
+  studentId: number;
+  studentName: string;
+  /** The paid plan this subscription bought. */
+  plan: string | null;
+  amountTomans: number;
+  coachShareTomans: number;
+  adminShareTomans: number;
+  /** The coach who referred the student, when the subscription came through one. */
+  coachName: string | null;
+  status: string;
+  /** The tracking number of the bank transfer that paid for it. */
+  trackingNumber: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * The income from the subscriptions of the whole club, newest first.
+ *
+ * The subscriptions live in their own ledger, so the financial report of the club would
+ * otherwise not show the money that arrived: the share of the club and the referral shares
+ * of the coaches would be missing from the books.
+ */
+export async function listSubscriptionPayments(db: Db, limit = 100, now = new Date()): Promise<SubscriptionPaymentRow[]> {
+  const rows = await db.query<{
+    id: number;
+    user_id: number;
+    display_name: string;
+    plan: string | null;
+    amount_tomans: number;
+    coach_share_tomans: number;
+    admin_share_tomans: number;
+    coach_name: string | null;
+    status: string;
+    tracking_number: string | null;
+    created_at: string;
+    expires_at: string;
+  }>(
+    `SELECT s.id, s.user_id, u.display_name, s.plan, s.amount_tomans, s.coach_share_tomans,
+            s.admin_share_tomans, c.display_name AS coach_name, s.status, p.tracking_number,
+            s.created_at, s.expires_at
+     FROM subscriptions s
+     JOIN users u ON u.id = s.user_id
+     LEFT JOIN users c ON c.id = s.source_coach_id
+     LEFT JOIN subscription_payments p ON p.authority = s.authority
+     ORDER BY s.id DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    studentId: row.user_id,
+    studentName: row.display_name,
+    plan: row.plan,
+    amountTomans: row.amount_tomans,
+    coachShareTomans: row.coach_share_tomans,
+    adminShareTomans: row.admin_share_tomans,
+    coachName: row.coach_name,
+    // The status of the column never changes when the month ends, so the end of the period
+    // is decided by the date. The money arrived when the subscription started, so an expired
+    // month still belongs in the books of the club.
+    status: row.expires_at > now.toISOString() ? 'active' : 'expired',
+    trackingNumber: row.tracking_number,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  }));
+}
