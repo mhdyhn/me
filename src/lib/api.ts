@@ -97,6 +97,39 @@ export interface TransactionsResponse {
   subscriptionShares?: SubscriptionShare[];
   /** The income of the club from the subscriptions; the subscriptions have their own ledger. */
   subscriptionPayments?: SubscriptionPayment[];
+  /** The balance of the coach: what they earned and what the club paid them. */
+  settlement?: CoachSettlementSummary | null;
+}
+
+export interface CoachSettlement {
+  id: number;
+  coachId: number;
+  amountTomans: number;
+  /** The bank reference of the transfer the club made. */
+  reference: string | null;
+  note: string | null;
+  paidAt: string;
+  createdAt: string;
+}
+
+export interface CoachSettlementSummary {
+  coachId: number;
+  coachName: string;
+  iban: string | null;
+  /** The share of the coach from the sold programmes. */
+  programmeShareTomans: number;
+  /** The share of the coach from the subscriptions of the students he referred. */
+  referralShareTomans: number;
+  earnedTomans: number;
+  paidTomans: number;
+  /** What is still owed to the coach. */
+  owedTomans: number;
+  payments: CoachSettlement[];
+}
+
+export interface CoachSettlementsResponse {
+  settlements: CoachSettlementSummary[];
+  totals: { earnedTomans: number; paidTomans: number; owedTomans: number };
 }
 
 export interface SubscriptionPayment {

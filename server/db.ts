@@ -10,6 +10,7 @@ import { migrateNotifications } from './notifications.ts';
 import { migrateCardTransfers } from './cardTransfer.ts';
 import { migrateSubscriptions } from './subscriptions.ts';
 import { migratePlanPrices } from './planPrices.ts';
+import { migrateSettlements } from './settlements.ts';
 import { migrateBiometrics } from './biometrics.ts';
 import { migrateStudentProfiles } from './studentProfile.ts';
 import { migratePersonalData } from './personalData.ts';
@@ -686,6 +687,7 @@ async function migrate(db: Db): Promise<void> {
   await migrateCardTransfers(db);
   await migrateSubscriptions(db);
   await migratePlanPrices(db);
+  await migrateSettlements(db);
   await migrateBiometrics(db);
   await migrateStudentProfiles(db);
   await migratePersonalData(db);
