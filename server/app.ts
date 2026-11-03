@@ -11,7 +11,7 @@ import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProg
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
 import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
-import { createSubscriptionCheckout, listCoachSubscriptionShares, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
+import { createSubscriptionCheckout, listCoachSubscriptionShares, listSubscriptionPayments, remindSubscriptionEnd, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { aiConfig } from './ai.ts';
 import { isPaidPlan, PLANS } from './plans.ts';
 import { editablePlanPrices, savePlanPrices } from './planPrices.ts';
@@ -381,6 +381,9 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       auth: 'signed-in',
       handler: async ({ user, url }) => {
         const limit = Number(url.searchParams.get('limit') ?? '30');
+        // Opening the app is the moment to tell the student that the period of the
+        // subscription is about to end. The reminder is written once and never twice.
+        await remindSubscriptionEnd(db, user!.id, now());
         const notifications = await listNotifications(db, user!.id, Number.isFinite(limit) ? limit : 30);
         return { status: 200, body: { notifications, unread: notifications.filter((item) => !item.readAt).length }, headers: { 'Cache-Control': 'no-store' } };
       },
@@ -1442,7 +1445,16 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
       pattern: /^\/api\/admin\/transactions$/,
       auth: ['admin'],
       handler: async () => {
-        return { status: 200, body: { transactions: await listAllTransactions(db) }, headers: { 'Cache-Control': 'no-store' } };
+        return {
+          status: 200,
+          body: {
+            transactions: await listAllTransactions(db),
+            // The subscriptions have their own ledger; without them the books of the club
+            // would not show the money that arrived.
+            subscriptionPayments: await listSubscriptionPayments(db),
+          },
+          headers: { 'Cache-Control': 'no-store' },
+        };
       },
     },
 
