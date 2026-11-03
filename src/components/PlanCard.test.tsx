@@ -87,6 +87,32 @@ describe('the plan card of the student', () => {
     expect(screen.getAllByText(/۹۹٬۰۰۰/).length).toBeGreaterThanOrEqual(2);
   });
 
+  it('lets a student with a running period buy one month more', async () => {
+    stubPlan({
+      planId: 'pro',
+      plan: { id: 'pro', title: 'پلن حرفه‌ای', tagline: 'برنامه و تغذیه', priceTomans: 99000, periodDays: 30, audience: 'independent', features: [{ key: 'smart_program', label: 'برنامه‌ساز هوشمند' }] },
+      features: ['smart_program'],
+      subscriptionActive: true,
+      expiresAt: '2026-11-30T08:00:00.000Z',
+      daysLeft: 3,
+      priceTomans: 99000,
+      cardTransferAvailable: true,
+      plans: [
+        { id: 'basic', title: 'پلن پایه', tagline: '', priceTomans: 49000, periodDays: 30, audience: 'independent', features: [] },
+        { id: 'pro', title: 'پلن حرفه‌ای', tagline: '', priceTomans: 99000, periodDays: 30, audience: 'independent', features: [] },
+        { id: 'full', title: 'پلن کامل', tagline: '', priceTomans: 149000, periodDays: 30, audience: 'independent', features: [] },
+      ],
+    });
+
+    render(<PlanCard />);
+    await waitFor(() => expect(screen.getByText('پلن حرفه‌ای')).toBeTruthy());
+    // The period is still running, so the student can buy one month more.
+    fireEvent.click(screen.getByRole('button', { name: /تمدید برای یک ماه دیگر/ }));
+    expect(await screen.findByText(/تمدیدِ/)).toBeTruthy();
+    // The new month starts when the current one ends, so the access has no gap.
+    expect(screen.getAllByText(/دورهٔ تازه از پایان دورهٔ فعلی شروع می‌شود/).length).toBeGreaterThanOrEqual(1);
+  });
+
   it('shows nothing to a coach', async () => {
     session.user = { ...student, role: 'coach' };
     stubPlan({ planId: 'coach', plan: { id: 'coach', title: 'پلن همراه مربی', tagline: '', priceTomans: 0, periodDays: null, audience: 'coach', features: [] }, features: [], subscriptionActive: false, expiresAt: null, daysLeft: 0, priceTomans: 0, cardTransferAvailable: true, plans: [] });

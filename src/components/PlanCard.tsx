@@ -18,6 +18,8 @@ export function PlanCard() {
   const [plan, setPlan] = useState<PlanState | null>(null);
   // The paid plan the student picked to change to; empty until he picks one.
   const [changing, setChanging] = useState<string | null>(null);
+  // The student asked to buy one month more of the plan that is running.
+  const [renewingNow, setRenewingNow] = useState(false);
 
   useEffect(() => {
     void loadPlan().then(setPlan);
@@ -34,6 +36,9 @@ export function PlanCard() {
   const paidPlans = plan.plans.filter((item) => item.priceTomans > 0);
   const otherPlans = paidPlans.filter((item) => item.id !== plan.planId);
   const chosen = changing ? paidPlans.find((item) => item.id === changing) ?? null : null;
+  // The plan of the running period, so the student can buy one month more of it.
+  const runningPlan = paidPlans.find((item) => item.id === plan.planId) ?? null;
+  const renewing = renewingNow && runningPlan ? runningPlan : null;
 
   return (
     <section className="panel-card plan-card" aria-label="پلن شما">
@@ -51,6 +56,16 @@ export function PlanCard() {
           <span>{faNumber(plan.daysLeft)} روز از اشتراک فعلی باقی مانده</span>
         )}
       </p>
+      {plan.subscriptionActive && runningPlan && (
+        <button
+          type="button"
+          className="button button--secondary plan-card__renew"
+          onClick={() => setRenewingNow(!renewingNow)}
+          aria-expanded={renewingNow}
+        >
+          <Sparkles size={15} /> {renewingNow ? 'بستن تمدید' : 'تمدید برای یک ماه دیگر'}
+        </button>
+      )}
       <ul className="plan-card__features">
         {plan.plan.features.map((feature) => (
           <li key={feature.key}><Check size={13} /> {feature.label}</li>
@@ -84,9 +99,29 @@ export function PlanCard() {
           }}
         />
       )}
+      {renewing && !chosen && (
+        <>
+          <p className="account-muted plan-card__hint">
+            دورهٔ تازه از پایان دورهٔ فعلی شروع می‌شود؛ یعنی دسترسی شما بدون وقفه ادامه پیدا می‌کند.
+          </p>
+          <SubscriptionCheckout
+            planId={renewing.id}
+            priceTomans={renewing.priceTomans}
+            planTitle={renewing.title}
+            renewal
+            onActivated={(next) => {
+              setRenewingNow(false);
+              void loadPlan(true).then(setPlan);
+              void next;
+            }}
+          />
+        </>
+      )}
       {otherPlans.length > 0 && !chosen && (
         <p className="account-muted plan-card__hint">
-          پلن دیگری می‌خواهی؟ از بخش‌های پولیِ برنامه، پلن‌ها را ببین و همان را بخر.
+          {plan.subscriptionActive
+            ? 'پلنِ دیگری می‌خواهی؟ پلنِ تازه از پایان دورهٔ فعلی شروع می‌شود.'
+            : 'پلن دیگری می‌خواهی؟ از بخش‌های پولیِ برنامه، پلن‌ها را ببین و همان را بخر.'}
         </p>
       )}
       {plan.planId === 'coach' && (

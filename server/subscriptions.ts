@@ -212,9 +212,6 @@ export async function createSubscriptionCheckout(
     throw new HttpError(400, 'این پلن قابل خرید نیست.');
   }
   const state = await subscriptionState(db, userId, now);
-  if (state.active) {
-    throw new HttpError(409, 'اشتراک شما فعال است؛ تا پایان این دوره نیازی به خرید دوباره نیست.');
-  }
   if (state.planId === 'coach') {
     throw new HttpError(409, 'شما پلن «همراه مربی» را دارید؛ برنامهٔ تمرینی و غذایی مربی برایتان باز است و اشتراک لازم نیست.');
   }
@@ -445,11 +442,13 @@ export async function submitSubscriptionReceipt(
     };
   }
 
-  const state = await settleSubscriptionPayment(db, userId, row, trackingNumber, senderLast4, now);
+  const { state, renewed } = await settleSubscriptionPayment(db, userId, row, trackingNumber, senderLast4, now);
   return {
     success: true,
     pending: false,
-    message: 'رسید واریزی تأیید شد و اشتراک هوشمند شما فعال شد.',
+    message: renewed
+      ? 'رسید واریزی تأیید شد؛ دورهٔ بعدیِ اشتراک شما از پایان دورهٔ فعلی شروع می‌شود.'
+      : 'رسید واریزی تأیید شد و اشتراک هوشمند شما فعال شد.',
     state,
   };
 }
@@ -476,11 +475,16 @@ async function settleSubscriptionPayment(
   trackingNumber: string,
   senderCardLast4: string | null,
   now: Date
-): Promise<SubscriptionState> {
+): Promise<{ state: SubscriptionState; renewed: boolean }> {
   const coachShare = payment.source_coach_id ? referralShareTomans(payment.amount_tomans) : 0;
   const adminShare = payment.amount_tomans - coachShare;
-  const startedAt = now.toISOString();
-  const periodEnd = new Date(now.getTime() + SUBSCRIPTION_PERIOD_DAYS * 86_400_000).toISOString();
+  // A period that is bought while another one is running starts when that one ends, so the
+  // access of the student continues without a gap and nothing is lost.
+  const state = await subscriptionState(db, userId, now);
+  const currentEnd = state.active && state.expiresAt ? Date.parse(state.expiresAt) : 0;
+  const startedAtMs = Math.max(now.getTime(), currentEnd);
+  const startedAt = new Date(startedAtMs).toISOString();
+  const periodEnd = new Date(startedAtMs + SUBSCRIPTION_PERIOD_DAYS * 86_400_000).toISOString();
   const claimed = await db.query<{ id: number }>(
     `UPDATE subscription_payments SET status = 'paid', tracking_number = $1, sender_card_last4 = $2, confirmed_at = $3
      WHERE id = $4 AND status = 'pending' RETURNING id`,
@@ -489,7 +493,7 @@ async function settleSubscriptionPayment(
   if (!claimed.length) {
     // Another request confirmed the same transfer a moment earlier. Its subscription row
     // may still be on its way, so we wait a moment for it.
-    return waitForSubscription(db, userId, payment.authority, now);
+    return { state: await waitForSubscription(db, userId, payment.authority, now), renewed: false };
   }
   await db.query(
     `INSERT INTO subscriptions
@@ -497,7 +501,7 @@ async function settleSubscriptionPayment(
      VALUES ($1, $2, $3, 'active', $4, $5, $6, $7, $8, $9, $4)`,
     [userId, payment.plan ?? 'pro', payment.amount_tomans, startedAt, periodEnd, payment.source_coach_id, coachShare, adminShare, payment.authority]
   );
-  return subscriptionState(db, userId, now);
+  return { state: await subscriptionState(db, userId, now), renewed: currentEnd > now.getTime() };
 }
 
 /**
@@ -532,7 +536,7 @@ export async function reviewSubscriptionPayment(
     throw new HttpError(409, 'این درخواست دیگر در انتظار بررسی نیست.');
   }
   if (action === 'confirm') {
-    const state = await settleSubscriptionPayment(
+    const { state, renewed } = await settleSubscriptionPayment(
       db, row.user_id,
       { id: row.id, amount_tomans: row.amount_tomans, source_coach_id: row.source_coach_id, authority, plan: row.plan },
       row.tracking_number ?? `MANUAL-${authority}`,
@@ -542,10 +546,16 @@ export async function reviewSubscriptionPayment(
     await createNotification(db, row.user_id, {
       kind: 'payment',
       title: 'رسید اشتراک شما تأیید شد',
-      body: 'اشتراک ماهانهٔ شما فعال شد.',
+      body: renewed ? 'دورهٔ بعدیِ اشتراک شما از پایان دورهٔ فعلی شروع می‌شود.' : 'اشتراک ماهانهٔ شما فعال شد.',
       link: '/progress',
     }, now);
-    return { success: true, message: 'رسید با بررسی پشتیبانی تأیید شد و اشتراک فعال شد.', state };
+    return {
+      success: true,
+      message: renewed
+        ? 'رسید با بررسی پشتیبانی تأیید شد و دورهٔ بعدی از پایان دورهٔ فعلی شروع می‌شود.'
+        : 'رسید با بررسی پشتیبانی تأیید شد و اشتراک فعال شد.',
+      state,
+    };
   }
   await db.query("UPDATE subscription_payments SET status = 'canceled' WHERE id = $1 AND status = 'pending'", [row.id]);
   await createNotification(db, row.user_id, {

@@ -2712,6 +2712,7 @@ select:not([multiple]) option { color: #241338; background: #FFFFFF; }
 button.plan-card__other { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); color: var(--muted); font: inherit; font-size: 12px; text-align: start; cursor: pointer; }
 button.plan-card__other:hover { border-color: var(--accent); }
 button.plan-card__other.is-current { border-color: var(--accent); background: rgba(134, 207, 255, .08); }
+.plan-card__renew { margin: 8px 0 2px; font-size: 13px; }
 button.plan-card__other:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .premium-gate__plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin: 4px 0 2px; }

@@ -22,6 +22,7 @@ export function SubscriptionCheckout({
   planId,
   priceTomans,
   planTitle,
+  renewal,
   onActivated,
 }: {
   /** The paid plan the student picked. */
@@ -29,6 +30,8 @@ export function SubscriptionCheckout({
   priceTomans: number;
   /** The name of the plan, shown to the student while he pays. */
   planTitle?: string;
+  /** True when the student buys one month more of the plan that is already running. */
+  renewal?: boolean;
   onActivated?: (state: SubscriptionState) => void;
 }) {
   const [details, setDetails] = useState<SubscriptionCheckoutDetails | null>(null);
@@ -116,8 +119,8 @@ export function SubscriptionCheckout({
     return (
       <section className="card-transfer" aria-label="خرید اشتراک">
         <p className="account-muted">
-          اشتراک ماهانهٔ {planTitle ? `«${planTitle}» ` : ''}: {faNumber(priceTomans)} تومان. با کارت‌به‌کارت بپردازید و رسید را ثبت کنید؛
-          پس از دیدنِ واریز در صورت‌حساب، اشتراک شما باز می‌شود.
+          {renewal ? 'تمدیدِ' : 'اشتراک ماهانهٔ'} {planTitle ? `«${planTitle}» ` : ''}: {faNumber(priceTomans)} تومان. با کارت‌به‌کارت بپردازید و رسید را ثبت کنید؛
+          پس از دیدنِ واریز در صورت‌حساب، {renewal ? 'دورهٔ تازه از پایان دورهٔ فعلی شروع می‌شود' : 'اشتراک شما باز می‌شود'}.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button type="button" className="button button--secondary" disabled={busy} onClick={() => void start()}>
@@ -131,7 +134,7 @@ export function SubscriptionCheckout({
     <section className="card-transfer card-transfer--active" aria-label="خرید اشتراک">
       <header className="card-transfer__head">
         <Landmark size={16} />
-        <strong>پرداخت کارت‌به‌کارت اشتراک</strong>
+        <strong>{renewal ? 'پرداخت کارت‌به‌کارت تمدید اشتراک' : 'پرداخت کارت‌به‌کارت اشتراک'}</strong>
       </header>
 
       <div className="card-transfer__grid">

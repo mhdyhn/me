@@ -213,11 +213,18 @@ describe('the optional student subscription', () => {
     vi.restoreAllMocks();
   });
 
-  it('refuses a second purchase while the subscription is running and replays a receipt', async () => {
+  it('reuses the unfinished request instead of asking the student to pay twice', async () => {
     const admin = await signIn('owner', 'owner-pass-123');
     const student = await account('buyer-two', 'student', null, true);
     const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
     expect(checkout.status).toBe(201);
+
+    // An unfinished request is handed out again, so the student never pays for it twice.
+    const unfinished = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    expect(unfinished.status).toBe(201);
+    expect(unfinished.json.authority).toBe(checkout.json.authority);
+    expect(unfinished.json.transferAmountTomans).toBe(checkout.json.transferAmountTomans);
+
     const receipt = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
@@ -225,14 +232,13 @@ describe('the optional student subscription', () => {
     expect(receipt.json.pending).toBe(true);
     await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
 
-    const again = await call('POST', '/api/me/subscription/checkout', undefined, student);
-    expect(again.status).toBe(409);
-
     const replay = await call('POST', '/api/me/subscription/receipt', {
       authority: checkout.json.authority, trackingNumber: '123456789012',
     }, student);
     expect(replay.status).toBe(200);
     expect(replay.json.success).toBe(true);
+    // The replay does not open a second month.
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.daysLeft).toBe(30);
   });
 
   it('does not accept the same receipt number for another payment', async () => {
@@ -241,9 +247,14 @@ describe('the optional student subscription', () => {
     const first = await call('POST', '/api/me/subscription/checkout', undefined, student);
     await call('POST', '/api/me/subscription/receipt', { authority: first.json.authority, trackingNumber: '555000111' }, student);
     await call('POST', '/api/admin/card-transfer/review', { authority: first.json.authority, action: 'confirm' }, { id: 0, token: admin });
-    // The subscription is active now, so a second purchase is refused before the receipt check.
-    const blocked = await call('POST', '/api/me/subscription/checkout', undefined, student);
-    expect(blocked.status).toBe(409);
+    // The subscription is active now; a renewal is allowed, but the receipt number of the
+    // first payment still cannot be used a second time.
+    const renewal = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    expect(renewal.status).toBe(201);
+    const reused = await call('POST', '/api/me/subscription/receipt', {
+      authority: renewal.json.authority, trackingNumber: '555000111',
+    }, student);
+    expect(reused.status).toBe(409);
 
     const other = await account('buyer-four', 'student', null, true);
     const second = await call('POST', '/api/me/subscription/checkout', undefined, other);
@@ -300,6 +311,59 @@ describe('the optional student subscription', () => {
     expect(report.status).toBe(200);
     expect(report.json.subscriptionShares).toHaveLength(1);
     expect(report.json.subscriptionShares[0]).toMatchObject({ studentName: 'referred-student', coachShareTomans: 9900, amountTomans: 99000 });
+  });
+
+  it('lets the student buy one month more before the current period ends', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-renew', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '11223399',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+    const first = await call('GET', '/api/me/subscription', undefined, student);
+    expect(first.json.active).toBe(true);
+    expect(first.json.daysLeft).toBe(30);
+
+    // The student renews while the first month is still running.
+    const renewal = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    expect(renewal.status).toBe(201);
+    expect(renewal.json.authority).not.toBe(checkout.json.authority);
+    const receipt = await call('POST', '/api/me/subscription/receipt', {
+      authority: renewal.json.authority, trackingNumber: '11223400',
+    }, student);
+    expect(receipt.status).toBe(200);
+    expect(receipt.json.pending).toBe(true);
+    await call('POST', '/api/admin/card-transfer/review', { authority: renewal.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    // The new month starts when the old one ends: the access continues without a gap.
+    const after = await call('GET', '/api/me/subscription', undefined, student);
+    expect(after.json.active).toBe(true);
+    expect(after.json.daysLeft).toBe(60);
+    const rows = await db.query<{ started_at: string; expires_at: string }>(
+      'SELECT started_at, expires_at FROM subscriptions WHERE user_id = $1 ORDER BY id', [student.id]
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[1].started_at).toBe(rows[0].expires_at);
+  });
+
+  it('lets the student change the plan while the period is running', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-switch', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '22334499',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    const other = await call('POST', '/api/me/subscription/checkout', { planId: 'full' }, student);
+    expect(other.status).toBe(201);
+    expect(other.json.planId).toBe('full');
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: other.json.authority, trackingNumber: '22334500',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: other.json.authority, action: 'confirm' }, { id: 0, token: admin });
+    expect((await call('GET', '/api/me/subscription', undefined, student)).json.subscriptionPlanId).toBe('full');
   });
 
   it('reminds the student once when the period of the subscription is about to end', async () => {
