@@ -87,6 +87,8 @@ export async function migrateSubscriptions(db: Db): Promise<void> {
       authority TEXT,
       created_at TEXT NOT NULL
     );
+    -- The reminder of the end of the period is sent once; this column remembers that.
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS end_reminder_sent_at TEXT;
     CREATE INDEX IF NOT EXISTS idx_subscription_user ON subscriptions(user_id, status);
     CREATE TABLE IF NOT EXISTS subscription_payments (
       id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -668,4 +670,42 @@ export async function listSubscriptionPayments(db: Db, limit = 100, now = new Da
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   }));
+}
+
+/** How many days before the end of the period the student is told about it. */
+export const SUBSCRIPTION_END_REMINDER_DAYS = 3;
+
+/**
+ * Tells the student, once, that the period of the subscription is about to end.
+ *
+ * The reminder lives in the bell of the app: no push message and no message outside the
+ * app. It is written when the student opens the app, so it needs no cron on the hosting
+ * service (which sleeps when it is free).
+ */
+export async function remindSubscriptionEnd(db: Db, userId: number, now = new Date()): Promise<void> {
+  const until = new Date(now.getTime() + SUBSCRIPTION_END_REMINDER_DAYS * 86_400_000).toISOString();
+  const rows = await db.query<{ id: number; expires_at: string }>(
+    `SELECT id, expires_at FROM subscriptions
+     WHERE user_id = $1 AND status = 'active' AND end_reminder_sent_at IS NULL
+       AND expires_at > $2 AND expires_at <= $3
+     ORDER BY expires_at DESC LIMIT 1`,
+    [userId, now.toISOString(), until]
+  );
+  const row = rows[0];
+  if (!row) return;
+  const daysLeft = Math.max(1, Math.ceil((Date.parse(row.expires_at) - now.getTime()) / 86_400_000));
+  // The column is claimed first, so a second request at the same moment cannot write the
+  // reminder twice.
+  const claimed = await db.query<{ id: number }>(
+    `UPDATE subscriptions SET end_reminder_sent_at = $1
+     WHERE id = $2 AND end_reminder_sent_at IS NULL RETURNING id`,
+    [now.toISOString(), row.id]
+  );
+  if (!claimed.length) return;
+  await createNotification(db, userId, {
+    kind: 'payment',
+    title: 'دورهٔ اشتراک شما رو به پایان است',
+    body: `تا ${daysLeft.toLocaleString('fa-IR')} روز دیگر دورهٔ اشتراک شما تمام می‌شود. برای ادامهٔ امکانات هوشمند، پیش از پایان دوره دوباره بخرید.`,
+    link: '/settings',
+  }, now);
 }

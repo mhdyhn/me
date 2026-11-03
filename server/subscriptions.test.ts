@@ -302,6 +302,45 @@ describe('the optional student subscription', () => {
     expect(report.json.subscriptionShares[0]).toMatchObject({ studentName: 'referred-student', coachShareTomans: 9900, amountTomans: 99000 });
   });
 
+  it('reminds the student once when the period of the subscription is about to end', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-reminder', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '77889900',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    const reminders = async () => (await call('GET', '/api/notifications', undefined, student)).json.notifications
+      .filter((item: { title: string }) => item.title.includes('رو به پایان'));
+
+    // Nothing to say while the month is long ahead.
+    expect((await reminders()).length).toBe(0);
+
+    // The period is about to end.
+    await db.query("UPDATE subscriptions SET expires_at = '2026-10-31T10:00:00Z' WHERE user_id = $1", [student.id]);
+    const first = await reminders();
+    expect(first.length).toBe(1);
+    expect(first[0].body).toContain('۱');
+    // The reminder is written once, not at every opening of the app.
+    expect((await reminders()).length).toBe(1);
+  });
+
+  it('does not remind a student whose period is far away or already over', async () => {
+    const admin = await signIn('owner', 'owner-pass-123');
+    const student = await account('buyer-no-reminder', 'student', null, true);
+    const checkout = await call('POST', '/api/me/subscription/checkout', undefined, student);
+    await call('POST', '/api/me/subscription/receipt', {
+      authority: checkout.json.authority, trackingNumber: '88990011',
+    }, student);
+    await call('POST', '/api/admin/card-transfer/review', { authority: checkout.json.authority, action: 'confirm' }, { id: 0, token: admin });
+
+    await db.query("UPDATE subscriptions SET expires_at = '2026-10-20T10:00:00Z' WHERE user_id = $1", [student.id]);
+    const reminders = (await call('GET', '/api/notifications', undefined, student)).json.notifications
+      .filter((item: { title: string }) => item.title.includes('رو به پایان'));
+    expect(reminders.length).toBe(0);
+  });
+
   it('shows the income of the subscriptions in the financial report of the manager', async () => {
     const admin = await signIn('owner', 'owner-pass-123');
     const student = await account('buyer-report', 'student', null, true);
