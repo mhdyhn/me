@@ -7,6 +7,13 @@ export const faNumber = (value: number, options?: Intl.NumberFormatOptions) =>
 export const faDigits = (value: string | number) =>
   String(value).replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
 
+/** Persian and Arabic digits become Latin ones, so the server always gets a plain number. */
+export const toLatinDigits = (value: string) =>
+  value.replace(/[۰-۹٠-٩]/g, (digit) => {
+    const code = digit.charCodeAt(0);
+    return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+  });
+
 export const kg = (value: number, digits = 1) =>
   `${faNumber(Number(value.toFixed(digits)), { maximumFractionDigits: digits })} کیلوگرم`;
 

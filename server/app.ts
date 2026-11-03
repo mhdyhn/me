@@ -10,6 +10,7 @@ import { acceptCoachInvitation, acceptCoachRegistrationLink, coachRegistrationLi
 import { deleteProgramme, listCoachProgrammes, listPurchasedProgrammes, loadProgramme, restoreCoachProgramme, saveProgramme, studentProgrammeView, validateProgramme, validateProgrammeSave } from './programs.ts';
 import { MESSAGE_MAX, addAdminCoachMessage, addMessage, listAdminCoachMessages, listFormerCoachThreads, listMessages } from './chat.ts';
 import { calculateCommission, listAllTransactions, listCoachTransactions, normalizeIban } from './payments.ts';
+import { coachSettlementSummary, listCoachSettlements, recordCoachSettlement } from './settlements.ts';
 import { cardTransferConfig, cardTransferSettings, createCardTransferRequest, listCardTransferRequests, pendingCardTransferRequest, reviewCardTransfer, saveCardTransferSettings, submitCardTransferReceipt } from './cardTransfer.ts';
 import { createSubscriptionCheckout, listCoachSubscriptionShares, listSubscriptionPayments, remindSubscriptionEnd, reviewSubscriptionPayment, submitSubscriptionReceipt, subscriptionState } from './subscriptions.ts';
 import { aiConfig } from './ai.ts';
@@ -1409,6 +1410,20 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
 
     {
       method: 'GET',
+      pattern: /^\/api\/coach\/settlement$/,
+      auth: ['coach'],
+      handler: async ({ user }) => {
+        const summary = await coachSettlementSummary(db, user!.id);
+        return {
+          status: 200,
+          body: { settlement: summary },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
       pattern: /^\/api\/coach\/transactions$/,
       auth: ['coach'],
       handler: async ({ user }) => {
@@ -1417,6 +1432,8 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
           body: {
             transactions: await listCoachTransactions(db, user!.id),
             subscriptionShares: await listCoachSubscriptionShares(db, user!.id),
+            // What the coach has earned and what the club has already paid them.
+            settlement: await coachSettlementSummary(db, user!.id),
           },
           headers: { 'Cache-Control': 'no-store' },
         };
@@ -1435,6 +1452,33 @@ async function usernameForNewAccount(db: Db, input: Record<string, unknown>, pre
             inactiveDays: INACTIVE_DAYS,
             insight: await coachInactiveInsight(db, user!.id, now()),
           },
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: /^\/api\/admin\/settlements$/,
+      auth: ['admin'],
+      handler: async () => {
+        return {
+          status: 200,
+          body: await listCoachSettlements(db),
+          headers: { 'Cache-Control': 'no-store' },
+        };
+      },
+    },
+
+    {
+      method: 'POST',
+      pattern: /^\/api\/admin\/settlements$/,
+      auth: ['admin'],
+      handler: async ({ body }) => {
+        const settlement = await recordCoachSettlement(db, body);
+        return {
+          status: 200,
+          body: { settlement },
           headers: { 'Cache-Control': 'no-store' },
         };
       },

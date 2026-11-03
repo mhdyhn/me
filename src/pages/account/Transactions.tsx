@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock, CreditCard, Save, XCircle } from 'lucide-react';
-import { ApiError, api, type PaymentTransaction, type SubscriptionPayment, type TransactionsResponse } from '../../lib/api';
+import { ApiError, api, type CoachSettlementSummary, type CoachSettlementsResponse, type PaymentTransaction, type SubscriptionPayment, type TransactionsResponse } from '../../lib/api';
 import { useSession } from '../../context/SessionContext';
 import { PaymentPractice } from '../../components/PaymentPractice';
-import { faNumber } from '../../lib/format';
+import { faNumber, formatDate, toLatinDigits } from '../../lib/format';
 import { PanelPage, RequireRole } from './AccountShell';
 
 
@@ -87,6 +87,9 @@ function CoachTransactionsView() {
       {!report && !loadError && <p className="account-muted">در حال بارگذاری تراکنش‌ها…</p>}
       {report && <>
         <FinancialReport transactions={report.transactions} isCoach />
+        {report.settlement && (report.settlement.earnedTomans > 0 || report.settlement.payments.length > 0) && (
+          <CoachSettlementPanel settlement={report.settlement} />
+        )}
         {report.subscriptionShares && report.subscriptionShares.length > 0 && (
           <section className="panel-card financial-report" aria-label="سهم اشتراک معرفی‌شده">
             <h2>سهم اشتراک معرفی‌شده</h2>
@@ -148,21 +151,193 @@ export function AdminTransactions() {
 
 function AdminTransactionsView() {
   const { report, error: loadError, loading, refresh } = useFinancialReport('/admin/transactions');
+  const settlements = useCoachSettlements();
 
   return (
     <PanelPage title="تراکنش‌های کل باشگاه">
       <Link className="back-link" to="/coach"><ArrowRight size={16} /> مربی‌ها</Link>
-      <button type="button" className="button button--secondary financial-refresh" disabled={loading} onClick={() => void refresh()}>{loading ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی گزارش مالی'}</button>
+      <button type="button" className="button button--secondary financial-refresh" disabled={loading} onClick={() => { void refresh(); void settlements.refresh(); }}>{loading ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی گزارش مالی'}</button>
       {loadError && <p className="form-error" role="alert">{loadError}</p>}
       {!report && !loadError && <p className="account-muted">در حال بارگذاری تراکنش‌ها…</p>}
       {report && <>
         <FinancialReport transactions={report.transactions} isCoach={false} subscriptions={report.subscriptionPayments} />
       </>}
+      <CoachSettlementsPanel book={settlements} />
       <SampleCalculation />
     </PanelPage>
   );
 }
 
+/** The balance of the coach: what they earned, what the club paid, and what is left. */
+function CoachSettlementPanel({ settlement }: { settlement: CoachSettlementSummary }) {
+  return (
+    <section className="panel-card financial-report" aria-label="تسویهٔ حساب شما">
+      <h2>تسویهٔ حساب شما</h2>
+      <p className="account-muted">
+        سهم شما از فروش برنامه‌ها و از اشتراکِ شاگردهای معرفی‌شده‌تان جمع می‌شود. باشگاه پرداخت‌ها را به شبای شما واریز و در همین‌جا ثبت می‌کند.
+      </p>
+      <div className="financial-report__stats">
+        <Metric label="کسب‌شده" value={`${faNumber(settlement.earnedTomans)} تومان`} />
+        <Metric label="پرداخت‌شده" value={`${faNumber(settlement.paidTomans)} تومان`} />
+        <Metric label="ماندهٔ طلب شما" value={`${faNumber(settlement.owedTomans)} تومان`} />
+      </div>
+      {settlement.payments.length === 0 ? (
+        <p className="account-muted">هنوز پرداختی برای شما ثبت نشده است.</p>
+      ) : (
+        <div className="transaction-list">
+          {settlement.payments.map((payment) => (
+            <article key={payment.id} className="panel-card" style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div className="transaction-card__identity">
+                <div className="transaction-card__names"><span style={{ fontWeight: 600 }}>پرداخت به شما</span></div>
+                <div className="account-muted transaction-card__meta">
+                  <span>{formatDate(payment.paidAt)}</span>
+                  {payment.reference && <span>پیگیری: {payment.reference}</span>}
+                  {payment.note && <span>{payment.note}</span>}
+                </div>
+              </div>
+              <div style={{ textAlign: 'end', display: 'grid', gap: 4 }}>
+                <strong style={{ fontSize: 16, color: '#4ade80' }}>{faNumber(payment.amountTomans)} تومان</strong>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>پرداخت‌شده</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The settlement book of the club: what every coach earned, got paid and is owed. */
+function useCoachSettlements() {
+  const [data, setData] = useState<CoachSettlementsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const requestId = useRef(0);
+  const refresh = useCallback(async () => {
+    const current = ++requestId.current;
+    setLoading(true);
+    try {
+      const result = await api<CoachSettlementsResponse>('GET', '/admin/settlements');
+      // The server is the source of truth, but a missing field must not empty the page.
+      const rows = Array.isArray(result?.settlements) ? result.settlements : [];
+      const sums = rows.reduce((acc, row) => ({
+        earnedTomans: acc.earnedTomans + (row.earnedTomans ?? 0),
+        paidTomans: acc.paidTomans + (row.paidTomans ?? 0),
+        owedTomans: acc.owedTomans + (row.owedTomans ?? 0),
+      }), { earnedTomans: 0, paidTomans: 0, owedTomans: 0 });
+      const totals = result?.totals && typeof result.totals === 'object'
+        ? { earnedTomans: result.totals.earnedTomans ?? 0, paidTomans: result.totals.paidTomans ?? 0, owedTomans: result.totals.owedTomans ?? 0 }
+        : sums;
+      if (current === requestId.current) { setData({ settlements: rows, totals }); setError(null); }
+    } catch (caught) {
+      if (current === requestId.current) setError(caught instanceof ApiError ? caught.message : 'تسویهٔ مربیان بارگذاری نشد.');
+    } finally { if (current === requestId.current) setLoading(false); }
+  }, []);
+  useEffect(() => {
+    void refresh();
+    const onFocus = () => void refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { requestId.current += 1; window.removeEventListener('focus', onFocus); };
+  }, [refresh]);
+  return { data, error, loading, refresh };
+}
+
+/** The manager books the transfers they made to the coaches. */
+function CoachSettlementsPanel({ book }: { book: ReturnType<typeof useCoachSettlements> }) {
+  const { data, error, loading, refresh } = book;
+  const [message, setMessage] = useState<string | null>(null);
+  const [openCoachId, setOpenCoachId] = useState<number | null>(null);
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function onRecord(e: FormEvent) {
+    e.preventDefault();
+    if (openCoachId === null || saving) return;
+    const value = Number(toLatinDigits(amount).replace(/[^0-9.-]/g, ''));
+    if (!Number.isInteger(value) || value <= 0) { setFormError('مبلغ پرداخت را به‌صورت عددِ مثبت بنویسید.'); return; }
+    setSaving(true); setFormError(null); setMessage(null);
+    try {
+      await api('POST', '/admin/settlements', { coachId: openCoachId, amountTomans: value, reference: toLatinDigits(reference).trim() || undefined, note: note.trim() || undefined });
+      setAmount(''); setReference(''); setNote(''); setOpenCoachId(null);
+      setMessage('پرداخت ثبت شد.');
+      await refresh();
+    } catch (caught) {
+      setFormError(caught instanceof ApiError ? caught.message : 'ثبت پرداخت ممکن نشد.');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <section className="panel-card financial-report" aria-label="تسویهٔ سهم مربیان">
+      <h2>تسویهٔ سهم مربیان</h2>
+      <p className="account-muted">
+        سهم هر مربی از فروش برنامه‌ها و از اشتراکِ شاگردهای معرفی‌شده‌اش جمع می‌شود. پرداخت را خودتان به شبای مربی واریز کنید و اینجا ثبت کنید.
+      </p>
+      {data && (
+        <div className="financial-report__stats">
+          <Metric label="کل سهمِ کسب‌شده" value={`${faNumber(data.totals.earnedTomans)} تومان`} />
+          <Metric label="پرداخت‌شده" value={`${faNumber(data.totals.paidTomans)} تومان`} />
+          <Metric label="ماندهٔ بدهی" value={`${faNumber(data.totals.owedTomans)} تومان`} />
+        </div>
+      )}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {message && <p role="status" style={{ color: '#4ade80', fontSize: 13 }}>{message}</p>}
+      {loading && !data && <p className="account-muted">در حال بارگذاری تسویهٔ مربیان…</p>}
+      {data && data.settlements.length === 0 && <p className="account-muted">هنوز سهمی برای مربی‌ها ثبت نشده است.</p>}
+      {data?.settlements.map((row) => (
+        <article key={row.coachId} className="panel-card" style={{ padding: '14px 16px', display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{row.coachName}</div>
+              <div className="account-muted transaction-card__meta">
+                <span>سهم برنامه‌ها: {faNumber(row.programmeShareTomans)} تومان</span>
+                <span>سهم اشتراک معرفی‌شده: {faNumber(row.referralShareTomans)} تومان</span>
+                {row.iban && <span dir="ltr">{row.iban}</span>}
+              </div>
+            </div>
+            <div style={{ textAlign: 'end', display: 'grid', gap: 2 }}>
+              <strong style={{ fontSize: 16, color: row.owedTomans > 0 ? 'var(--danger, #f87171)' : '#4ade80' }}>{faNumber(row.owedTomans)} تومان</strong>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>مانده — کسب‌شده {faNumber(row.earnedTomans)}، پرداخت‌شده {faNumber(row.paidTomans)}</span>
+            </div>
+          </div>
+          {row.payments.length > 0 && (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+              {row.payments.map((payment) => (
+                <li key={payment.id} className="account-muted" style={{ fontSize: 12 }}>
+                  {formatDate(payment.paidAt)} — {faNumber(payment.amountTomans)} تومان{payment.reference ? ` — پیگیری ${payment.reference}` : ''}{payment.note ? ` — ${payment.note}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+          {openCoachId === row.coachId ? (
+            <form className="iban-form" onSubmit={(e) => void onRecord(e)}>
+              <label className="iban-form__field"><span>مبلغ پرداخت (تومان)</span>
+                <input aria-label="مبلغ پرداخت (تومان)" value={amount} onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
+                  inputMode="numeric" placeholder="۹۰۰۰۰" disabled={saving} required /></label>
+              <label className="iban-form__field"><span>شمارهٔ پیگیری بانکی</span>
+                <input aria-label="شمارهٔ پیگیری بانکی" value={reference} onChange={(e) => setReference(e.target.value)}
+                  inputMode="numeric" placeholder="اختیاری" disabled={saving} /></label>
+              <label className="iban-form__field"><span>یادداشت</span>
+                <input aria-label="یادداشت پرداخت" value={note} onChange={(e) => setNote(e.target.value)}
+                  placeholder="اختیاری" maxLength={300} disabled={saving} /></label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" className="button button--primary" disabled={saving}><Save size={16} /> {saving ? 'در حال ثبت…' : 'ثبت پرداخت'}</button>
+                <button type="button" className="button button--secondary" onClick={() => { setOpenCoachId(null); setFormError(null); }} disabled={saving}>انصراف</button>
+              </div>
+              {formError && <p className="form-error" role="alert">{formError}</p>}
+            </form>
+          ) : (
+            <button type="button" className="button button--secondary button--small" onClick={() => { setOpenCoachId(row.coachId); setFormError(null); setMessage(null); }}>
+              ثبت پرداخت به {row.coachName}
+            </button>
+          )}
+        </article>
+      ))}
+    </section>
+  );
+}
 function FinancialReport({ transactions, isCoach, subscriptions }: { transactions: PaymentTransaction[]; isCoach: boolean; subscriptions?: SubscriptionPayment[] }) {
   const paid = transactions.filter((t) => t.status === 'paid');
   const volume = paid.reduce((sum, t) => sum + t.amountTomans, 0);

@@ -43,6 +43,7 @@ export const TABLES = [
   'subscriptions',
   'subscription_payments',
   'plan_prices',
+  'coach_settlements',
   'app_data_migrations',
 ];
 
